@@ -38,11 +38,13 @@ Layanan backend dibangun dengan Node.js dan Express untuk menangani pencatatan e
 | Library / Tool | Versi | Kegunaan |
 | :--- | :--- | :--- |
 | **[Express.js](https://expressjs.com/)** | `^5.2.1` | Framework web minimalis dan fleksibel untuk routing dan pembuatan REST API. |
-| **[Prisma ORM](https://www.prisma.io/)** | `@prisma/client ^7.x`, `prisma ^8.x` | ORM (Object-Relational Mapping) modern untuk interaksi database (PostgreSQL) yang *type-safe* dan mudah dimigrasi. |
+| **[Prisma ORM](https://www.prisma.io/)** | `@prisma/client ^7.x`, `prisma ^7.x` | ORM (Object-Relational Mapping) modern untuk interaksi database (PostgreSQL) yang *type-safe* dan mudah dimigrasi. |
+| **[@prisma/adapter-pg](https://www.npmjs.com/package/@prisma/adapter-pg) & [pg](https://node-postgres.com/)** | `^7.10.0`, `^8.23.0` | Driver adapter PostgreSQL resmi untuk Prisma Client v7+. |
 | **[Zod](https://zod.dev/)** | `^4.5.4` | Library validasi skema data runtime dan TypeScript/JavaScript-first untuk request body dan parameter. |
 | **[jsonwebtoken (JWT)](https://github.com/auth0/node-jsonwebtoken)** | `^9.0.3` | Implementasi token JWT untuk mekanisme autentikasi dan otorisasi pengguna (access token & refresh token). |
 | **[bcrypt](https://github.com/kelektiv/node.bcrypt.js)** | `^6.0.0` | Algoritma hashing password yang aman untuk melindungi kredensial pengguna di database. |
 | **[CORS](https://github.com/expressjs/cors)** | `^2.8.6` | Middleware Express untuk mengizinkan permintaan lintas domain (*Cross-Origin Resource Sharing*) dari frontend. |
+| **[cookie-parser](https://github.com/expressjs/cookie-parser)** | `^1.4.7` | Middleware untuk mem-parsing cookie dari HTTP request header (diperlukan untuk membaca refresh token di HttpOnly cookie). |
 | **[http-errors](https://github.com/jshttp/http-errors)** | `^2.0.1` | Utilitas pembuatan objek error HTTP standar dengan kode status yang sesuai. |
 | **[dotenv](https://github.com/motdotla/dotenv)** | `^17.4.2` | Memuat variabel konfigurasi lingkungan dari file `.env` ke `process.env`. |
 | **[nodemon](https://nodemon.io/)** *(Dev)* | `^3.1.14` | Tool otomatis yang merestart server Node.js setiap kali ada perubahan file pada masa pengembangan. |
@@ -117,7 +119,7 @@ Template konfigurasi lingkungan tersedia di root folder: [`.env.example`](.env.e
      - `JWT_SECRET` & `JWT_REFRESH_SECRET`: String rahasia untuk enkripsi token JWT.
      - `FRONTEND_URL`: URL aplikasi frontend (default: `http://localhost:5173`).
    - **Frontend (`apps/interfaces/.env`)**:
-     - `VITE_API_BASE_URL`: URL endpoint REST API backend (default: `http://localhost:3000/api`).
+     - `VITE_API_BASE_URL`: URL endpoint REST API backend (default: `http://localhost:3000/v1`).
 
 ---
 
@@ -140,8 +142,11 @@ npx prisma migrate dev
 #### Menjalankan Backend (`error-service`):
 ```bash
 cd apps/error-service
-npx nodemon index.js
-# atau sesuaikan dengan script yang ada di package.json
+# Mode pengembangan (dengan live reload via nodemon):
+npm run dev
+
+# Mode produksi:
+npm start
 ```
 Layanan akan aktif di: `http://localhost:3000`
 
@@ -151,6 +156,19 @@ cd apps/interfaces
 npm run dev
 ```
 Antarmuka web akan aktif di: `http://localhost:5173`
+
+---
+
+## 🔐 API Endpoints (Auth Module)
+
+| Method | Endpoint | Auth | Deskripsi |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/v1/health` | Public | Health check status service & versi v1 |
+| `POST` | `/v1/auth/register` | Public | Registrasi akun pengguna baru |
+| `POST` | `/v1/auth/login` | Public | Login pengguna, menghasilkan Access Token (body) & Refresh Token (`HttpOnly` cookie) |
+| `POST` | `/v1/auth/refresh` | Cookie | Memperbarui access token dan melakukan rotasi refresh token |
+| `POST` | `/v1/auth/logout` | Cookie | Mencabut refresh token di database dan membersihkan cookie |
+| `GET` | `/v1/auth/me` | Bearer Token | Mengambil data profil pengguna yang sedang login |
 
 ---
 

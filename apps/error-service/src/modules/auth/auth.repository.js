@@ -1,0 +1,104 @@
+import { prisma } from "../../config/prisma.js";
+
+/**
+ * Find user by email
+ * @param {string} email
+ */
+export const findUserByEmail = async (email) => {
+  return prisma.user.findUnique({
+    where: { email },
+  });
+};
+
+/**
+ * Find user by ID (excluding password hash by selection)
+ * @param {string} id
+ */
+export const findUserById = async (id) => {
+  return prisma.user.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      email: true,
+      name: true,
+      role: true,
+      isActive: true,
+      isVerified: true,
+      createdAt: true,
+      updatedAt: true,
+    },
+  });
+};
+
+/**
+ * Create a new user record
+ * @param {object} data - { email, password, name, role }
+ */
+export const createUser = async (data) => {
+  return prisma.user.create({
+    data,
+    select: {
+      id: true,
+      email: true,
+      name: true,
+      role: true,
+      isActive: true,
+      isVerified: true,
+      createdAt: true,
+    },
+  });
+};
+
+/**
+ * Store a new refresh token in the database
+ * @param {object} data - { token, userId, expiresAt, userAgent, ipAddress }
+ */
+export const createRefreshToken = async (data) => {
+  return prisma.refreshToken.create({
+    data,
+  });
+};
+
+/**
+ * Find refresh token along with its associated user
+ * @param {string} token
+ */
+export const findRefreshToken = async (token) => {
+  return prisma.refreshToken.findUnique({
+    where: { token },
+    include: {
+      user: true,
+    },
+  });
+};
+
+/**
+ * Mark a refresh token as revoked
+ * @param {string} token
+ */
+export const revokeRefreshToken = async (token) => {
+  return prisma.refreshToken.update({
+    where: { token },
+    data: {
+      revoked: true,
+      revokedAt: new Date(),
+    },
+  });
+};
+
+/**
+ * Revoke all active refresh tokens for a user (useful for security breach / force logout all devices)
+ * @param {string} userId
+ */
+export const revokeAllUserTokens = async (userId) => {
+  return prisma.refreshToken.updateMany({
+    where: {
+      userId,
+      revoked: false,
+    },
+    data: {
+      revoked: true,
+      revokedAt: new Date(),
+    },
+  });
+};

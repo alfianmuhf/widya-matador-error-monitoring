@@ -33,10 +33,15 @@ lerna-debug.log*
 !.vscode/extensions.json
 .idea/
 *.suo
+*.workspace
+*.code-workspace
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
+.codegraph/
+.opencode/
+openspec/
 
 # OS Generated Files
 .DS_Store

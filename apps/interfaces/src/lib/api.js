@@ -33,6 +33,9 @@ api.interceptors.response.use(
       return new Promise((resolve, reject) => {
         failedQueue.push({ resolve, reject });
       }).then((token) => {
+        if (!token) return Promise.reject(new Error("Refresh token missing"));
+        originalRequest._retry = true;
+        originalRequest.headers = originalRequest.headers ?? {};
         originalRequest.headers.Authorization = `Bearer ${token}`;
         return api(originalRequest);
       });
@@ -48,8 +51,10 @@ api.interceptors.response.use(
         { withCredentials: true }
       );
       const accessToken = data.data?.accessToken;
+      if (!accessToken) throw new Error("Refresh token missing");
       processQueue(null, accessToken);
       api.defaults.headers.common.Authorization = `Bearer ${accessToken}`;
+      originalRequest.headers = originalRequest.headers ?? {};
       originalRequest.headers.Authorization = `Bearer ${accessToken}`;
       return api(originalRequest);
     } catch (refreshError) {

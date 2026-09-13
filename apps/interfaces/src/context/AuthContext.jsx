@@ -23,8 +23,15 @@ export function AuthProvider({ children }) {
     const token = res.data.data.accessToken;
     setAccessToken(token);
     api.defaults.headers.common.Authorization = `Bearer ${token}`;
-    const me = await fetchMe(token);
-    return me;
+    try {
+      const me = await fetchMe(token);
+      return me;
+    } catch (error) {
+      setAccessToken(null);
+      setUser(null);
+      delete api.defaults.headers.common.Authorization;
+      throw error;
+    }
   };
 
   const logout = async () => {

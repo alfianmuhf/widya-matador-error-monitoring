@@ -3,7 +3,6 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";
 import { loginSchema } from "../lib/validators.js";
 
-// ponytail: simpel tanpa desain berat — pakai tokens dari index.css (var(--bg), --text, --muted, --heading, --border)
 const page = {
   minHeight: "100vh",
   width: "100%",
@@ -85,14 +84,14 @@ export default function Login() {
     try {
       await login(email, password);
       navigate("/", { replace: true });
-    } catch (err) {
-      const status = err.response?.status;
+    } catch (error) {
+      const status = error.response?.status;
       if (status === 422) {
-        const details = err.response?.data?.details;
+        const details = error.response?.data?.details;
         if (Array.isArray(details)) {
-          const m = {};
-          details.forEach((d) => { if (d.field) m[d.field] = d.message; });
-          setErrors(m);
+          const mappedErrors = {};
+          details.forEach((detail) => { if (detail.field) mappedErrors[detail.field] = detail.message; });
+          setErrors(mappedErrors);
         } else setErrors({ form: "Validasi gagal, periksa kembali input." });
       } else if (status === 401) setErrors({ form: "Email atau password salah" });
       else setErrors({ form: "Terjadi kesalahan" });

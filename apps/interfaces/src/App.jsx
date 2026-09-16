@@ -1,36 +1,18 @@
-import { BrowserRouter, Routes, Route, Navigate, useNavigate } from "react-router-dom";
-import { AuthProvider, useAuth } from "./context/AuthContext.jsx";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { AuthProvider } from "./context/AuthContext.jsx";
 import Login from "./pages/Login.jsx";
+import DashboardLayout from "./components/layout/DashboardLayout.jsx";
+import Dashboard from "./pages/Dashboard.jsx";
+import PenggunaWhitelist from "./pages/PenggunaWhitelist.jsx";
 import { ProtectedRoute, PublicOnlyRoute } from "./components/ProtectedRoute.jsx";
 import "./App.css";
-
-function DashboardPlaceholder() {
-  const { user, logout } = useAuth();
-  const navigate = useNavigate();
-
-  const handleLogout = async () => {
-    await logout();
-    navigate("/login", { replace: true });
-  };
-
-  return (
-    <div className="dashboard-page">
-      <div className="dashboard-card">
-        <h1 className="dashboard-title">Halo, {user?.name || user?.email}</h1>
-        <p className="dashboard-role">Role: {user?.role || "-"}</p>
-        <button type="button" onClick={handleLogout} className="dashboard-logout">
-          Logout
-        </button>
-      </div>
-    </div>
-  );
-}
 
 export default function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
         <Routes>
+          {/* Public Route */}
           <Route
             path="/login"
             element={
@@ -39,14 +21,30 @@ export default function App() {
               </PublicOnlyRoute>
             }
           />
+
+          {/* Protected Routes with Sidebar Layout */}
           <Route
             path="/"
             element={
               <ProtectedRoute>
-                <DashboardPlaceholder />
+                <DashboardLayout />
               </ProtectedRoute>
             }
-          />
+          >
+            {/* Index: Ringkasan (Dashboard) */}
+            <Route index element={<Dashboard />} />
+
+            {/* Menu Pengguna & Whitelist */}
+            <Route path="pengguna-whitelist" element={<PenggunaWhitelist />} />
+
+            {/* Placeholders for other sidebar menus */}
+            <Route path="analitik-error" element={<Dashboard />} />
+            <Route path="daftar-tiket" element={<Dashboard />} />
+            <Route path="master-data" element={<Dashboard />} />
+            <Route path="audit-log" element={<Dashboard />} />
+          </Route>
+
+          {/* Catch-all redirect */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>

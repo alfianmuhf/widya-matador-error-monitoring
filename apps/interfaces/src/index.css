@@ -1,55 +1,112 @@
 :root {
-  --bg: #f8fafc;
-  --surface: #ffffff;
-  --text: #334155;
-  --muted: #64748b;
-  --heading: #0f172a;
-  --border: #e2e8f0;
-  --sans: ui-sans-system, system-ui, -apple-system, "Segoe UI", Roboto, Inter, sans-serif;
+  /* Core Theme Colors */
+  --sidebar-bg: #0b1e27;
+  --sidebar-text: #8e9da6;
+  --sidebar-text-active: #ffffff;
+  --sidebar-hover: #132733;
+  --sidebar-active-bg: #0e8587;
+  --sidebar-border: #152c38;
+  
+  --primary-teal: #0e8587;
+  --primary-teal-hover: #0b7173;
+  --primary-teal-light: #e8f7f6;
+  
+  --bg-main: #f4f6f8;
+  --surface-card: #ffffff;
+  --surface-hover: #f9fafb;
+  --border-light: #e5e9ec;
+  --border-subtle: #f0f2f5;
 
+  --text-dark: #111827;
+  --text-secondary: #4b5563;
+  --text-muted: #64748b;
+
+  /* Pill & Tabs */
+  --tab-active-bg: #10212a;
+  --tab-active-text: #ffffff;
+  --tab-inactive-bg: #ffffff;
+  --tab-inactive-border: #dbe2e6;
+  --tab-inactive-text: #334155;
+
+  /* Info PRD Banners */
+  --banner-yellow-bg: #fffbf0;
+  --banner-yellow-border: #fef08a;
+  --banner-yellow-text: #92400e;
+  
+  --banner-teal-bg: #e8f7f6;
+  --banner-teal-border: #a5f3fc;
+  --banner-teal-text: #0e7490;
+
+  /* Status Colors */
+  --status-active-dot: #16a34a;
+  --status-active-text: #166534;
+  --status-suspended-dot: #dc2626;
+  --status-suspended-text: #991b1b;
+  
+  /* Typography */
+  --sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --text-xs: 0.75rem;
   --text-sm: 0.875rem;
-  --text-base: 1rem;
-  --text-lg: 1.25rem;
-  --text-xl: 1.5rem;
-  --text-2xl: 1.875rem;
+  --text-base: 0.9375rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.375rem;
+  --text-2xl: 1.75rem;
 
   font-family: var(--sans);
-  font-size: 16px;
-  line-height: 1.6;
-  color: var(--text);
-  background: var(--bg);
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--text-dark);
+  background: var(--bg-main);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
 
-* { box-sizing: border-box; }
+* {
+  box-sizing: border-box;
+}
 
 body {
   margin: 0;
-  background: var(--bg);
-  color: var(--text);
+  padding: 0;
+  background: var(--bg-main);
+  color: var(--text-dark);
+  font-family: var(--sans);
 }
 
 #root {
   width: 100%;
   min-height: 100vh;
-  margin: 0;
-  background: var(--bg);
 }
 
-h1, h2, h3 {
+/* Base Headings */
+h1, h2, h3, h4, h5, h6 {
   font-family: var(--sans);
-  color: var(--heading);
+  color: var(--text-dark);
   font-weight: 650;
-  line-height: 1.2;
-  letter-spacing: -0.02em;
   margin: 0;
 }
 
-h1 { font-size: var(--text-2xl); }
-h2 { font-size: var(--text-xl); }
-h3 { font-size: var(--text-lg); }
+p {
+  margin: 0;
+}
 
-p { margin: 0; line-height: 1.6; }
-small, .muted { font-size: var(--text-sm); color: var(--muted); }
+/* Reusable buttons & interactive styles */
+button {
+  font-family: inherit;
+}
+
+/* Custom Scrollbar for clean aesthetics */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}

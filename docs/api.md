@@ -10,11 +10,15 @@
 - [Struktur Endpoint Direct (Tanpa Versi)](#struktur-endpoint-direct-tanpa-versi)
 - [Health Check](#health-check)
 - [Auth Module](#auth-module)
-  - [Register](#post-authregister)
+  - [Register (Self-Service)](#post-authregister)
   - [Login](#post-authlogin)
   - [Refresh Token](#post-authrefresh)
   - [Logout](#post-authlogout)
   - [Get Current User](#get-authme)
+- [User Management Module (Admin)](#user-management-module-admin)
+  - [Create User Baru](#post-users)
+  - [Daftar Pengguna](#get-users)
+  - [Detail Pengguna](#get-usersid)
 - [Error Response](#error-response)
 
 ---
@@ -64,7 +68,7 @@ Endpoint API diakses langsung seperti : `[ip]:[port]/[endpoint]`
 Contoh:
 - `http://10.10.10.10:3000/health`
 - `http://10.10.10.10:3000/auth/login`
-- `http://10.10.10.10:3000/auth/register`
+- `http://10.10.10.10:3000/users`
 
 ---
 
@@ -92,7 +96,7 @@ Memeriksa status server.
 
 ### `POST /auth/register`
 
-Mendaftarkan akun pengguna baru.
+Mendaftarkan akun pengguna baru secara mandiri (*self-service*).
 
 **Auth:** Tidak diperlukan
 
@@ -135,13 +139,6 @@ Mendaftarkan akun pengguna baru.
   }
 }
 ```
-
-**Response Error:**
-
-| Status | Kondisi |
-| :--- | :--- |
-| `409 Conflict` | Email sudah terdaftar |
-| `422 Unprocessable Entity` | Validasi input gagal |
 
 ---
 
@@ -238,21 +235,6 @@ Memperbarui Access Token menggunakan Refresh Token yang tersimpan di cookie. Men
 }
 ```
 
-**Response Header (Set-Cookie):**
-
-```
-Set-Cookie: refreshToken=<token_baru>; Max-Age=86400; Path=/; HttpOnly; SameSite=Lax
-```
-
-**Response Error:**
-
-| Status | Kondisi |
-| :--- | :--- |
-| `401 Unauthorized` | Refresh token tidak ditemukan, kedaluwarsa, tidak valid, atau sudah di-revoke |
-
-> **⚠️ Keamanan — Token Reuse Detection:**  
-> Jika refresh token yang sudah di-revoke (bekas rotasi sebelumnya) digunakan kembali, sistem menganggap terjadi pencurian token. Sebagai perlindungan, **seluruh sesi aktif user tersebut otomatis dicabut** dan user harus login ulang di semua perangkat.
-
 ---
 
 ### `POST /auth/logout`
@@ -261,14 +243,6 @@ Mencabut (revoke) refresh token di database dan menghapus cookie dari browser.
 
 **Auth:** Cookie `refreshToken` (otomatis dikirim browser)
 
-**Request Body (alternatif, jika cookie tidak tersedia):**
-
-```json
-{
-  "refreshToken": "eyJ..."
-}
-```
-
 **Response Sukses: `200 OK`**
 
 ```json
@@ -276,12 +250,6 @@ Mencabut (revoke) refresh token di database dan menghapus cookie dari browser.
   "success": true,
   "message": "Logout berhasil"
 }
-```
-
-**Response Header (Set-Cookie — clear cookie):**
-
-```
-Set-Cookie: refreshToken=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; SameSite=Lax
 ```
 
 ---
@@ -316,12 +284,170 @@ Mengambil data profil pengguna yang sedang login berdasarkan Access Token.
 }
 ```
 
+---
+
+## User Management Module (Admin)
+
+### `POST /users`
+
+Mendaftarkan pengguna baru oleh Admin. Password awal otomatis dibuat dengan format **nama email + 4 digit angka acak** (contoh: `joko@gmail.com` $\rightarrow$ `joko7457`). Respons mengembalikan data user beserta `initialPassword` dalam bentuk plaintext agar Admin dapat memberikannya kepada user.
+
+**Auth:** `Authorization: Bearer <admin_access_token>` ✅  
+**Role Izin:** `ADMIN`
+
+**Request Body:**
+
+| Field | Tipe | Wajib | Pilihan Nilai | Keterangan |
+| :--- | :--- | :---: | :--- | :--- |
+| `email` | `string` | ✅ | Email valid | Contoh: `joko@gmail.com` |
+| `name` | `string` | ✅ | Min 2 karakter | Nama lengkap |
+| `role` | `string` | ❌ | `"ADMIN"`, `"COORDINATOR"`, `"VIEWER"` | Default: `"VIEWER"` |
+
+**Contoh Request:**
+
+```json
+{
+  "email": "joko@gmail.com",
+  "name": "Joko Susilo",
+  "role": "COORDINATOR"
+}
+```
+
+**Response Sukses: `201 Created`**
+
+```json
+{
+  "success": true,
+  "message": "Pengguna baru berhasil didaftarkan",
+  "data": {
+    "user": {
+      "id": "981ba263-8103-4c76-a7ed-f241297e8b27",
+      "email": "joko@gmail.com",
+      "name": "Joko Susilo",
+      "role": "COORDINATOR",
+      "status": "ACTIVE",
+      "mustChangePassword": true,
+      "createdById": "admin-uuid-1234",
+      "createdAt": "2026-09-16T10:13:14.049Z"
+    },
+    "initialPassword": "joko7457"
+  }
+}
+```
+
 **Response Error:**
 
 | Status | Kondisi |
 | :--- | :--- |
-| `401 Unauthorized` | Token tidak ada, kedaluwarsa, atau tidak valid |
-| `404 Not Found` | Data pengguna tidak ditemukan di database |
+| `401 Unauthorized` | Token tidak ada atau kedaluwarsa |
+| `403 Forbidden` | Bukan role `ADMIN` |
+| `409 Conflict` | Email sudah terdaftar |
+| `422 Unprocessable Entity` | Validasi input gagal |
+
+---
+
+### `GET /users`
+
+Mengambil daftar seluruh pengguna dengan fitur pencarian dan pagination.
+
+**Auth:** `Authorization: Bearer <access_token>` ✅  
+**Role Izin:** `ADMIN`, `COORDINATOR`
+
+**Query Parameters (Opsional):**
+
+| Parameter | Tipe | Default | Keterangan |
+| :--- | :--- | :---: | :--- |
+| `page` | `number` | `1` | Halaman data |
+| `limit` | `number` | `10` | Jumlah data per halaman (maks: 100) |
+| `search` | `string` | — | Cari berdasarkan nama atau email |
+| `role` | `string` | — | Filter role (`ADMIN`, `COORDINATOR`, `VIEWER`) |
+| `status` | `string` | — | Filter status (`ACTIVE`, `INVITED`, `SUSPENDED`) |
+
+**Contoh Request:**
+
+```
+GET /users?page=1&limit=10&role=COORDINATOR
+```
+
+**Response Sukses: `200 OK`**
+
+```json
+{
+  "success": true,
+  "data": {
+    "users": [
+      {
+        "id": "981ba263-8103-4c76-a7ed-f241297e8b27",
+        "email": "joko@gmail.com",
+        "name": "Joko Susilo",
+        "role": "COORDINATOR",
+        "status": "ACTIVE",
+        "mustChangePassword": true,
+        "failedLoginAttempts": 0,
+        "lockedUntil": null,
+        "lastLoginAt": null,
+        "createdAt": "2026-09-16T10:13:14.049Z",
+        "updatedAt": "2026-09-16T10:13:14.049Z",
+        "createdBy": {
+          "id": "admin-uuid-1234",
+          "name": "Super Admin",
+          "email": "admin@widya.com"
+        }
+      }
+    ],
+    "pagination": {
+      "total": 1,
+      "page": 1,
+      "limit": 10,
+      "totalPages": 1
+    }
+  }
+}
+```
+
+---
+
+### `GET /users/:id`
+
+Melihat detail lengkap satu akun pengguna berdasarkan ID (termasuk informasi siapa Admin yang membuatnya).
+
+**Auth:** `Authorization: Bearer <access_token>` ✅  
+**Role Izin:** `ADMIN`, `COORDINATOR`
+
+**Contoh Request:**
+
+```
+GET /users/981ba263-8103-4c76-a7ed-f241297e8b27
+```
+
+**Response Sukses: `200 OK`**
+
+```json
+{
+  "success": true,
+  "data": {
+    "user": {
+      "id": "981ba263-8103-4c76-a7ed-f241297e8b27",
+      "email": "joko@gmail.com",
+      "name": "Joko Susilo",
+      "role": "COORDINATOR",
+      "status": "ACTIVE",
+      "mustChangePassword": true,
+      "failedLoginAttempts": 0,
+      "lockedUntil": null,
+      "lastLoginAt": null,
+      "passwordChangedAt": null,
+      "createdAt": "2026-09-16T10:13:14.049Z",
+      "updatedAt": "2026-09-16T10:13:14.049Z",
+      "createdBy": {
+        "id": "admin-uuid-1234",
+        "name": "Super Admin",
+        "email": "admin@widya.com"
+      }
+    }
+  }
+}
+```
 
 ---
 
@@ -333,8 +459,8 @@ Mengambil data profil pengguna yang sedang login berdasarkan Access Token.
 | :--- | :--- | :--- |
 | `400` | Bad Request | JSON body tidak valid (syntax error) |
 | `401` | Unauthorized | Token tidak ada, expired, atau invalid; password salah |
-| `403` | Forbidden | Akun dinonaktifkan (`status: "SUSPENDED"`); role tidak memiliki izin |
-| `404` | Not Found | Route atau resource tidak ditemukan |
+| `403` | Forbidden | Akun dinonaktifkan (`status: "SUSPENDED"`); role tidak memiliki izin (bukan Admin) |
+| `404` | Not Found | Route atau data pengguna tidak ditemukan |
 | `409` | Conflict | Data duplikat (contoh: email sudah terdaftar) |
 | `422` | Unprocessable Entity | Validasi Zod gagal pada input |
 | `423` | Locked | Akun terkunci sementara karena 5x percobaan login gagal (FR-SEC-01/02) |

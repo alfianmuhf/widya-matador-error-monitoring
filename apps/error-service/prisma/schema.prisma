@@ -1,3 +1,11 @@
+// =========================================================================
+// Domain User — sesuai fitur yang benar-benar ada di PRD:
+//   1. Login dashboard (FR-SEC-01/02) + lockout 5x percobaan gagal
+//   2. Akun dibuat oleh admin untuk user lain (persona Bruno, EP-06)
+//   3. Whitelist pengguna Telegram oleh admin (FR-BOT-03)
+// Tidak ada pembatasan akses per client/lokasi — itu bukan requirement PRD.
+// =========================================================================
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -6,45 +14,113 @@ datasource db {
   provider = "postgresql"
 }
 
+// ------------------------------- LOGIN & ROLE -----------------------------
+
+enum Role {
+  VIEWER
+  COORDINATOR
+  ADMIN
+}
+
+enum UserStatus {
+  INVITED   // akun dibuat admin, user belum pernah set password / login
+  ACTIVE
+  SUSPENDED // dinonaktifkan admin, tidak bisa login walau password benar
+}
+
 model User {
-  id        String   @id @default(uuid())
-  email     String   @unique
-  password  String
-  name      String?
+  id    String @id @default(uuid())
+  email String @unique
+  name  String
+  role  Role   @default(VIEWER)
 
-  role      Role     @default(USER)
-  isActive  Boolean  @default(true)
-  isVerified Boolean @default(false)
+  // nullable: kosong selama status masih INVITED, baru terisi setelah user
+  // klik link undangan dan set password sendiri
+  passwordHash String? @map("password_hash")
 
-  refreshTokens RefreshToken[]
+  status             UserStatus @default(INVITED)
+  mustChangePassword Boolean    @default(true) @map("must_change_password")
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  failedLoginAttempts Int       @default(0) @map("failed_login_attempts")
+  lockedUntil         DateTime? @map("locked_until") // dukung lockout 5x percobaan gagal
+  lastLoginAt         DateTime? @map("last_login_at")
+  passwordChangedAt   DateTime? @map("password_changed_at") // diisi tiap kali user ganti password sendiri
+
+  // siapa admin yang membuat akun ini (self-relation). Null khusus untuk admin
+  // pertama yang dibuat lewat seed/bootstrap, bukan lewat dashboard
+  createdById  String? @map("created_by_id")
+  createdBy    User?   @relation("UserCreatedBy", fields: [createdById], references: [id])
+  createdUsers User[]  @relation("UserCreatedBy")
+
+  refreshTokens            RefreshToken[]
+  passwordResetTokens      PasswordResetToken[]
+  whitelistedTelegramUsers TelegramUser[]       @relation("TelegramUserWhitelistedBy")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("users")
 }
 
-enum Role {
-  USER
-  ADMIN
-}
-
 model RefreshToken {
-  id        String   @id @default(uuid())
-  token     String   @unique
+  id    String @id @default(uuid())
+  token String @unique
 
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String @map("user_id")
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  expiresAt DateTime
-  revoked   Boolean  @default(false)
-  revokedAt DateTime?
+  expiresAt DateTime  @map("expires_at")
+  revoked   Boolean   @default(false)
+  revokedAt DateTime? @map("revoked_at")
 
-  userAgent String?
-  ipAddress String?
+  userAgent String? @map("user_agent")
+  ipAddress String? @map("ip_address")
 
-  createdAt DateTime @default(now())
+  createdAt DateTime @default(now()) @map("created_at")
 
   @@map("refresh_tokens")
   @@index([userId])
+}
+
+// ----------------------- REGISTER AKUN OLEH ADMIN --------------------------
+
+enum PasswordTokenPurpose {
+  INVITE // link pertama kali dari admin, untuk user set password sendiri
+  RESET  // lupa password
+}
+
+model PasswordResetToken {
+  id    String @id @default(uuid())
+  token String @unique // token acak yang dikirim lewat email, bukan password itu sendiri
+
+  userId String @map("user_id")
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  purpose   PasswordTokenPurpose @default(INVITE)
+  expiresAt DateTime             @map("expires_at")
+  usedAt    DateTime?            @map("used_at") // null = belum dipakai; sekali pakai
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("password_reset_tokens")
+  @@index([userId])
+}
+
+// --------------------- WHITELIST TELEGRAM OLEH ADMIN ------------------------
+
+model TelegramUser {
+  id         String  @id @default(uuid())
+  telegramId String  @unique @map("telegram_id")
+  username   String? // @username Telegram, bisa kosong kalau user tidak set username
+  fullName   String? @map("full_name") // nama asli, diisi admin biar gampang dikenali di daftar whitelist
+  isActive   Boolean @default(true) @map("is_active")
+
+  // siapa admin yang menambahkan nomor ini ke whitelist
+  whitelistedById String? @map("whitelisted_by_id")
+  whitelistedBy   User?   @relation("TelegramUserWhitelistedBy", fields: [whitelistedById], references: [id])
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("telegram_users")
 }

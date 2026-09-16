@@ -119,7 +119,7 @@ Template konfigurasi lingkungan tersedia di root folder: [`.env.example`](.env.e
      - `JWT_SECRET` & `JWT_REFRESH_SECRET`: String rahasia untuk enkripsi token JWT.
      - `FRONTEND_URL`: URL aplikasi frontend (default: `http://localhost:5173`).
    - **Frontend (`apps/interfaces/.env`)**:
-     - `VITE_API_BASE_URL`: URL endpoint REST API backend (default: `http://localhost:3000/v1`).
+     - `VITE_API_BASE_URL`: URL endpoint REST API backend (default: `http://localhost:3000`).
 
 ---
 
@@ -163,12 +163,12 @@ Antarmuka web akan aktif di: `http://localhost:5173`
 
 | Method | Endpoint | Auth | Deskripsi |
 | :--- | :--- | :--- | :--- |
-| `GET` | `/v1/health` | Public | Health check status service & versi v1 |
-| `POST` | `/v1/auth/register` | Public | Registrasi akun pengguna baru |
-| `POST` | `/v1/auth/login` | Public | Login pengguna, menghasilkan Access Token (body) & Refresh Token (`HttpOnly` cookie) |
-| `POST` | `/v1/auth/refresh` | Cookie | Memperbarui access token dan melakukan rotasi refresh token |
-| `POST` | `/v1/auth/logout` | Cookie | Mencabut refresh token di database dan membersihkan cookie |
-| `GET` | `/v1/auth/me` | Bearer Token | Mengambil data profil pengguna yang sedang login |
+| `GET` | `/health` | Public | Health check status server |
+| `POST` | `/auth/register` | Public | Registrasi akun pengguna baru |
+| `POST` | `/auth/login` | Public | Login pengguna, menghasilkan Access Token (body) & Refresh Token (`HttpOnly` cookie) |
+| `POST` | `/auth/refresh` | Cookie | Memperbarui access token dan melakukan rotasi refresh token |
+| `POST` | `/auth/logout` | Cookie | Mencabut refresh token di database dan membersihkan cookie |
+| `GET` | `/auth/me` | Bearer Token | Mengambil data profil pengguna yang sedang login |
 
 ---
 

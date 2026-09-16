@@ -1,21 +1,20 @@
 # API Documentation — After-Sales Monitoring System
 
-> Base URL: `http://localhost:3000/v1`  
-> Root URL: `http://localhost:3000`
+> Base URL: `http://[ip]:[port]` (contoh: `http://localhost:3000` atau `http://10.10.10.10:3000`)
 
 ---
 
 ## 📋 Daftar Isi
 
 - [Konvensi Umum](#konvensi-umum)
-- [Arsitektur Modular Versioning](#arsitektur-modular-versioning)
+- [Struktur Endpoint Direct (Tanpa Versi)](#struktur-endpoint-direct-tanpa-versi)
 - [Health Check](#health-check)
 - [Auth Module](#auth-module)
-  - [Register](#post-v1authregister)
-  - [Login](#post-v1authlogin)
-  - [Refresh Token](#post-v1authrefresh)
-  - [Logout](#post-v1authlogout)
-  - [Get Current User](#get-v1authme)
+  - [Register](#post-authregister)
+  - [Login](#post-authlogin)
+  - [Refresh Token](#post-authrefresh)
+  - [Logout](#post-authlogout)
+  - [Get Current User](#get-authme)
 - [Error Response](#error-response)
 
 ---
@@ -58,27 +57,22 @@ Refresh token dikirim dan dibaca melalui **HttpOnly cookie** bernama `refreshTok
 
 ---
 
-## Arsitektur Modular Versioning
+## Struktur Endpoint Direct (Tanpa Versi)
 
-Sistem menggunakan struktur routing modular agar setiap service atau kelompok fitur dapat memiliki versinya masing-masing secara independen:
+Endpoint API diakses langsung seperti : `[ip]:[port]/[endpoint]`
 
-```
-apps/error-service/src/routes/
-├── index.js          # Route aggregator utama — mendaftarkan router berdasarkan versi (/v1, /v2, dst)
-└── v1/
-    └── index.js      # Aggregator versi 1 — memetakan service modular (auth, errors, robots, dsb)
-```
-
-- **Prefix Versi**: `/v1` menggantikan `/api`.
-- **Independensi Versi**: Setiap service (misalnya `auth`, `error-monitoring`, dll.) didaftarkan secara modular di dalam routernya masing-masing. Jika suatu saat sebuah service membutuhkan `v2`, service tersebut dapat dibuatkan router `v2/` tanpa mengganggu service `v1` yang sudah berjalan.
+Contoh:
+- `http://10.10.10.10:3000/health`
+- `http://10.10.10.10:3000/auth/login`
+- `http://10.10.10.10:3000/auth/register`
 
 ---
 
 ## Health Check
 
-### `GET /v1/health`
+### `GET /health`
 
-Memeriksa status health dan informasi versi API v1.
+Memeriksa status server.
 
 **Auth:** Tidak diperlukan
 
@@ -88,18 +82,15 @@ Memeriksa status health dan informasi versi API v1.
 {
   "status": "ok",
   "service": "error-service",
-  "version": "v1",
-  "timestamp": "2026-09-09T10:10:21.890Z"
+  "timestamp": "2026-09-15T07:10:00.000Z"
 }
 ```
-
-> **Catatan:** Endpoint health check root `GET /health` dan `GET /` juga tersedia tanpa prefix versi untuk kebutuhan container/orchestrator probe.
 
 ---
 
 ## Auth Module
 
-### `POST /v1/auth/register`
+### `POST /auth/register`
 
 Mendaftarkan akun pengguna baru.
 
@@ -110,9 +101,9 @@ Mendaftarkan akun pengguna baru.
 | Field | Tipe | Wajib | Validasi | Keterangan |
 | :--- | :--- | :---: | :--- | :--- |
 | `email` | `string` | ✅ | Format email valid | Di-trim dan di-lowercase otomatis |
-| `password` | `string` | ✅ | Minimal 6 karakter | — |
-| `name` | `string` | ❌ | Minimal 2 karakter | Nama pengguna (opsional) |
-| `role` | `string` | ❌ | `"USER"` atau `"ADMIN"` | Default: `"USER"` |
+| `password` | `string` | ✅ | Minimal 6 karakter | Disimpan dalam bentuk `password_hash` |
+| `name` | `string` | ✅ | Minimal 2 karakter | Nama lengkap pengguna |
+| `role` | `string` | ❌ | `"VIEWER"`, `"COORDINATOR"`, atau `"ADMIN"` | Default: `"VIEWER"` |
 
 **Contoh Request:**
 
@@ -121,7 +112,7 @@ Mendaftarkan akun pengguna baru.
   "email": "user@example.com",
   "password": "password123",
   "name": "John Doe",
-  "role": "USER"
+  "role": "VIEWER"
 }
 ```
 
@@ -136,10 +127,10 @@ Mendaftarkan akun pengguna baru.
       "id": "48247728-9cfe-4789-a01f-bd27ad0272a1",
       "email": "user@example.com",
       "name": "John Doe",
-      "role": "USER",
-      "isActive": true,
-      "isVerified": false,
-      "createdAt": "2026-09-09T09:56:47.608Z"
+      "role": "VIEWER",
+      "status": "ACTIVE",
+      "mustChangePassword": false,
+      "createdAt": "2026-09-16T15:30:00.000Z"
     }
   }
 }
@@ -154,9 +145,9 @@ Mendaftarkan akun pengguna baru.
 
 ---
 
-### `POST /v1/auth/login`
+### `POST /auth/login`
 
-Login pengguna menggunakan email dan password. Mengembalikan Access Token di body dan men-set Refresh Token di HttpOnly cookie.
+Login pengguna menggunakan email dan password. Mengembalikan Access Token di body dan men-set Refresh Token di HttpOnly cookie. Mendukung proteksi Account Lockout setelah 5 kali gagal berturut-turut (FR-SEC-01/02).
 
 **Auth:** Tidak diperlukan
 
@@ -187,7 +178,9 @@ Login pengguna menggunakan email dan password. Mengembalikan Access Token di bod
       "id": "48247728-9cfe-4789-a01f-bd27ad0272a1",
       "email": "user@example.com",
       "name": "John Doe",
-      "role": "USER"
+      "role": "VIEWER",
+      "status": "ACTIVE",
+      "mustChangePassword": false
     },
     "accessToken": "eyJhbGciOiJIUzI1NiIs..."
   }
@@ -204,13 +197,14 @@ Set-Cookie: refreshToken=eyJ...; Max-Age=86400; Path=/; HttpOnly; SameSite=Lax
 
 | Status | Kondisi |
 | :--- | :--- |
-| `401 Unauthorized` | Email atau password salah |
-| `403 Forbidden` | Akun telah dinonaktifkan |
+| `401 Unauthorized` | Email atau password salah (menampilkan sisa kesempatan), atau akun belum aktif |
+| `403 Forbidden` | Akun telah dinonaktifkan (`status: "SUSPENDED"`) |
+| `423 Locked` | Akun terkunci sementara selama 15 menit akibat 5x percobaan gagal (FR-SEC-01/02) |
 | `422 Unprocessable Entity` | Validasi input gagal |
 
 ---
 
-### `POST /v1/auth/refresh`
+### `POST /auth/refresh`
 
 Memperbarui Access Token menggunakan Refresh Token yang tersimpan di cookie. Mengimplementasikan **Refresh Token Rotation**: token lama di-revoke dan token baru diterbitkan.
 
@@ -235,7 +229,9 @@ Memperbarui Access Token menggunakan Refresh Token yang tersimpan di cookie. Men
       "id": "48247728-9cfe-4789-a01f-bd27ad0272a1",
       "email": "user@example.com",
       "name": "John Doe",
-      "role": "USER"
+      "role": "VIEWER",
+      "status": "ACTIVE",
+      "mustChangePassword": false
     },
     "accessToken": "eyJhbGciOiJIUzI1NiIs..."
   }
@@ -259,7 +255,7 @@ Set-Cookie: refreshToken=<token_baru>; Max-Age=86400; Path=/; HttpOnly; SameSite
 
 ---
 
-### `POST /v1/auth/logout`
+### `POST /auth/logout`
 
 Mencabut (revoke) refresh token di database dan menghapus cookie dari browser.
 
@@ -290,7 +286,7 @@ Set-Cookie: refreshToken=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOn
 
 ---
 
-### `GET /v1/auth/me`
+### `GET /auth/me`
 
 Mengambil data profil pengguna yang sedang login berdasarkan Access Token.
 
@@ -306,11 +302,15 @@ Mengambil data profil pengguna yang sedang login berdasarkan Access Token.
       "id": "48247728-9cfe-4789-a01f-bd27ad0272a1",
       "email": "user@example.com",
       "name": "John Doe",
-      "role": "USER",
-      "isActive": true,
-      "isVerified": false,
-      "createdAt": "2026-09-09T09:56:47.608Z",
-      "updatedAt": "2026-09-09T09:56:47.608Z"
+      "role": "VIEWER",
+      "status": "ACTIVE",
+      "mustChangePassword": false,
+      "failedLoginAttempts": 0,
+      "lockedUntil": null,
+      "lastLoginAt": "2026-09-16T15:30:45.000Z",
+      "passwordChangedAt": null,
+      "createdAt": "2026-09-16T15:30:00.000Z",
+      "updatedAt": "2026-09-16T15:30:45.000Z"
     }
   }
 }
@@ -333,10 +333,11 @@ Mengambil data profil pengguna yang sedang login berdasarkan Access Token.
 | :--- | :--- | :--- |
 | `400` | Bad Request | JSON body tidak valid (syntax error) |
 | `401` | Unauthorized | Token tidak ada, expired, atau invalid; password salah |
-| `403` | Forbidden | Akun dinonaktifkan; role tidak memiliki izin |
+| `403` | Forbidden | Akun dinonaktifkan (`status: "SUSPENDED"`); role tidak memiliki izin |
 | `404` | Not Found | Route atau resource tidak ditemukan |
 | `409` | Conflict | Data duplikat (contoh: email sudah terdaftar) |
 | `422` | Unprocessable Entity | Validasi Zod gagal pada input |
+| `423` | Locked | Akun terkunci sementara karena 5x percobaan login gagal (FR-SEC-01/02) |
 | `500` | Internal Server Error | Kesalahan tidak terduga pada server |
 
 ### Contoh: Validasi Error (`422`)
@@ -359,13 +360,13 @@ Mengambil data profil pengguna yang sedang login berdasarkan Access Token.
 }
 ```
 
-### Contoh: Route Tidak Ditemukan (`404`)
+### Contoh: Akun Terkunci / Lockout (`423`)
 
 ```json
 {
   "success": false,
-  "statusCode": 404,
-  "message": "Route GET /v1/unknown tidak ditemukan"
+  "statusCode": 423,
+  "message": "Akun Anda terkunci selama 15 menit karena 5 kali percobaan login gagal."
 }
 ```
 

@@ -88,9 +88,7 @@ monitoring-api/
 │   │   └── logger.js
 │   │
 │   ├── routes/
-│   │   ├── index.js
-│   │   └── v1/
-│   │       └── index.js
+│   │   └── index.js
 │   │
 │   ├── app.js
 │   └── server.js
@@ -115,29 +113,44 @@ Route → Middleware (validate/auth) → Controller → Service → Repository �
 
 ---
 
-## 4. Database Design
+## 4. Database Design (Domain User PRD)
 
 ### ERD (Ringkas)
 
 ```
 User (1) ──── (N) RefreshToken
+User (1) ──── (N) PasswordResetToken
+User (1) ──── (N) TelegramUser (WhitelistedBy)
+User (1) ──── (N) User (CreatedBy self-relation)
 ```
 
 ### Model
 
 **User**
-- `id`, `email` (unique), `password` (hashed), `name`
-- `role`: USER | ADMIN
-- `isActive`, `isVerified`
-- Relasi ke banyak `RefreshToken`
+- `id`, `email` (unique), `name`, `role` (`VIEWER`, `COORDINATOR`, `ADMIN`)
+- `passwordHash` (`password_hash`, nullable untuk status `INVITED`)
+- `status` (`INVITED`, `ACTIVE`, `SUSPENDED`)
+- `mustChangePassword` (default `true`)
+- `failedLoginAttempts`, `lockedUntil` (proteksi lockout 5x gagal sesuai FR-SEC-01/02)
+- `lastLoginAt`, `passwordChangedAt`
+- `createdById` → relasi self-referencing (siapa admin yang membuat akun ini, EP-06)
+- Relasi ke `RefreshToken`, `PasswordResetToken`, dan `TelegramUser`
 
 **RefreshToken**
 - `id`, `token` (unique)
 - `userId` → relasi ke User (cascade delete)
 - `expiresAt`, `revoked`, `revokedAt`
-- `userAgent`, `ipAddress` (untuk audit/tracking device)
+- `userAgent`, `ipAddress` (audit tracking device)
 
-Model ini sudah cukup solid untuk auth flow modern: mendukung multi-device login (satu user bisa punya banyak refresh token aktif), revoke per-device, dan audit trail (siapa login dari mana).
+**PasswordResetToken**
+- `id`, `token` (unique)
+- `userId` → relasi ke User (cascade delete)
+- `purpose` (`INVITE`, `RESET`)
+- `expiresAt`, `usedAt`
+
+**TelegramUser**
+- `id`, `telegramId` (unique), `username`, `fullName`, `isActive`
+- `whitelistedById` → relasi ke admin User (FR-BOT-03)
 
 ---
 
@@ -157,11 +170,11 @@ Supaya bisa di-revoke sewaktu-waktu (logout, ganti password, atau device dicurig
 
 | Method | Endpoint		| Deskripsi									|
 |--------|----------------------|-------------------------------------------------------------------------------|
-| POST	 | `/v1/auth/register`	| Registrasi user baru (opsional di fase 1, atau seed manual dulu)		|
-| POST	 | `/v1/auth/login`	| Login pakai email + password → return access token + set refresh token cookie	|
-| POST	 | `/v1/auth/refresh`	| Ambil access token baru pakai refresh token					|
-| POST	 | `/v1/auth/logout`	| Revoke refresh token yang dipakai						|
-| GET	 | `/v1/auth/me`	| Ambil data user yang sedang login (protected, pakai `auth.middleware`)	|
+| POST	 | `/auth/register`	| Registrasi user baru (opsional di fase 1, atau seed manual dulu)		|
+| POST	 | `/auth/login`	| Login pakai email + password → return access token + set refresh token cookie	|
+| POST	 | `/auth/refresh`	| Ambil access token baru pakai refresh token					|
+| POST	 | `/auth/logout`	| Revoke refresh token yang dipakai						|
+| GET	 | `/auth/me`		| Ambil data user yang sedang login (protected, pakai `auth.middleware`)	|
 
 ### 5.3 Detail Flow
 

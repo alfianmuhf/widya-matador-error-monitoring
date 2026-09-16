@@ -1,5 +1,6 @@
 import { Router } from "express";
 import authRoutes from "../modules/auth/auth.route.js";
+import userRoutes from "../modules/user/user.route.js";
 
 const router = Router();
 
@@ -17,11 +18,14 @@ router.get("/health", (req, res) => {
 
 /**
  * Modular Service Routes (Direct / Unversioned)
- * Contoh: /auth/login, /auth/register, /auth/me, dsb.
  */
+// Auth Service (/auth/login, /auth/register, /auth/refresh, /auth/logout, /auth/me)
 router.use("/auth", authRoutes);
 
-// Service lain di masa depan dapat didaftarkan langsung di sini:
+// User Management Service (/users)
+router.use("/users", userRoutes);
+
+// Service lain di masa depan:
 // router.use("/errors", errorRoutes);
 // router.use("/robots", robotRoutes);
 

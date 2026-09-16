@@ -159,16 +159,24 @@ Antarmuka web akan aktif di: `http://localhost:5173`
 
 ---
 
-## 🔐 API Endpoints (Auth Module)
+## 🔐 API Endpoints
 
+### Auth Module
 | Method | Endpoint | Auth | Deskripsi |
 | :--- | :--- | :--- | :--- |
 | `GET` | `/health` | Public | Health check status server |
-| `POST` | `/auth/register` | Public | Registrasi akun pengguna baru |
+| `POST` | `/auth/register` | Public | Registrasi akun pengguna mandiri |
 | `POST` | `/auth/login` | Public | Login pengguna, menghasilkan Access Token (body) & Refresh Token (`HttpOnly` cookie) |
 | `POST` | `/auth/refresh` | Cookie | Memperbarui access token dan melakukan rotasi refresh token |
 | `POST` | `/auth/logout` | Cookie | Mencabut refresh token di database dan membersihkan cookie |
 | `GET` | `/auth/me` | Bearer Token | Mengambil data profil pengguna yang sedang login |
+
+### User Management Module (Admin & Coordinator)
+| Method | Endpoint | Auth | Role | Deskripsi |
+| :--- | :--- | :--- | :--- | :--- |
+| `POST` | `/users` | Bearer Token | `ADMIN` | Registrasi akun baru oleh admin dengan auto-generated initial password |
+| `GET` | `/users` | Bearer Token | `ADMIN`, `COORDINATOR` | Mengambil daftar seluruh pengguna (pagination & filter) |
+| `GET` | `/users/:id` | Bearer Token | `ADMIN`, `COORDINATOR` | Mengambil detail lengkap pengguna berdasarkan ID |
 
 ---
 

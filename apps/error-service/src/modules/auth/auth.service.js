@@ -8,6 +8,9 @@ import {
   getTokenExpiryDate,
 } from "../../utils/jwt.js";
 
+const MAX_FAILED_ATTEMPTS = 5;
+const LOCKOUT_DURATION_MINUTES = 15;
+
 /**
  * Register a new user
  */
@@ -21,9 +24,11 @@ export const register = async ({ email, password, name, role }) => {
 
   const newUser = await authRepository.createUser({
     email,
-    password: hashedPassword,
+    passwordHash: hashedPassword,
     name,
-    role: role || "USER",
+    role: role || "VIEWER",
+    status: "ACTIVE",
+    mustChangePassword: false,
   });
 
   return newUser;
@@ -31,6 +36,7 @@ export const register = async ({ email, password, name, role }) => {
 
 /**
  * Authenticate user and issue access + refresh tokens
+ * Includes Account Lockout Protection (FR-SEC-01/02)
  */
 export const login = async ({ email, password }, { userAgent, ipAddress } = {}) => {
   const user = await authRepository.findUserByEmail(email);
@@ -39,15 +45,53 @@ export const login = async ({ email, password }, { userAgent, ipAddress } = {}) 
     throw createError(401, "Email atau password salah");
   }
 
-  if (!user.isActive) {
+  // 1. Check if account is currently locked
+  if (user.lockedUntil && new Date() < new Date(user.lockedUntil)) {
+    const remainingMinutes = Math.ceil((new Date(user.lockedUntil) - new Date()) / (60 * 1000));
+    throw createError(
+      423,
+      `Akun terkunci sementara karena 5x percobaan login gagal. Silakan coba lagi dalam ${remainingMinutes} menit.`
+    );
+  }
+
+  // 2. Check user status
+  if (user.status === "SUSPENDED") {
     throw createError(403, "Akun Anda telah dinonaktifkan. Silakan hubungi administrator.");
   }
 
-  const isPasswordValid = await comparePassword(password, user.password);
-  if (!isPasswordValid) {
-    throw createError(401, "Email atau password salah");
+  if (user.status === "INVITED" || !user.passwordHash) {
+    throw createError(
+      401,
+      "Akun belum diaktifkan. Silakan setel password melalui link undangan terlebih dahulu."
+    );
   }
 
+  // 3. Verify password
+  const isPasswordValid = await comparePassword(password, user.passwordHash);
+  if (!isPasswordValid) {
+    const currentAttempts = (user.failedLoginAttempts || 0) + 1;
+
+    if (currentAttempts >= MAX_FAILED_ATTEMPTS) {
+      const lockedUntil = new Date(Date.now() + LOCKOUT_DURATION_MINUTES * 60 * 1000);
+      await authRepository.recordFailedLoginAttempt(user.id, currentAttempts, lockedUntil);
+      throw createError(
+        423,
+        `Akun Anda terkunci selama ${LOCKOUT_DURATION_MINUTES} menit karena 5 kali percobaan login gagal.`
+      );
+    } else {
+      await authRepository.recordFailedLoginAttempt(user.id, currentAttempts);
+      const remainingAttempts = MAX_FAILED_ATTEMPTS - currentAttempts;
+      throw createError(
+        401,
+        `Email atau password salah. Sisa kesempatan login: ${remainingAttempts} kali.`
+      );
+    }
+  }
+
+  // 4. Successful login: reset lockout attempts & update lastLoginAt
+  await authRepository.updateLoginSuccess(user.id);
+
+  // 5. Issue Token Pair
   const accessTokenPayload = {
     id: user.id,
     email: user.email,
@@ -73,6 +117,8 @@ export const login = async ({ email, password }, { userAgent, ipAddress } = {}) 
       email: user.email,
       name: user.name,
       role: user.role,
+      status: user.status,
+      mustChangePassword: user.mustChangePassword,
     },
     accessToken,
     refreshToken,
@@ -107,8 +153,6 @@ export const refreshToken = async (oldToken, { userAgent, ipAddress } = {}) => {
 
   // 3. Security: Check if token has been revoked (Token Reuse Detection)
   if (storedToken.revoked) {
-    // If a revoked token is used again, someone might be replaying tokens!
-    // Invalidate ALL tokens for this user as a safeguard.
     await authRepository.revokeAllUserTokens(storedToken.userId);
     throw createError(
       401,
@@ -123,7 +167,7 @@ export const refreshToken = async (oldToken, { userAgent, ipAddress } = {}) => {
 
   // 5. Ensure user exists and is active
   const user = storedToken.user;
-  if (!user || !user.isActive) {
+  if (!user || user.status !== "ACTIVE") {
     throw createError(403, "User tidak aktif atau tidak ditemukan");
   }
 
@@ -156,6 +200,8 @@ export const refreshToken = async (oldToken, { userAgent, ipAddress } = {}) => {
       email: user.email,
       name: user.name,
       role: user.role,
+      status: user.status,
+      mustChangePassword: user.mustChangePassword,
     },
     accessToken: newAccessToken,
     refreshToken: newRefreshToken,

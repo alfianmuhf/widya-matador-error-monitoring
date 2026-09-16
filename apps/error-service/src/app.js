@@ -38,7 +38,7 @@ app.get("/", (req, res) => {
   });
 });
 
-// Mount all modular versioned routes (e.g. /v1/...)
+// Mount all modular routes directly (/health, /auth, etc.)
 app.use(routes);
 
 // 404 Handler

@@ -1,11 +1,11 @@
 import { Router } from "express";
-import v1Routes from "./v1/index.js";
+import authRoutes from "../modules/auth/auth.route.js";
 
 const router = Router();
 
 /**
- * Health check endpoint root (unversioned)
- * Berguna untuk health probe container, orchestrator, atau load balancer
+ * Health check endpoint
+ * GET /health
  */
 router.get("/health", (req, res) => {
   res.status(200).json({
@@ -16,17 +16,13 @@ router.get("/health", (req, res) => {
 });
 
 /**
- * Modular API Versioning
- * Tiap service atau kelompok endpoint memiliki versinya masing-masing secara modular.
- * 
- * Contoh:
- * - Error Service API v1 (Auth, Errors, dsb): /v1/...
- * - Jika nantinya ada service atau modul yang mengadopsi v2: /v2/...
+ * Modular Service Routes (Direct / Unversioned)
+ * Contoh: /auth/login, /auth/register, /auth/me, dsb.
  */
-router.use("/v1", v1Routes);
+router.use("/auth", authRoutes);
 
-// Modular service version lain di masa depan dapat didaftarkan di sini:
-// router.use("/v2", v2Routes);
+// Service lain di masa depan dapat didaftarkan langsung di sini:
+// router.use("/errors", errorRoutes);
+// router.use("/robots", robotRoutes);
 
 export default router;
-

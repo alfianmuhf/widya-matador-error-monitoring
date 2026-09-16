@@ -21,14 +21,13 @@ export const registerSchema = z.object({
     .string({ required_error: "Password wajib diisi" })
     .min(6, "Password minimal 6 karakter"),
   name: z
-    .string()
+    .string({ required_error: "Nama wajib diisi" })
     .trim()
-    .min(2, "Nama minimal 2 karakter")
-    .optional(),
+    .min(2, "Nama minimal 2 karakter"),
   role: z
-    .enum(["USER", "ADMIN"], {
-      errorMap: () => ({ message: "Role harus berupa USER atau ADMIN" }),
+    .enum(["VIEWER", "COORDINATOR", "ADMIN"], {
+      errorMap: () => ({ message: "Role harus berupa VIEWER, COORDINATOR, atau ADMIN" }),
     })
     .optional()
-    .default("USER"),
+    .default("VIEWER"),
 });

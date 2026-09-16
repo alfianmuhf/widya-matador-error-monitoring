@@ -22,8 +22,12 @@ export const findUserById = async (id) => {
       email: true,
       name: true,
       role: true,
-      isActive: true,
-      isVerified: true,
+      status: true,
+      mustChangePassword: true,
+      failedLoginAttempts: true,
+      lockedUntil: true,
+      lastLoginAt: true,
+      passwordChangedAt: true,
       createdAt: true,
       updatedAt: true,
     },
@@ -32,7 +36,7 @@ export const findUserById = async (id) => {
 
 /**
  * Create a new user record
- * @param {object} data - { email, password, name, role }
+ * @param {object} data - { email, passwordHash, name, role, status, mustChangePassword }
  */
 export const createUser = async (data) => {
   return prisma.user.create({
@@ -42,9 +46,40 @@ export const createUser = async (data) => {
       email: true,
       name: true,
       role: true,
-      isActive: true,
-      isVerified: true,
+      status: true,
+      mustChangePassword: true,
       createdAt: true,
+    },
+  });
+};
+
+/**
+ * Update user on successful login: reset failed attempts, clear lock, update lastLoginAt
+ * @param {string} id
+ */
+export const updateLoginSuccess = async (id) => {
+  return prisma.user.update({
+    where: { id },
+    data: {
+      failedLoginAttempts: 0,
+      lockedUntil: null,
+      lastLoginAt: new Date(),
+    },
+  });
+};
+
+/**
+ * Record failed login attempt and optionally lock the account
+ * @param {string} id
+ * @param {number} attempts
+ * @param {Date|null} lockedUntil
+ */
+export const recordFailedLoginAttempt = async (id, attempts, lockedUntil = null) => {
+  return prisma.user.update({
+    where: { id },
+    data: {
+      failedLoginAttempts: attempts,
+      ...(lockedUntil ? { lockedUntil } : {}),
     },
   });
 };

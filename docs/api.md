@@ -15,10 +15,13 @@
   - [Refresh Token](#post-authrefresh)
   - [Logout](#post-authlogout)
   - [Get Current User](#get-authme)
+  - [Change Password (Ubah Password Sendiri)](#post-authchange-password)
 - [User Management Module (Admin)](#user-management-module-admin)
   - [Create User Baru](#post-users)
   - [Daftar Pengguna](#get-users)
   - [Detail Pengguna](#get-usersid)
+  - [Update Data Pengguna](#patch-usersid)
+  - [Hapus Pengguna](#delete-usersid)
 - [Error Response](#error-response)
 
 ---
@@ -286,11 +289,73 @@ Mengambil data profil pengguna yang sedang login berdasarkan Access Token.
 
 ---
 
+### `POST /auth/change-password`
+
+Mengubah password akun pengguna yang sedang login. Mendukung method `POST` dan `PATCH`.
+
+Setelah password berhasil diubah:
+- Nilai `mustChangePassword` di database otomatis berubah menjadi `false`.
+- Waktu perubahan dicatat di `passwordChangedAt`.
+- Seluruh sesi login/refresh token di perangkat lain otomatis dicabut (*revoked*) untuk keamanan.
+- Sesi aktif saat ini tetap berjalan dengan diterbitkannya pasangan access token baru dan refresh token baru pada cookie.
+
+**Auth:** `Authorization: Bearer <access_token>` ✅ **Wajib**
+
+**Request Body:**
+
+| Field | Tipe | Wajib | Aturan | Keterangan |
+| :--- | :--- | :--- | :--- | :--- |
+| `currentPassword` | `string` | Ya | Minimal 1 karakter | Password lama yang sedang aktif |
+| `newPassword` | `string` | Ya | Minimal 6 karakter, tidak boleh sama dengan password lama | Password baru yang diinginkan |
+| `confirmPassword` | `string` | Tidak | Harus sama persis dengan `newPassword` | Konfirmasi password baru (opsional) |
+
+```json
+{
+  "currentPassword": "passwordLama123",
+  "newPassword": "passwordBaru456",
+  "confirmPassword": "passwordBaru456"
+}
+```
+
+**Response Sukses: `200 OK`**
+
+```json
+{
+  "success": true,
+  "message": "Password berhasil diubah",
+  "data": {
+    "user": {
+      "id": "48247728-9cfe-4789-a01f-bd27ad0272a1",
+      "email": "user@example.com",
+      "name": "John Doe",
+      "role": "VIEWER",
+      "status": "ACTIVE",
+      "mustChangePassword": false,
+      "passwordChangedAt": "2026-09-16T17:30:00.000Z",
+      "updatedAt": "2026-09-16T17:30:00.000Z"
+    },
+    "accessToken": "eyJhbGciOiJIUzI1NiIs..."
+  }
+}
+```
+
+**Kode Status HTTP:**
+
+| Status Code | Kondisi |
+| :--- | :--- |
+| `200 OK` | Password berhasil diubah |
+| `400 Bad Request` | Password saat ini salah, atau password baru sama dengan password lama |
+| `401 Unauthorized` | Access token tidak disertakan atau sudah kedaluwarsa |
+| `403 Forbidden` | Akun pengguna berstatus `SUSPENDED` |
+| `422 Unprocessable Entity` | Validasi input gagal (panjang kurang dari 6 karakter / konfirmasi tidak cocok) |
+
+---
+
 ## User Management Module (Admin)
 
 ### `POST /users`
 
-Mendaftarkan pengguna baru oleh Admin. Password awal otomatis dibuat dengan format **nama email + 4 digit angka acak** (contoh: `joko@gmail.com` $\rightarrow$ `joko7457`). Respons mengembalikan data user beserta `initialPassword` dalam bentuk plaintext agar Admin dapat memberikannya kepada user.
+Mendaftarkan pengguna baru oleh Admin. Password awal otomatis dibuat sama dengan **nama email sebelum tanda `@`** (contoh: `joko@gmail.com` $\rightarrow$ `joko`). Respons mengembalikan data user beserta `initialPassword` dalam bentuk plaintext agar Admin dapat memberikannya kepada user.
 
 **Auth:** `Authorization: Bearer <admin_access_token>` ✅  
 **Role Izin:** `ADMIN`
@@ -330,7 +395,7 @@ Mendaftarkan pengguna baru oleh Admin. Password awal otomatis dibuat dengan form
       "createdById": "admin-uuid-1234",
       "createdAt": "2026-09-16T10:13:14.049Z"
     },
-    "initialPassword": "joko7457"
+    "initialPassword": "joko"
   }
 }
 ```
@@ -448,6 +513,118 @@ GET /users/981ba263-8103-4c76-a7ed-f241297e8b27
   }
 }
 ```
+
+---
+
+### `PATCH /users/:id`
+
+Memperbarui data pengguna tertentu oleh Admin. Mendukung method `PATCH` dan `PUT`. Admin dapat memperbarui satu atau beberapa field: `email`, `name`, `password`, `role`, dan `status`.
+
+**Auth:** `Authorization: Bearer <admin_access_token>` ✅  
+**Role Izin:** `ADMIN`
+
+**Request Body (minimal 1 field diisi):**
+
+| Field | Tipe | Wajib | Pilihan / Validasi | Keterangan |
+| :--- | :--- | :---: | :--- | :--- |
+| `email` | `string` | ❌ | Format email valid | Diperiksa agar tidak bentrok dengan email user lain |
+| `name` | `string` | ❌ | Min 2 karakter | Nama lengkap baru |
+| `password` | `string` | ❌ | Min 6 karakter | Otomatis di-hash dengan bcrypt |
+| `role` | `string` | ❌ | `"ADMIN"`, `"COORDINATOR"`, `"VIEWER"` | Peran hak akses |
+| `status` | `string` | ❌ | `"ACTIVE"`, `"INVITED"`, `"SUSPENDED"` | Status keaktifan akun |
+
+> [!NOTE]
+> - Jika `password` diubah atau status diubah menjadi `SUSPENDED`, seluruh refresh token milik user tersebut otomatis dicabut (*revoked*) untuk keamanan.
+> - Admin tidak dapat menonaktifkan (`SUSPENDED`) atau mendemosi role akunnya sendiri demi mencegah penguncian sistem (*lockout*).
+
+**Contoh Request:**
+
+```json
+{
+  "name": "Joko Susilo, S.Kom",
+  "role": "COORDINATOR",
+  "status": "ACTIVE",
+  "password": "newPasswordBaru123"
+}
+```
+
+**Response Sukses: `200 OK`**
+
+```json
+{
+  "success": true,
+  "message": "Data pengguna berhasil diperbarui",
+  "data": {
+    "user": {
+      "id": "981ba263-8103-4c76-a7ed-f241297e8b27",
+      "email": "joko@gmail.com",
+      "name": "Joko Susilo, S.Kom",
+      "role": "COORDINATOR",
+      "status": "ACTIVE",
+      "mustChangePassword": false,
+      "failedLoginAttempts": 0,
+      "lockedUntil": null,
+      "lastLoginAt": null,
+      "passwordChangedAt": "2026-09-16T17:40:00.000Z",
+      "createdAt": "2026-09-16T10:13:14.049Z",
+      "updatedAt": "2026-09-16T17:40:00.000Z",
+      "createdBy": {
+        "id": "admin-uuid-1234",
+        "name": "Super Admin",
+        "email": "admin@widya.com"
+      }
+    }
+  }
+}
+```
+
+**Response Error:**
+
+| Status Code | Kondisi |
+| :--- | :--- |
+| `400 Bad Request` | Admin mencoba menonaktifkan/mengubah role akunnya sendiri |
+| `401 Unauthorized` | Token tidak disertakan atau sudah kedaluwarsa |
+| `403 Forbidden` | Bukan role `ADMIN` |
+| `404 Not Found` | Pengguna dengan ID tersebut tidak ditemukan |
+| `409 Conflict` | Email baru sudah digunakan oleh pengguna lain |
+| `422 Unprocessable Entity` | Validasi input gagal (password < 6 karakter, enum salah, atau body kosong) |
+
+---
+
+### `DELETE /users/:id`
+
+Menghapus akun pengguna dari sistem secara permanen. Seluruh sesi login, token reset password, serta relasi data terkait akan dibersihkan secara aman melalui database transaction.
+
+**Auth:** `Authorization: Bearer <admin_access_token>` ✅  
+**Role Izin:** `ADMIN`
+
+> [!WARNING]
+> Admin tidak dapat menghapus akun miliknya sendiri (`self-deletion prevention`).
+
+**Contoh Request:**
+
+```http
+DELETE /users/981ba263-8103-4c76-a7ed-f241297e8b27
+Authorization: Bearer <admin_access_token>
+```
+
+**Response Sukses: `200 OK`**
+
+```json
+{
+  "success": true,
+  "message": "Pengguna berhasil dihapus"
+}
+```
+
+**Response Error:**
+
+| Status Code | Kondisi |
+| :--- | :--- |
+| `400 Bad Request` | Admin mencoba menghapus akun miliknya sendiri |
+| `401 Unauthorized` | Token tidak disertakan atau kedaluwarsa |
+| `403 Forbidden` | Bukan role `ADMIN` |
+| `404 Not Found` | Pengguna dengan ID tersebut tidak ditemukan |
 
 ---
 

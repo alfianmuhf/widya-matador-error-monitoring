@@ -52,3 +52,39 @@ export const getUserById = async (req, res, next) => {
     next(error);
   }
 };
+
+/**
+ * Controller: Admin updates user data
+ */
+export const updateUser = async (req, res, next) => {
+  try {
+    const adminId = req.user?.id;
+    const user = await userService.updateUser(req.params.id, req.body, adminId);
+
+    res.status(200).json({
+      success: true,
+      message: "Data pengguna berhasil diperbarui",
+      data: { user },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Controller: Admin deletes a user
+ */
+export const deleteUser = async (req, res, next) => {
+  try {
+    const adminId = req.user?.id;
+    await userService.deleteUser(req.params.id, adminId);
+
+    res.status(200).json({
+      success: true,
+      message: "Pengguna berhasil dihapus",
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+

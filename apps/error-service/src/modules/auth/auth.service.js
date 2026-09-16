@@ -235,3 +235,68 @@ export const getMe = async (userId) => {
 
   return user;
 };
+
+/**
+ * Change current user password
+ */
+export const changePassword = async (userId, { currentPassword, newPassword }, meta = {}) => {
+  // 1. Retrieve user with current password hash
+  const user = await authRepository.findUserWithPasswordById(userId);
+
+  if (!user) {
+    throw createError(404, "Data pengguna tidak ditemukan");
+  }
+
+  if (user.status === "SUSPENDED") {
+    throw createError(403, "Akun Anda telah dinonaktifkan");
+  }
+
+  // 2. Verify current password
+  if (!user.passwordHash) {
+    throw createError(400, "Akun ini belum memiliki password terdaftar");
+  }
+
+  const isCurrentPasswordValid = await comparePassword(currentPassword, user.passwordHash);
+  if (!isCurrentPasswordValid) {
+    throw createError(400, "Password saat ini tidak sesuai");
+  }
+
+  // 3. Ensure new password is not identical to current password
+  const isSamePassword = await comparePassword(newPassword, user.passwordHash);
+  if (isSamePassword) {
+    throw createError(400, "Password baru tidak boleh sama dengan password saat ini");
+  }
+
+  // 4. Hash new password and update in database
+  const newPasswordHash = await hashPassword(newPassword);
+  const updatedUser = await authRepository.updateUserPassword(userId, newPasswordHash);
+
+  // 5. Invalidate existing sessions on other devices for security
+  await authRepository.revokeAllUserTokens(userId);
+
+  // 6. Generate fresh active session token pair for current device
+  const accessTokenPayload = {
+    id: updatedUser.id,
+    email: updatedUser.email,
+    role: updatedUser.role,
+  };
+
+  const accessToken = generateAccessToken(accessTokenPayload);
+  const refreshToken = generateRefreshToken({ id: updatedUser.id });
+  const expiresAt = getTokenExpiryDate(refreshToken);
+
+  await authRepository.createRefreshToken({
+    token: refreshToken,
+    userId: updatedUser.id,
+    expiresAt,
+    userAgent: meta.userAgent || null,
+    ipAddress: meta.ipAddress || null,
+  });
+
+  return {
+    user: updatedUser,
+    accessToken,
+    refreshToken,
+  };
+};
+

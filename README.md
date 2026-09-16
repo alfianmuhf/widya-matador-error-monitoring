@@ -170,6 +170,7 @@ Antarmuka web akan aktif di: `http://localhost:5173`
 | `POST` | `/auth/refresh` | Cookie | Memperbarui access token dan melakukan rotasi refresh token |
 | `POST` | `/auth/logout` | Cookie | Mencabut refresh token di database dan membersihkan cookie |
 | `GET` | `/auth/me` | Bearer Token | Mengambil data profil pengguna yang sedang login |
+| `POST` / `PATCH` | `/auth/change-password` | Bearer Token | Mengubah password akun pengguna yang sedang login |
 
 ### User Management Module (Admin & Coordinator)
 | Method | Endpoint | Auth | Role | Deskripsi |
@@ -177,6 +178,8 @@ Antarmuka web akan aktif di: `http://localhost:5173`
 | `POST` | `/users` | Bearer Token | `ADMIN` | Registrasi akun baru oleh admin dengan auto-generated initial password |
 | `GET` | `/users` | Bearer Token | `ADMIN`, `COORDINATOR` | Mengambil daftar seluruh pengguna (pagination & filter) |
 | `GET` | `/users/:id` | Bearer Token | `ADMIN`, `COORDINATOR` | Mengambil detail lengkap pengguna berdasarkan ID |
+| `PATCH` / `PUT` | `/users/:id` | Bearer Token | `ADMIN` | Mengubah data pengguna (email, nama, password, role, status) |
+| `DELETE` | `/users/:id` | Bearer Token | `ADMIN` | Menghapus data pengguna secara permanen beserta sesi terkait |
 
 ---
 

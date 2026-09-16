@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback } from "react";
-import Header from "../components/layout/Header.jsx";
 import UserTable from "../components/users/UserTable.jsx";
 import UserModal from "../components/users/UserModal.jsx";
 import TelegramTable from "../components/users/TelegramTable.jsx";
@@ -113,14 +112,7 @@ export default function PenggunaWhitelist() {
 
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
-      {/* Top Header */}
-      <Header
-        title="Pengguna & Whitelist"
-        subtitle="Akun dashboard dan pengguna bot Telegram"
-      />
-
-      <div style={{ padding: "0 32px 32px 32px" }}>
-        {/* Tab Switcher Pills */}
+      {/* Tab Switcher Pills */}
         <div style={{ display: "flex", gap: "10px", marginBottom: "20px" }}>
           <button
             type="button"
@@ -176,7 +168,6 @@ export default function PenggunaWhitelist() {
             onEditTelegramUser={handleOpenEditTelegram}
           />
         )}
-      </div>
 
       {/* Modals */}
       <UserModal

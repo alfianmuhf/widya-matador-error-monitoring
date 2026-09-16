@@ -1,5 +1,3 @@
-import InfoBanner from "../common/InfoBanner.jsx";
-
 export default function TelegramTable({
   telegramUsers = [],
   loading = false,
@@ -22,7 +20,7 @@ export default function TelegramTable({
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          marginBottom: "18px",
+          marginBottom: "20px",
         }}
       >
         <h2 style={{ fontSize: "1.15rem", fontWeight: 700, color: "var(--text-dark)" }}>
@@ -56,11 +54,6 @@ export default function TelegramTable({
         </button>
       </div>
 
-      {/* Info Banner PRD FR-BOT-03 */}
-      <InfoBanner type="info">
-        Hanya pengguna pada daftar ini yang dapat membuat tiket melalui bot (FR-BOT-03 / US-22).
-      </InfoBanner>
-
       {/* Table */}
       <div style={{ overflowX: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
@@ -84,13 +77,13 @@ export default function TelegramTable({
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan="5" style={{ padding: "36px", textAlign: "center", color: "var(--text-muted)" }}>
+                <td colSpan="5" style={{ padding: "40px", textAlign: "center", color: "var(--text-muted)" }}>
                   Memuat data whitelist Telegram...
                 </td>
               </tr>
             ) : telegramUsers.length === 0 ? (
               <tr>
-                <td colSpan="5" style={{ padding: "36px", textAlign: "center", color: "var(--text-muted)" }}>
+                <td colSpan="5" style={{ padding: "40px", textAlign: "center", color: "var(--text-muted)" }}>
                   Belum ada ID Telegram di whitelist.
                 </td>
               </tr>
@@ -98,9 +91,7 @@ export default function TelegramTable({
               telegramUsers.map((item) => {
                 const isActive = item.isActive;
                 const formattedUsername = item.username
-                  ? item.username.startsWith("@")
-                    ? item.username
-                    : `@${item.username}`
+                  ? item.username.startsWith("@") ? item.username : `@${item.username}`
                   : "-";
 
                 return (
@@ -113,22 +104,15 @@ export default function TelegramTable({
                     onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "var(--surface-hover)")}
                     onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
                   >
-                    {/* Nama */}
                     <td style={{ padding: "16px 14px", fontWeight: 650, color: "var(--text-dark)", fontSize: "var(--text-sm)" }}>
                       {item.fullName || "Pengguna Telegram"}
                     </td>
-
-                    {/* Username */}
                     <td style={{ padding: "16px 14px", color: "var(--primary-teal)", fontSize: "var(--text-sm)", fontWeight: 500 }}>
                       {formattedUsername}
                     </td>
-
-                    {/* Telegram ID */}
                     <td style={{ padding: "16px 14px", color: "var(--text-dark)", fontSize: "var(--text-sm)", fontFamily: "monospace" }}>
                       {item.telegramId}
                     </td>
-
-                    {/* Status */}
                     <td style={{ padding: "16px 14px", fontSize: "var(--text-sm)", fontWeight: 500 }}>
                       <span
                         style={{
@@ -149,8 +133,6 @@ export default function TelegramTable({
                         {isActive ? "Aktif" : "Nonaktif"}
                       </span>
                     </td>
-
-                    {/* Aksi Edit */}
                     <td style={{ padding: "16px 14px", textAlign: "right" }}>
                       <button
                         type="button"

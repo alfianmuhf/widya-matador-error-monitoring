@@ -37,7 +37,7 @@ export default function UserTable({
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          marginBottom: "18px",
+          marginBottom: "20px",
         }}
       >
         <h2 style={{ fontSize: "1.15rem", fontWeight: 700, color: "var(--text-dark)" }}>
@@ -71,11 +71,6 @@ export default function UserTable({
         </button>
       </div>
 
-      {/* Info Banner PRD FR-SEC-02 */}
-      <InfoBanner type="warning">
-        Sesuai PRD (FR-SEC-02), saat ini hanya tersedia satu peran: <strong>Admin</strong> dengan akses penuh.
-      </InfoBanner>
-
       {/* Table */}
       <div style={{ overflowX: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
@@ -102,20 +97,22 @@ export default function UserTable({
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan="6" style={{ padding: "36px", textAlign: "center", color: "var(--text-muted)" }}>
+                <td colSpan="6" style={{ padding: "40px", textAlign: "center", color: "var(--text-muted)" }}>
                   Memuat data pengguna...
                 </td>
               </tr>
             ) : users.length === 0 ? (
               <tr>
-                <td colSpan="6" style={{ padding: "36px", textAlign: "center", color: "var(--text-muted)" }}>
+                <td colSpan="6" style={{ padding: "40px", textAlign: "center", color: "var(--text-muted)" }}>
                   Belum ada data pengguna dashboard.
                 </td>
               </tr>
             ) : (
               users.map((item) => {
                 const isActive = item.status === "ACTIVE";
-                const roleLabel = item.role === "ADMIN" ? "Admin" : item.role === "COORDINATOR" ? "Coordinator" : "Viewer";
+                const roleLabel = item.role === "ADMIN" ? "Admin"
+                  : item.role === "COORDINATOR" ? "Coordinator"
+                  : "Viewer";
 
                 return (
                   <tr
@@ -127,17 +124,12 @@ export default function UserTable({
                     onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "var(--surface-hover)")}
                     onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
                   >
-                    {/* Nama */}
                     <td style={{ padding: "16px 14px", fontWeight: 650, color: "var(--text-dark)", fontSize: "var(--text-sm)" }}>
                       {item.name}
                     </td>
-
-                    {/* Email */}
                     <td style={{ padding: "16px 14px", color: "var(--text-muted)", fontSize: "var(--text-sm)" }}>
                       {item.email}
                     </td>
-
-                    {/* Peran Badge */}
                     <td style={{ padding: "16px 14px" }}>
                       <span
                         style={{
@@ -159,13 +151,9 @@ export default function UserTable({
                         {roleLabel}
                       </span>
                     </td>
-
-                    {/* Login terakhir */}
                     <td style={{ padding: "16px 14px", color: "var(--text-secondary)", fontSize: "var(--text-sm)" }}>
                       {formatDate(item.lastLoginAt)}
                     </td>
-
-                    {/* Status */}
                     <td style={{ padding: "16px 14px", fontSize: "var(--text-sm)", fontWeight: 500 }}>
                       <span
                         style={{
@@ -186,8 +174,6 @@ export default function UserTable({
                         {isActive ? "Aktif" : item.status === "INVITED" ? "Diundang" : "Nonaktif"}
                       </span>
                     </td>
-
-                    {/* Aksi Edit */}
                     <td style={{ padding: "16px 14px", textAlign: "right" }}>
                       <button
                         type="button"

@@ -14,13 +14,18 @@ export function AuthProvider({ children }) {
     const res = await api.get("/auth/me", {
       headers: { Authorization: `Bearer ${token}` },
     });
-    setUser(res.data.data);
-    return res.data.data;
+    const userData = res.data?.data?.user || res.data?.data || null;
+    setUser(userData);
+    return userData;
   };
 
   const login = async (email, password) => {
     const res = await api.post("/auth/login", { email, password });
-    const token = res.data.data.accessToken;
+    const token = res.data?.data?.accessToken;
+    const initialUser = res.data?.data?.user;
+    if (initialUser) {
+      setUser(initialUser);
+    }
     setAccessToken(token);
     api.defaults.headers.common.Authorization = `Bearer ${token}`;
     try {
@@ -50,6 +55,10 @@ export function AuthProvider({ children }) {
       try {
         const { data } = await api.post("/auth/refresh");
         const token = data.data?.accessToken;
+        const initialUser = data.data?.user;
+        if (initialUser) {
+          setUser(initialUser);
+        }
         if (token) {
           setAccessToken(token);
           api.defaults.headers.common.Authorization = `Bearer ${token}`;

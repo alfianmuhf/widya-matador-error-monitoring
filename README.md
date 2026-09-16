@@ -176,10 +176,19 @@ Antarmuka web akan aktif di: `http://localhost:5173`
 | Method | Endpoint | Auth | Role | Deskripsi |
 | :--- | :--- | :--- | :--- | :--- |
 | `POST` | `/users` | Bearer Token | `ADMIN` | Registrasi akun baru oleh admin dengan auto-generated initial password |
-| `GET` | `/users` | Bearer Token | `ADMIN`, `COORDINATOR` | Mengambil daftar seluruh pengguna (pagination & filter) |
+| `GET` | `/users` | Bearer Token | `ADMIN` | Mengambil daftar seluruh pengguna (pagination & filter) |
 | `GET` | `/users/:id` | Bearer Token | `ADMIN`, `COORDINATOR` | Mengambil detail lengkap pengguna berdasarkan ID |
 | `PATCH` / `PUT` | `/users/:id` | Bearer Token | `ADMIN` | Mengubah data pengguna (email, nama, password, role, status) |
 | `DELETE` | `/users/:id` | Bearer Token | `ADMIN` | Menghapus data pengguna secara permanen beserta sesi terkait |
+
+### Telegram Whitelist Module (Admin)
+| Method | Endpoint | Auth | Role | Deskripsi |
+| :--- | :--- | :--- | :--- | :--- |
+| `POST` | `/telegram-users` | Bearer Token | `ADMIN` | Menambahkan pengguna Telegram ke daftar whitelist |
+| `GET` | `/telegram-users` | Bearer Token | `ADMIN` | Mengambil daftar seluruh pengguna Telegram di whitelist |
+| `GET` | `/telegram-users/:id` | Bearer Token | `ADMIN` | Mengambil detail pengguna Telegram di whitelist |
+| `PATCH` / `PUT` | `/telegram-users/:id` | Bearer Token | `ADMIN` | Mengubah data atau status keaktifan user Telegram (`isActive`) |
+| `DELETE` | `/telegram-users/:id` | Bearer Token | `ADMIN` | Menghapus pengguna Telegram dari whitelist |
 
 ---
 

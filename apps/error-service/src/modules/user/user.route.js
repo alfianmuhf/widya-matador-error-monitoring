@@ -17,10 +17,10 @@ router.post(
   userController.createUser
 );
 
-// ADMIN & COORDINATOR: Melihat daftar pengguna (dengan pencarian & pagination)
+// Khusus ADMIN: Melihat daftar pengguna (dengan pencarian & pagination)
 router.get(
   "/",
-  authorize("ADMIN", "COORDINATOR"),
+  authorize("ADMIN"),
   userController.getUsers
 );
 

@@ -22,6 +22,12 @@
   - [Detail Pengguna](#get-usersid)
   - [Update Data Pengguna](#patch-usersid)
   - [Hapus Pengguna](#delete-usersid)
+- [Telegram Whitelist Module (Admin)](#telegram-whitelist-module-admin)
+  - [Tambah User Telegram ke Whitelist](#post-telegram-users)
+  - [Daftar Whitelist User Telegram](#get-telegram-users)
+  - [Detail User Telegram](#get-telegram-usersid)
+  - [Edit Status & Data User Telegram](#patch-telegram-usersid)
+  - [Hapus User Telegram dari Whitelist](#delete-telegram-usersid)
 - [Error Response](#error-response)
 
 ---
@@ -416,7 +422,7 @@ Mendaftarkan pengguna baru oleh Admin. Password awal otomatis dibuat sama dengan
 Mengambil daftar seluruh pengguna dengan fitur pencarian dan pagination.
 
 **Auth:** `Authorization: Bearer <access_token>` ✅  
-**Role Izin:** `ADMIN`, `COORDINATOR`
+**Role Izin:** `ADMIN`
 
 **Query Parameters (Opsional):**
 
@@ -625,6 +631,229 @@ Authorization: Bearer <admin_access_token>
 | `401 Unauthorized` | Token tidak disertakan atau kedaluwarsa |
 | `403 Forbidden` | Bukan role `ADMIN` |
 | `404 Not Found` | Pengguna dengan ID tersebut tidak ditemukan |
+
+---
+
+## Telegram Whitelist Module (Admin)
+
+Modul ini mengelola daftar putih (*whitelist*) pengguna Telegram yang diizinkan berinteraksi dengan Bot Notifikasi Error (FR-BOT-03). Seluruh endpoint pada modul ini **hanya dapat diakses oleh role `ADMIN`**.
+
+---
+
+### `POST /telegram-users`
+
+Menambahkan pengguna Telegram baru ke dalam whitelist.
+
+**Auth:** `Authorization: Bearer <admin_access_token>` ✅  
+**Role Izin:** `ADMIN`
+
+**Request Body:**
+
+| Field | Tipe | Wajib | Keterangan |
+| :--- | :--- | :---: | :--- |
+| `telegramId` | `string` / `number` | ✅ | ID numerik unik pengguna Telegram (contoh: `"123456789"` atau `123456789`) |
+| `username` | `string` | ❌ | Username Telegram (simbol `@` di depan otomatis dibersihkan) |
+| `fullName` | `string` | ❌ | Nama lengkap pengguna untuk kemudahan identifikasi di dashboard |
+| `isActive` | `boolean` | ❌ | Status keaktifan akses whitelist (default: `true`) |
+
+**Contoh Request:**
+
+```json
+{
+  "telegramId": "123456789",
+  "username": "@john_doe",
+  "fullName": "John Doe Tele",
+  "isActive": true
+}
+```
+
+**Response Sukses: `201 Created`**
+
+```json
+{
+  "success": true,
+  "message": "User Telegram berhasil ditambahkan ke whitelist",
+  "data": {
+    "telegramUser": {
+      "id": "e81d7637-2fb0-4e5a-8b89-1df812d1b0d2",
+      "telegramId": "123456789",
+      "username": "john_doe",
+      "fullName": "John Doe Tele",
+      "isActive": true,
+      "whitelistedById": "admin-uuid-1234",
+      "createdAt": "2026-09-16T18:47:00.000Z",
+      "updatedAt": "2026-09-16T18:47:00.000Z",
+      "whitelistedBy": {
+        "id": "admin-uuid-1234",
+        "name": "Super Admin",
+        "email": "admin@widya.com"
+      }
+    }
+  }
+}
+```
+
+**Response Error:**
+
+| Status Code | Kondisi |
+| :--- | :--- |
+| `401 Unauthorized` | Token tidak disertakan atau kedaluwarsa |
+| `403 Forbidden` | Bukan role `ADMIN` |
+| `409 Conflict` | Telegram ID sudah terdaftar di whitelist |
+| `422 Unprocessable Entity` | Validasi input gagal (telegramId tidak berupa angka numerik) |
+
+---
+
+### `GET /telegram-users`
+
+Mengambil daftar seluruh pengguna Telegram di whitelist dengan pagination, pencarian, dan filter status aktif.
+
+**Auth:** `Authorization: Bearer <admin_access_token>` ✅  
+**Role Izin:** `ADMIN`
+
+**Query Parameters (Opsional):**
+
+| Parameter | Tipe | Default | Keterangan |
+| :--- | :--- | :---: | :--- |
+| `page` | `number` | `1` | Halaman data |
+| `limit` | `number` | `10` | Jumlah data per halaman (maks: 100) |
+| `search` | `string` | — | Cari berdasarkan `telegramId`, `username`, atau `fullName` |
+| `isActive` | `boolean` | — | Filter status keaktifan (`true` atau `false`) |
+
+**Response Sukses: `200 OK`**
+
+```json
+{
+  "success": true,
+  "data": {
+    "telegramUsers": [
+      {
+        "id": "e81d7637-2fb0-4e5a-8b89-1df812d1b0d2",
+        "telegramId": "123456789",
+        "username": "john_doe",
+        "fullName": "John Doe Tele",
+        "isActive": true,
+        "createdAt": "2026-09-16T18:47:00.000Z",
+        "updatedAt": "2026-09-16T18:47:00.000Z",
+        "whitelistedBy": {
+          "id": "admin-uuid-1234",
+          "name": "Super Admin",
+          "email": "admin@widya.com"
+        }
+      }
+    ],
+    "pagination": {
+      "total": 1,
+      "page": 1,
+      "limit": 10,
+      "totalPages": 1
+    }
+  }
+}
+```
+
+---
+
+### `GET /telegram-users/:id`
+
+Mengambil detail satu pengguna Telegram di whitelist berdasarkan ID internal.
+
+**Auth:** `Authorization: Bearer <admin_access_token>` ✅  
+**Role Izin:** `ADMIN`
+
+**Response Sukses: `200 OK`**
+
+```json
+{
+  "success": true,
+  "data": {
+    "telegramUser": {
+      "id": "e81d7637-2fb0-4e5a-8b89-1df812d1b0d2",
+      "telegramId": "123456789",
+      "username": "john_doe",
+      "fullName": "John Doe Tele",
+      "isActive": true,
+      "createdAt": "2026-09-16T18:47:00.000Z",
+      "updatedAt": "2026-09-16T18:47:00.000Z",
+      "whitelistedBy": {
+        "id": "admin-uuid-1234",
+        "name": "Super Admin",
+        "email": "admin@widya.com"
+      }
+    }
+  }
+}
+```
+
+---
+
+### `PATCH /telegram-users/:id`
+
+Mengubah data atau status keaktifan pengguna Telegram di whitelist (`isActive`, `username`, `fullName`). Mendukung method `PATCH` dan `PUT`.
+
+**Auth:** `Authorization: Bearer <admin_access_token>` ✅  
+**Role Izin:** `ADMIN`
+
+**Request Body (minimal 1 field):**
+
+| Field | Tipe | Wajib | Keterangan |
+| :--- | :--- | :---: | :--- |
+| `isActive` | `boolean` | ❌ | Ubah status aktif/nonaktif (`true` / `false`) |
+| `username` | `string` | ❌ | Username Telegram baru |
+| `fullName` | `string` | ❌ | Nama lengkap baru |
+
+**Contoh Request (Menonaktifkan Akses Telegram):**
+
+```json
+{
+  "isActive": false
+}
+```
+
+**Response Sukses: `200 OK`**
+
+```json
+{
+  "success": true,
+  "message": "Data user Telegram berhasil diperbarui",
+  "data": {
+    "telegramUser": {
+      "id": "e81d7637-2fb0-4e5a-8b89-1df812d1b0d2",
+      "telegramId": "123456789",
+      "username": "john_doe",
+      "fullName": "John Doe Tele",
+      "isActive": false,
+      "updatedAt": "2026-09-16T18:48:00.000Z"
+    }
+  }
+}
+```
+
+---
+
+### `DELETE /telegram-users/:id`
+
+Menghapus pengguna Telegram dari daftar whitelist.
+
+**Auth:** `Authorization: Bearer <admin_access_token>` ✅  
+**Role Izin:** `ADMIN`
+
+**Response Sukses: `200 OK`**
+
+```json
+{
+  "success": true,
+  "message": "User Telegram berhasil dihapus dari whitelist"
+}
+```
+
+**Response Error:**
+
+| Status Code | Kondisi |
+| :--- | :--- |
+| `401 Unauthorized` | Token tidak disertakan atau kedaluwarsa |
+| `403 Forbidden` | Bukan role `ADMIN` |
+| `404 Not Found` | User Telegram dengan ID tersebut tidak ditemukan |
 
 ---
 

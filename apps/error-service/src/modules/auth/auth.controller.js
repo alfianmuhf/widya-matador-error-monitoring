@@ -134,3 +134,28 @@ export const getMe = async (req, res, next) => {
     next(error);
   }
 };
+
+/**
+ * Controller: Change current user password
+ */
+export const changePassword = async (req, res, next) => {
+  try {
+    const meta = getClientMeta(req);
+    const result = await authService.changePassword(req.user.id, req.body, meta);
+
+    // Set updated refresh token cookie on current device
+    res.cookie(REFRESH_TOKEN_COOKIE, result.refreshToken, getRefreshTokenCookieOptions());
+
+    res.status(200).json({
+      success: true,
+      message: "Password berhasil diubah",
+      data: {
+        user: result.user,
+        accessToken: result.accessToken,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+

@@ -2,7 +2,7 @@ import { Router } from "express";
 import * as userController from "./user.controller.js";
 import { authenticate, authorize } from "../../middlewares/auth.middleware.js";
 import { validate } from "../../middlewares/validate.middleware.js";
-import { createUserSchema } from "./user.schema.js";
+import { createUserSchema, updateUserSchema } from "./user.schema.js";
 
 const router = Router();
 
@@ -17,10 +17,10 @@ router.post(
   userController.createUser
 );
 
-// ADMIN & COORDINATOR: Melihat daftar pengguna (dengan pencarian & pagination)
+// Khusus ADMIN: Melihat daftar pengguna (dengan pencarian & pagination)
 router.get(
   "/",
-  authorize("ADMIN", "COORDINATOR"),
+  authorize("ADMIN"),
   userController.getUsers
 );
 
@@ -31,4 +31,27 @@ router.get(
   userController.getUserById
 );
 
+// Khusus ADMIN: Mengubah data pengguna (email, nama, password, role, status)
+router.patch(
+  "/:id",
+  authorize("ADMIN"),
+  validate(updateUserSchema),
+  userController.updateUser
+);
+
+router.put(
+  "/:id",
+  authorize("ADMIN"),
+  validate(updateUserSchema),
+  userController.updateUser
+);
+
+// Khusus ADMIN: Menghapus pengguna berdasarkan ID
+router.delete(
+  "/:id",
+  authorize("ADMIN"),
+  userController.deleteUser
+);
+
 export default router;
+

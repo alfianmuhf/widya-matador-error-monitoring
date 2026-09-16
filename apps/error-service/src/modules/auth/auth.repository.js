@@ -137,3 +137,40 @@ export const revokeAllUserTokens = async (userId) => {
     },
   });
 };
+
+/**
+ * Find user by ID including passwordHash for password verification
+ * @param {string} id
+ */
+export const findUserWithPasswordById = async (id) => {
+  return prisma.user.findUnique({
+    where: { id },
+  });
+};
+
+/**
+ * Update user password and mark mustChangePassword as false
+ * @param {string} id
+ * @param {string} passwordHash
+ */
+export const updateUserPassword = async (id, passwordHash) => {
+  return prisma.user.update({
+    where: { id },
+    data: {
+      passwordHash,
+      mustChangePassword: false,
+      passwordChangedAt: new Date(),
+    },
+    select: {
+      id: true,
+      email: true,
+      name: true,
+      role: true,
+      status: true,
+      mustChangePassword: true,
+      passwordChangedAt: true,
+      updatedAt: true,
+    },
+  });
+};
+

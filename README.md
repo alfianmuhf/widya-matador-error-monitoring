@@ -176,7 +176,8 @@ Antarmuka web akan aktif di: `http://localhost:5173`
 | Method | Endpoint | Auth | Role | Deskripsi |
 | :--- | :--- | :--- | :--- | :--- |
 | `POST` | `/users` | Bearer Token | `ADMIN` | Registrasi akun baru oleh admin dengan auto-generated initial password |
-| `GET` | `/users` | Bearer Token | `ADMIN` | Mengambil daftar seluruh pengguna (pagination & filter) |
+| `GET` | `/users` | Bearer Token / Cookie | `ADMIN` | Mengambil daftar seluruh pengguna (JSON atau SSE jika requested) |
+| `GET` | `/users/stream` | Bearer Token / `?token=` | `ADMIN` | Stream real-time data pengguna via Server-Sent Events (SSE) |
 | `GET` | `/users/:id` | Bearer Token | `ADMIN`, `COORDINATOR` | Mengambil detail lengkap pengguna berdasarkan ID |
 | `PATCH` / `PUT` | `/users/:id` | Bearer Token | `ADMIN` | Mengubah data pengguna (email, nama, password, role, status) |
 | `DELETE` | `/users/:id` | Bearer Token | `ADMIN` | Menghapus data pengguna secara permanen beserta sesi terkait |

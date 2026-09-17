@@ -17,7 +17,14 @@ router.post(
   userController.createUser
 );
 
-// Khusus ADMIN: Melihat daftar pengguna (dengan pencarian & pagination)
+// Khusus ADMIN: Stream real-time data pengguna via Server-Sent Events (SSE)
+router.get(
+  "/stream",
+  authorize("ADMIN"),
+  userController.streamUsers
+);
+
+// Khusus ADMIN: Melihat daftar pengguna (JSON atau SSE jika accept: text/event-stream / ?stream=true)
 router.get(
   "/",
   authorize("ADMIN"),

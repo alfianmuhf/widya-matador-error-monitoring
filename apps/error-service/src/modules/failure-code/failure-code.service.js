@@ -2,31 +2,32 @@ import createError from "http-errors";
 import * as failureCodeRepo from "./failure-code.repository.js";
 import prisma from "../../config/prisma.js";
 
-export const getFailureCodes = async (query) => {
-  const { page = 1, limit = 10, componentId, search, isActive } = query;
-  const skip = (page - 1) * limit;
+export const getFailureCodes = async (query = {}) => {
+  const pageNum = parseInt(query.page, 10) || 1;
+  const limitNum = parseInt(query.limit, 10) || 10;
+  const skip = (pageNum - 1) * limitNum;
 
   const where = {};
 
-  if (componentId) {
-    where.componentId = componentId;
+  if (query.componentId) {
+    where.componentId = query.componentId;
   }
 
-  if (search) {
+  if (query.search) {
     where.OR = [
-      { code: { contains: search, mode: "insensitive" } },
-      { description: { contains: search, mode: "insensitive" } },
+      { code: { contains: query.search, mode: "insensitive" } },
+      { description: { contains: query.search, mode: "insensitive" } },
     ];
   }
 
-  if (isActive === "true") {
+  if (query.isActive === "true" || query.isActive === true) {
     where.isActive = true;
-  } else if (isActive === "false") {
+  } else if (query.isActive === "false" || query.isActive === false) {
     where.isActive = false;
   }
 
   const [failureCodes, total] = await Promise.all([
-    failureCodeRepo.findMany({ skip, take: limit, where }),
+    failureCodeRepo.findMany({ skip, take: limitNum, where }),
     failureCodeRepo.count(where),
   ]);
 
@@ -34,9 +35,9 @@ export const getFailureCodes = async (query) => {
     failureCodes,
     meta: {
       total,
-      page,
-      limit,
-      totalPages: Math.ceil(total / limit) || 1,
+      page: pageNum,
+      limit: limitNum,
+      totalPages: Math.ceil(total / limitNum) || 1,
     },
   };
 };

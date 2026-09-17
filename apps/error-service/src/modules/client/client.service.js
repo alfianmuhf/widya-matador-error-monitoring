@@ -1,24 +1,25 @@
 import createError from "http-errors";
 import * as clientRepo from "./client.repository.js";
 
-export const getClients = async (query) => {
-  const { page = 1, limit = 10, search, isActive } = query;
-  const skip = (page - 1) * limit;
+export const getClients = async (query = {}) => {
+  const pageNum = parseInt(query.page, 10) || 1;
+  const limitNum = parseInt(query.limit, 10) || 10;
+  const skip = (pageNum - 1) * limitNum;
 
   const where = {};
 
-  if (search) {
-    where.name = { contains: search, mode: "insensitive" };
+  if (query.search) {
+    where.name = { contains: query.search, mode: "insensitive" };
   }
 
-  if (isActive === "true") {
+  if (query.isActive === "true" || query.isActive === true) {
     where.isActive = true;
-  } else if (isActive === "false") {
+  } else if (query.isActive === "false" || query.isActive === false) {
     where.isActive = false;
   }
 
   const [clients, total] = await Promise.all([
-    clientRepo.findMany({ skip, take: limit, where }),
+    clientRepo.findMany({ skip, take: limitNum, where }),
     clientRepo.count(where),
   ]);
 
@@ -26,9 +27,9 @@ export const getClients = async (query) => {
     clients,
     meta: {
       total,
-      page,
-      limit,
-      totalPages: Math.ceil(total / limit) || 1,
+      page: pageNum,
+      limit: limitNum,
+      totalPages: Math.ceil(total / limitNum) || 1,
     },
   };
 };

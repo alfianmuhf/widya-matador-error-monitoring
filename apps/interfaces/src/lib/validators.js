@@ -75,3 +75,20 @@ export const updateTelegramUserSchema = z.object({
   username: z.string().trim().optional(),
   isActive: z.boolean().optional(),
 });
+
+// sync with apps/error-service/src/modules/auth/auth.schema.js
+export const changePasswordSchema = z
+  .object({
+    currentPassword: z
+      .string({ required_error: "Password saat ini wajib diisi" })
+      .min(1, "Password saat ini wajib diisi"),
+    newPassword: z
+      .string({ required_error: "Password baru wajib diisi" })
+      .min(6, "Password baru minimal 6 karakter"),
+    confirmPassword: z.string({ required_error: "Konfirmasi password wajib diisi" }).min(1, "Konfirmasi password wajib diisi"),
+  })
+  .refine((data) => data.newPassword === data.confirmPassword, {
+    message: "Konfirmasi password baru tidak cocok",
+    path: ["confirmPassword"],
+  });
+

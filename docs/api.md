@@ -29,6 +29,12 @@
   - [Detail User Telegram](#get-telegram-usersid)
   - [Edit Status & Data User Telegram](#patch-telegram-usersid)
   - [Hapus User Telegram dari Whitelist](#delete-telegram-usersid)
+- [Master Data Modules](#master-data-modules)
+  - [Client Module (`/clients`)](#client-module-clients)
+  - [Location Module (`/locations`)](#location-module-locations)
+  - [Component Module (`/components`)](#component-module-components)
+  - [Failure Code Module (`/failure-codes`)](#failure-code-module-failure-codes)
+  - [Asset Module (`/assets`)](#asset-module-assets)
 - [Error Response](#error-response)
 
 ---
@@ -912,6 +918,320 @@ Menghapus pengguna Telegram dari daftar whitelist.
 | `401 Unauthorized` | Token tidak disertakan atau kedaluwarsa |
 | `403 Forbidden` | Bukan role `ADMIN` |
 | `404 Not Found` | User Telegram dengan ID tersebut tidak ditemukan |
+
+---
+
+## Master Data Modules
+
+Modul Master Data mengelola entitas operasional sistem aftersales: **Client**, **Location**, **Component**, **FailureCode**, dan **Asset**.
+
+> **Ketentuan Keamanan & Operasi Delete:**
+> 1. **Autentikasi Access Token**: Seluruh endpoint wajib menyertakan `Authorization: Bearer <access_token>`.
+> 2. **RBAC**:
+>    - Operasi Baca (`GET`): Dapat diakses oleh semua role (`ADMIN`, `COORDINATOR`, `VIEWER`).
+>    - Operasi Mutasi (`POST`, `PATCH`, `PUT`, `DELETE`): Khusus untuk `ADMIN` dan `COORDINATOR`.
+> 3. **Constraint Foreign Key pada Hard Delete**:
+>    - **Client**: Ditolak (`400 Bad Request`) jika masih memiliki `Asset` terkait.
+>    - **Location**: Ditolak (`400 Bad Request`) jika masih memiliki `Asset` terkait.
+>    - **Component**: Ditolak (`400 Bad Request`) jika masih memiliki `FailureCode` terkait.
+>    - Data hanya dapat dihapus secara permanen (Hard Delete) jika count relasi foreign key = 0.
+
+---
+
+### Client Module (`/clients`)
+
+#### `POST /clients`
+Menambahkan data client/perusahaan customer baru.
+
+**Auth:** `Authorization: Bearer <access_token>` | **Role:** `ADMIN`, `COORDINATOR`
+
+**Request Body:**
+| Field | Tipe | Wajib | Keterangan |
+| :--- | :--- | :---: | :--- |
+| `name` | `string` | ✅ | Nama client (minimal 2 karakter, maksimal 100) |
+| `isActive` | `boolean` | ❌ | Status aktif client (default: `true`) |
+
+**Contoh Body:**
+```json
+{
+  "name": "PT Sumber Rejeki Robotika",
+  "isActive": true
+}
+```
+
+**Response Sukses: `201 Created`**
+```json
+{
+  "status": "success",
+  "message": "Client berhasil ditambahkan",
+  "data": {
+    "client": {
+      "id": "c1f7b7f1-88bc-4eb7-a720-3b9508bc5c6d",
+      "name": "PT Sumber Rejeki Robotika",
+      "isActive": true
+    }
+  }
+}
+```
+
+#### `GET /clients`
+Mengambil daftar seluruh client dengan pagination dan pencarian.
+
+**Auth:** `Authorization: Bearer <access_token>` | **Role:** Semua role
+
+**Query Parameters:**
+| Parameter | Tipe | Default | Keterangan |
+| :--- | :--- | :--- | :--- |
+| `page` | `integer` | `1` | Halaman data |
+| `limit` | `integer` | `10` | Jumlah data per halaman |
+| `search` | `string` | - | Pencarian nama client (case-insensitive) |
+| `isActive` | `string` | `"all"` | Filter status: `"true"`, `"false"`, atau `"all"` |
+
+**Response Sukses: `200 OK`**
+```json
+{
+  "status": "success",
+  "message": "Berhasil mengambil daftar client",
+  "data": {
+    "clients": [
+      {
+        "id": "c1f7b7f1-88bc-4eb7-a720-3b9508bc5c6d",
+        "name": "PT Sumber Rejeki Robotika",
+        "isActive": true,
+        "_count": {
+          "assets": 3
+        }
+      }
+    ],
+    "meta": {
+      "total": 1,
+      "page": 1,
+      "limit": 10,
+      "totalPages": 1
+    }
+  }
+}
+```
+
+#### `GET /clients/:id`
+Mengambil detail satu client beserta daftar asset yang dimiliki.
+
+**Response Sukses: `200 OK`**
+```json
+{
+  "status": "success",
+  "message": "Berhasil mengambil detail client",
+  "data": {
+    "client": {
+      "id": "c1f7b7f1-88bc-4eb7-a720-3b9508bc5c6d",
+      "name": "PT Sumber Rejeki Robotika",
+      "isActive": true,
+      "_count": { "assets": 1 },
+      "assets": [
+        {
+          "id": "asset-uuid-1234",
+          "unitCode": "ROBOT-01",
+          "type": "portable",
+          "status": "OPERATIONAL",
+          "isActive": true
+        }
+      ]
+    }
+  }
+}
+```
+
+#### `PATCH /clients/:id` & `PUT /clients/:id`
+Memperbarui nama atau status aktif client.
+
+**Request Body:** Minimal 1 field disertakan.
+```json
+{
+  "name": "PT Sumber Rejeki Robotika Perkasa",
+  "isActive": false
+}
+```
+
+**Response Sukses: `200 OK`**
+
+#### `DELETE /clients/:id`
+Menghapus data client secara permanen.
+
+> [!WARNING]
+> Request akan **ditolak (`400 Bad Request`)** jika client masih terhubung dengan record Asset (`assets.count > 0`).
+
+**Response Gagal Constraint: `400 Bad Request`**
+```json
+{
+  "status": "error",
+  "message": "Tidak dapat menghapus client karena masih terdapat 3 asset yang terhubung. Hapus atau pindahkan asset terlebih dahulu."
+}
+```
+
+**Response Sukses: `200 OK`**
+```json
+{
+  "status": "success",
+  "message": "Client berhasil dihapus"
+}
+```
+
+---
+
+### Location Module (`/locations`)
+
+#### `POST /locations`
+Menambahkan data lokasi site/gudang baru.
+
+**Auth:** `Authorization: Bearer <access_token>` | **Role:** `ADMIN`, `COORDINATOR`
+
+**Request Body:**
+| Field | Tipe | Wajib | Keterangan |
+| :--- | :--- | :---: | :--- |
+| `name` | `string` | ✅ | Nama lokasi (minimal 2 karakter, maksimal 100) |
+| `isActive` | `boolean` | ❌ | Status aktif lokasi (default: `true`) |
+
+```json
+{
+  "name": "Warehouse Cakung Hub",
+  "isActive": true
+}
+```
+
+#### `GET /locations`
+Mengambil daftar lokasi dengan query `page`, `limit`, `search`, dan `isActive`.
+
+#### `GET /locations/:id`
+Mengambil detail lokasi beserta daftar asset di lokasi tersebut.
+
+#### `PATCH /locations/:id`
+Memperbarui nama atau status lokasi.
+
+#### `DELETE /locations/:id`
+Menghapus lokasi permanen. Ditolak (`400 Bad Request`) bila masih terdapat asset di lokasi tersebut (`assets.count > 0`).
+
+---
+
+### Component Module (`/components`)
+
+#### `POST /components`
+Menambahkan kategori komponen robot baru.
+
+**Auth:** `Authorization: Bearer <access_token>` | **Role:** `ADMIN`, `COORDINATOR`
+
+**Request Body:**
+| Field | Tipe | Wajib | Keterangan |
+| :--- | :--- | :---: | :--- |
+| `prefix` | `string` | ✅ | Prefix kode failure (contoh: `"SEN"`, `"MOT"`, otomatis dikonversi ke uppercase) |
+| `name` | `string` | ✅ | Nama komponen (minimal 2 karakter) |
+| `sortOrder` | `integer` | ❌ | Urutan tombol pada bot Telegram (default: `0`) |
+| `isActive` | `boolean` | ❌ | Status aktif (default: `true`) |
+
+```json
+{
+  "prefix": "SEN",
+  "name": "Sensor Unit",
+  "sortOrder": 1,
+  "isActive": true
+}
+```
+
+#### `GET /components`
+Mengambil daftar komponen (diurutkan berdasarkan `sortOrder` ASC).
+
+#### `GET /components/:id`
+Mengambil detail komponen beserta daftar `failureCodes` yang terhubung.
+
+#### `PATCH /components/:id`
+Memperbarui prefix, name, sortOrder, atau isActive.
+
+#### `DELETE /components/:id`
+Menghapus komponen permanen. Ditolak (`400 Bad Request`) bila masih terdapat failure code yang terhubung (`failureCodes.count > 0`).
+
+---
+
+### Failure Code Module (`/failure-codes`)
+
+#### `POST /failure-codes`
+Menambahkan kode kegagalan baru untuk komponen tertentu.
+
+**Auth:** `Authorization: Bearer <access_token>` | **Role:** `ADMIN`, `COORDINATOR`
+
+**Request Body:**
+| Field | Tipe | Wajib | Keterangan |
+| :--- | :--- | :---: | :--- |
+| `componentId` | `string` (UUID) | ✅ | ID komponen terkait |
+| `code` | `string` | ✅ | Kode kegagalan (contoh: `"SEN-001"`) |
+| `description` | `string` | ❌ | Penjelasan rincian kerusakan |
+| `isActive` | `boolean` | ❌ | Status aktif (default: `true`) |
+
+> [!NOTE]
+> Kombinasi `[componentId, code]` bersifat unik. Jika kode yang sama ditambahkan pada komponen yang sama, server mengembalikan `409 Conflict`.
+
+```json
+{
+  "componentId": "c1f7b7f1-88bc-4eb7-a720-3b9508bc5c6d",
+  "code": "SEN-001",
+  "description": "LiDAR sensor lost communication with ROS node",
+  "isActive": true
+}
+```
+
+#### `GET /failure-codes`
+Mengambil daftar failure code dengan filter query: `page`, `limit`, `componentId`, `search`, `isActive`. Menyertakan detail `component` (id, prefix, name).
+
+#### `GET /failure-codes/:id`
+Mengambil detail satu failure code beserta data komponennya.
+
+#### `PATCH /failure-codes/:id`
+Memperbarui kode, deskripsi, komponen, atau status aktif.
+
+#### `DELETE /failure-codes/:id`
+Menghapus record failure code secara permanen.
+
+---
+
+### Asset Module (`/assets`)
+
+#### `POST /assets`
+Menambahkan unit robot baru ke sistem.
+
+**Auth:** `Authorization: Bearer <access_token>` | **Role:** `ADMIN`, `COORDINATOR`
+
+**Request Body:**
+| Field | Tipe | Wajib | Keterangan |
+| :--- | :--- | :---: | :--- |
+| `unitCode` | `string` | ✅ | Kode unit robot unik (contoh: `"ROBOT-A01"`), tidak boleh duplikat (`409 Conflict`) |
+| `type` | `string` | ✅ | Tipe robot (contoh: `"portable"` atau `"static"`) |
+| `clientId` | `string` (UUID) | ✅ | ID Client pemilik unit |
+| `locationId` | `string` (UUID) | ✅ | ID Lokasi operasional unit |
+| `status` | `string` | ✅ | Status operasional (contoh: `"OPERATIONAL"`, `"MAINTENANCE"`) |
+| `commissioningDate` | `string` | ❌ | Tanggal commissioning (format ISO datetime atau `YYYY-MM-DD`) |
+| `isActive` | `boolean` | ❌ | Status aktif unit (default: `true`) |
+
+```json
+{
+  "unitCode": "ROBOT-A01",
+  "type": "portable",
+  "clientId": "c1f7b7f1-88bc-4eb7-a720-3b9508bc5c6d",
+  "locationId": "loc-uuid-1234",
+  "status": "OPERATIONAL",
+  "commissioningDate": "2026-03-15",
+  "isActive": true
+}
+```
+
+#### `GET /assets`
+Mengambil daftar asset dengan filter query: `page`, `limit`, `clientId`, `locationId`, `type`, `status`, `search` (unitCode), `isActive`. Menyertakan nama `client` dan `location`.
+
+#### `GET /assets/:id`
+Mengambil detail asset lengkap beserta info client dan lokasi.
+
+#### `PATCH /assets/:id`
+Memperbarui data unit robot (tipe, client, lokasi, status, commissioningDate, isActive).
+
+#### `DELETE /assets/:id`
+Menghapus unit robot secara permanen.
 
 ---
 

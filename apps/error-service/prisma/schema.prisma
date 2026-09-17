@@ -124,3 +124,70 @@ model TelegramUser {
 
   @@map("telegram_users")
 }
+
+model Client {
+  id       String  @id @default(uuid())
+  name     String
+  isActive Boolean @default(true) @map("is_active")
+
+  assets Asset[]
+
+  @@map("clients")
+}
+
+model Location {
+  id       String  @id @default(uuid())
+  name     String
+  isActive Boolean @default(true) @map("is_active")
+
+  assets Asset[]
+
+  @@map("locations")
+}
+
+model Asset {
+  id       String @id @default(uuid())
+  unitCode String @unique @map("unit_code") // kode unit, dipakai teknisi lewat bot (/report). Tidak boleh berubah setelah punya tiket (FR-MDM-01)
+  type     String // portable / static
+
+  clientId String @map("client_id")
+  client   Client @relation(fields: [clientId], references: [id])
+
+  locationId String   @map("location_id")
+  location   Location @relation(fields: [locationId], references: [id])
+
+  status            String
+  commissioningDate DateTime? @map("commissioning_date")
+  isActive          Boolean   @default(true) @map("is_active")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("asset")
+}
+
+model Component {
+  id        String  @id @default(uuid())
+  prefix    String  // dipakai untuk bentuk kode failure code baru
+  name      String
+  sortOrder Int     @default(0) @map("sort_order") // urutan tombol di keyboard bot (FR-BOT-07)
+  isActive  Boolean @default(true) @map("is_active")
+
+  failureCodes FailureCode[]
+
+  @@map("components")
+}
+
+model FailureCode {
+  id String @id @default(uuid())
+
+  componentId String    @map("component_id")
+  component   Component @relation(fields: [componentId], references: [id])
+
+  code        String
+  description String?
+  isActive    Boolean @default(true) @map("is_active")
+
+  @@unique([componentId, code]) // kode boleh sama di component berbeda, tidak boleh dobel di component yang sama
+  @@map("failure_codes")
+}

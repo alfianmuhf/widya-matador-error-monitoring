@@ -4,7 +4,7 @@ import Login from "./pages/Login.jsx";
 import DashboardLayout from "./components/layout/DashboardLayout.jsx";
 import PenggunaWhitelist from "./pages/PenggunaWhitelist.jsx";
 import EmptyPage from "./components/common/EmptyPage.jsx";
-import { ProtectedRoute, PublicOnlyRoute } from "./components/ProtectedRoute.jsx";
+import { ProtectedRoute, PublicOnlyRoute, AdminRoute } from "./components/ProtectedRoute.jsx";
 import "./App.css";
 
 export default function App() {
@@ -79,8 +79,15 @@ export default function App() {
               }
             />
 
-            {/* Pengguna & Whitelist — sudah diimplementasi */}
-            <Route path="pengguna-whitelist" element={<PenggunaWhitelist />} />
+            {/* Pengguna & Whitelist — hanya untuk admin */}
+            <Route
+              path="pengguna-whitelist"
+              element={
+                <AdminRoute>
+                  <PenggunaWhitelist />
+                </AdminRoute>
+              }
+            />
 
             {/* Audit Log — kosong */}
             <Route

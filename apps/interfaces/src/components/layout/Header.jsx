@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { useNavigate, useLocation } from "react-router-dom";
+import ChangePasswordModal from "../common/ChangePasswordModal.jsx";
 
 // Map route path ke judul & subtitle
 const PAGE_META = {
@@ -115,7 +116,24 @@ export default function Header() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
+  const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
+  const accountMenuRef = useRef(null);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (accountMenuRef.current && !accountMenuRef.current.contains(e.target)) {
+        setIsAccountMenuOpen(false);
+      }
+    };
+    if (isAccountMenuOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [isAccountMenuOpen]);
 
   // Ambil judul & subtitle berdasarkan route aktif
   const meta = PAGE_META[location.pathname] || { title: "Dashboard", subtitle: "" };
@@ -183,14 +201,36 @@ export default function Header() {
           )}
         </div>
 
-        {/* User Profile & Logout */}
-        <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+        {/* User Profile & Account Menu Dropdown */}
+        <div ref={accountMenuRef} style={{ position: "relative" }}>
+          <div
+            onClick={() => setIsAccountMenuOpen((prev) => !prev)}
+            title="Menu Akun"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "10px",
+              padding: "5px 12px 5px 6px",
+              borderRadius: "10px",
+              cursor: "pointer",
+              border: isAccountMenuOpen ? "1px solid var(--primary-teal)" : "1px solid var(--border-light)",
+              backgroundColor: isAccountMenuOpen ? "var(--surface-card)" : "#ffffff",
+              boxShadow: "0 1px 3px rgba(0, 0, 0, 0.05)",
+              transition: "all 0.15s ease",
+              userSelect: "none",
+            }}
+            onMouseEnter={(e) => {
+              if (!isAccountMenuOpen) e.currentTarget.style.borderColor = "var(--primary-teal)";
+            }}
+            onMouseLeave={(e) => {
+              if (!isAccountMenuOpen) e.currentTarget.style.borderColor = "var(--border-light)";
+            }}
+          >
             {/* Avatar Inisial */}
             <div
               style={{
-                width: "38px",
-                height: "38px",
+                width: "36px",
+                height: "36px",
                 borderRadius: "50%",
                 backgroundColor: "#11222c",
                 color: "#ffffff",
@@ -234,36 +274,230 @@ export default function Header() {
                 {displayRole}
               </span>
             </div>
+
+            {/* Chevron Icon */}
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              style={{
+                marginLeft: "4px",
+                color: "var(--text-muted)",
+                transform: isAccountMenuOpen ? "rotate(180deg)" : "rotate(0deg)",
+                transition: "transform 0.15s ease",
+              }}
+            >
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
           </div>
 
-          {/* Tombol Logout */}
-          <button
-            type="button"
-            onClick={() => setShowLogoutModal(true)}
-            title="Logout"
-            style={{
-              background: "none",
-              border: "none",
-              cursor: "pointer",
-              padding: "8px",
-              color: "var(--text-muted)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              borderRadius: "6px",
-              transition: "all 0.15s ease",
-            }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = "#dc2626")}
-            onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}
-          >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-              <polyline points="16 17 21 12 16 7" />
-              <line x1="21" y1="12" x2="9" y2="12" />
-            </svg>
-          </button>
+          {/* Account Dropdown Menu */}
+          {isAccountMenuOpen && (
+            <div
+              style={{
+                position: "absolute",
+                right: 0,
+                top: "calc(100% + 8px)",
+                width: "260px",
+                backgroundColor: "#ffffff",
+                borderRadius: "12px",
+                border: "1px solid var(--border-light)",
+                boxShadow: "0 12px 28px -4px rgba(0, 0, 0, 0.12), 0 8px 12px -6px rgba(0, 0, 0, 0.08)",
+                zIndex: 1000,
+                overflow: "hidden",
+              }}
+            >
+              {/* User Info Header */}
+              <div
+                style={{
+                  padding: "16px",
+                  backgroundColor: "#f9fafb",
+                  borderBottom: "1px solid var(--border-light)",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px" }}>
+                  <div
+                    style={{
+                      width: "38px",
+                      height: "38px",
+                      borderRadius: "50%",
+                      backgroundColor: "#11222c",
+                      color: "#ffffff",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontWeight: 700,
+                      fontSize: "0.85rem",
+                      flexShrink: 0,
+                    }}
+                  >
+                    {getInitials(displayName)}
+                  </div>
+                  <div style={{ overflow: "hidden", minWidth: 0 }}>
+                    <p
+                      style={{
+                        margin: 0,
+                        fontWeight: 700,
+                        fontSize: "0.875rem",
+                        color: "var(--text-dark)",
+                        whiteSpace: "nowrap",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                      }}
+                    >
+                      {displayName}
+                    </p>
+                    <p
+                      style={{
+                        margin: "2px 0 0 0",
+                        fontSize: "0.775rem",
+                        color: "var(--text-muted)",
+                        whiteSpace: "nowrap",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                      }}
+                    >
+                      {currentUser?.email || "-"}
+                    </p>
+                  </div>
+                </div>
+                <span
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "5px",
+                    padding: "3px 8px",
+                    backgroundColor: "#e0f2fe",
+                    color: "#0369a1",
+                    borderRadius: "6px",
+                    fontSize: "11px",
+                    fontWeight: 600,
+                  }}
+                >
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                  </svg>
+                  {displayRole}
+                </span>
+              </div>
+
+              {/* Menu Actions */}
+              <div style={{ padding: "6px" }}>
+                {/* Tombol Ubah Password */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAccountMenuOpen(false);
+                    setShowChangePasswordModal(true);
+                  }}
+                  style={{
+                    width: "100%",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "10px",
+                    padding: "10px 12px",
+                    backgroundColor: "transparent",
+                    border: "none",
+                    borderRadius: "8px",
+                    fontSize: "0.85rem",
+                    fontWeight: 500,
+                    color: "var(--text-dark)",
+                    cursor: "pointer",
+                    transition: "all 0.15s ease",
+                    textAlign: "left",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = "var(--surface-hover)";
+                    e.currentTarget.style.color = "var(--primary-teal)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = "transparent";
+                    e.currentTarget.style.color = "var(--text-dark)";
+                  }}
+                >
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                  </svg>
+                  Ubah Password
+                </button>
+
+                {/* Divider */}
+                <div
+                  style={{
+                    height: "1px",
+                    backgroundColor: "var(--border-light)",
+                    margin: "4px 0",
+                  }}
+                />
+
+                {/* Tombol Logout */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAccountMenuOpen(false);
+                    setShowLogoutModal(true);
+                  }}
+                  style={{
+                    width: "100%",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "10px",
+                    padding: "10px 12px",
+                    backgroundColor: "transparent",
+                    border: "none",
+                    borderRadius: "8px",
+                    fontSize: "0.85rem",
+                    fontWeight: 500,
+                    color: "#dc2626",
+                    cursor: "pointer",
+                    transition: "all 0.15s ease",
+                    textAlign: "left",
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#fef2f2")}
+                  onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
+                >
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                    <polyline points="16 17 21 12 16 7" />
+                    <line x1="21" y1="12" x2="9" y2="12" />
+                  </svg>
+                  Keluar (Logout)
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </header>
+
+      {/* Modal Ubah Password */}
+      <ChangePasswordModal
+        isOpen={showChangePasswordModal}
+        onClose={() => setShowChangePasswordModal(false)}
+      />
 
       {/* Modal Konfirmasi Logout */}
       <LogoutModal
@@ -274,3 +508,4 @@ export default function Header() {
     </>
   );
 }
+

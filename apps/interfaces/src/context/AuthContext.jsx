@@ -72,9 +72,28 @@ export function AuthProvider({ children }) {
     })();
   }, []);
 
+  const updateAuthSession = (newToken, updatedUser) => {
+    if (newToken) {
+      setAccessToken(newToken);
+      api.defaults.headers.common.Authorization = `Bearer ${newToken}`;
+    }
+    if (updatedUser) {
+      setUser(updatedUser);
+    }
+  };
+
   return (
     <AuthContext.Provider
-      value={{ accessToken, user, loading, isAuthenticated, login, logout, fetchMe }}
+      value={{
+        accessToken,
+        user,
+        loading,
+        isAuthenticated,
+        login,
+        logout,
+        fetchMe,
+        updateAuthSession,
+      }}
     >
       {children}
     </AuthContext.Provider>

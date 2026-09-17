@@ -25,7 +25,11 @@ export const validate = (schema, source = "body") => {
       }
 
       // Reassign validated/coerced data
-      req[source] = result.data;
+      if (source === "query") {
+        Object.assign(req.query, result.data);
+      } else {
+        req[source] = result.data;
+      }
       next();
     } catch (error) {
       next(error);

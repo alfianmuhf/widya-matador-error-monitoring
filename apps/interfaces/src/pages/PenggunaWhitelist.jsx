@@ -3,6 +3,7 @@ import UserTable from "../components/users/UserTable.jsx";
 import UserModal from "../components/users/UserModal.jsx";
 import TelegramTable from "../components/users/TelegramTable.jsx";
 import TelegramModal from "../components/users/TelegramModal.jsx";
+import DeleteConfirmModal from "../components/common/DeleteConfirmModal.jsx";
 import api from "../lib/api.js";
 
 export default function PenggunaWhitelist() {
@@ -14,11 +15,23 @@ export default function PenggunaWhitelist() {
   const [isUserModalOpen, setIsUserModalOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
 
+  // Delete User State
+  const [isDeleteUserModalOpen, setIsDeleteUserModalOpen] = useState(false);
+  const [userToDelete, setUserToDelete] = useState(null);
+  const [deleteUserLoading, setDeleteUserLoading] = useState(false);
+  const [deleteUserError, setDeleteUserError] = useState(null);
+
   // Telegram State
   const [telegramUsers, setTelegramUsers] = useState([]);
   const [loadingTelegram, setLoadingTelegram] = useState(false);
   const [isTelegramModalOpen, setIsTelegramModalOpen] = useState(false);
   const [selectedTelegramUser, setSelectedTelegramUser] = useState(null);
+
+  // Delete Telegram State
+  const [isDeleteTelegramModalOpen, setIsDeleteTelegramModalOpen] = useState(false);
+  const [telegramUserToDelete, setTelegramUserToDelete] = useState(null);
+  const [deleteTelegramLoading, setDeleteTelegramLoading] = useState(false);
+  const [deleteTelegramError, setDeleteTelegramError] = useState(null);
 
   // Fetch Users
   const fetchUsers = useCallback(async () => {
@@ -99,6 +112,29 @@ export default function PenggunaWhitelist() {
     setIsUserModalOpen(true);
   };
 
+  const handleOpenDeleteUser = (user) => {
+    setUserToDelete(user);
+    setDeleteUserError(null);
+    setIsDeleteUserModalOpen(true);
+  };
+
+  const handleConfirmDeleteUser = async () => {
+    if (!userToDelete) return;
+    setDeleteUserLoading(true);
+    setDeleteUserError(null);
+    try {
+      await api.delete(`/users/${userToDelete.id}`);
+      setIsDeleteUserModalOpen(false);
+      setUserToDelete(null);
+      fetchUsers();
+    } catch (err) {
+      console.error("Gagal menghapus user:", err);
+      setDeleteUserError(err.response?.data?.message || "Gagal menghapus akun pengguna");
+    } finally {
+      setDeleteUserLoading(false);
+    }
+  };
+
   // Handlers for Telegram Modal
   const handleOpenAddTelegram = () => {
     setSelectedTelegramUser(null);
@@ -108,6 +144,29 @@ export default function PenggunaWhitelist() {
   const handleOpenEditTelegram = (tgUser) => {
     setSelectedTelegramUser(tgUser);
     setIsTelegramModalOpen(true);
+  };
+
+  const handleOpenDeleteTelegram = (tgUser) => {
+    setTelegramUserToDelete(tgUser);
+    setDeleteTelegramError(null);
+    setIsDeleteTelegramModalOpen(true);
+  };
+
+  const handleConfirmDeleteTelegram = async () => {
+    if (!telegramUserToDelete) return;
+    setDeleteTelegramLoading(true);
+    setDeleteTelegramError(null);
+    try {
+      await api.delete(`/telegram-users/${telegramUserToDelete.id}`);
+      setIsDeleteTelegramModalOpen(false);
+      setTelegramUserToDelete(null);
+      fetchTelegramUsers();
+    } catch (err) {
+      console.error("Gagal menghapus telegram user:", err);
+      setDeleteTelegramError(err.response?.data?.message || "Gagal menghapus pengguna Telegram dari whitelist");
+    } finally {
+      setDeleteTelegramLoading(false);
+    }
   };
 
   return (
@@ -159,6 +218,7 @@ export default function PenggunaWhitelist() {
             loading={loadingUsers}
             onAddUser={handleOpenAddUser}
             onEditUser={handleOpenEditUser}
+            onDeleteUser={handleOpenDeleteUser}
           />
         ) : (
           <TelegramTable
@@ -166,6 +226,7 @@ export default function PenggunaWhitelist() {
             loading={loadingTelegram}
             onAddTelegramUser={handleOpenAddTelegram}
             onEditTelegramUser={handleOpenEditTelegram}
+            onDeleteTelegramUser={handleOpenDeleteTelegram}
           />
         )}
 
@@ -183,6 +244,41 @@ export default function PenggunaWhitelist() {
         telegramUser={selectedTelegramUser}
         onSuccess={fetchTelegramUsers}
       />
+
+      {/* Delete User Confirmation Modal */}
+      <DeleteConfirmModal
+        isOpen={isDeleteUserModalOpen}
+        onClose={() => {
+          if (!deleteUserLoading) setIsDeleteUserModalOpen(false);
+        }}
+        onConfirm={handleConfirmDeleteUser}
+        title="Hapus Pengguna Dashboard"
+        itemName={userToDelete ? `${userToDelete.name} (${userToDelete.email})` : ""}
+        description="Apakah Anda yakin ingin menghapus akun pengguna ini? Seluruh sesi login dan token terkait akan dicabut permanen."
+        loading={deleteUserLoading}
+        error={deleteUserError}
+      />
+
+      {/* Delete Telegram User Confirmation Modal */}
+      <DeleteConfirmModal
+        isOpen={isDeleteTelegramModalOpen}
+        onClose={() => {
+          if (!deleteTelegramLoading) setIsDeleteTelegramModalOpen(false);
+        }}
+        onConfirm={handleConfirmDeleteTelegram}
+        title="Hapus User Telegram dari Whitelist"
+        itemName={
+          telegramUserToDelete
+            ? `${telegramUserToDelete.fullName ? telegramUserToDelete.fullName + " — " : ""}${
+                telegramUserToDelete.username ? "@" + telegramUserToDelete.username : "ID: " + telegramUserToDelete.telegramId
+              }`
+            : ""
+        }
+        description="Apakah Anda yakin ingin menghapus pengguna Telegram ini dari whitelist? Pengguna tidak akan dapat mengakses bot lagi."
+        loading={deleteTelegramLoading}
+        error={deleteTelegramError}
+      />
     </div>
   );
 }
+

@@ -1,27 +1,28 @@
 import createError from "http-errors";
 import * as componentRepo from "./component.repository.js";
 
-export const getComponents = async (query) => {
-  const { page = 1, limit = 10, search, isActive } = query;
-  const skip = (page - 1) * limit;
+export const getComponents = async (query = {}) => {
+  const pageNum = parseInt(query.page, 10) || 1;
+  const limitNum = parseInt(query.limit, 10) || 10;
+  const skip = (pageNum - 1) * limitNum;
 
   const where = {};
 
-  if (search) {
+  if (query.search) {
     where.OR = [
-      { name: { contains: search, mode: "insensitive" } },
-      { prefix: { contains: search, mode: "insensitive" } },
+      { name: { contains: query.search, mode: "insensitive" } },
+      { prefix: { contains: query.search, mode: "insensitive" } },
     ];
   }
 
-  if (isActive === "true") {
+  if (query.isActive === "true" || query.isActive === true) {
     where.isActive = true;
-  } else if (isActive === "false") {
+  } else if (query.isActive === "false" || query.isActive === false) {
     where.isActive = false;
   }
 
   const [components, total] = await Promise.all([
-    componentRepo.findMany({ skip, take: limit, where }),
+    componentRepo.findMany({ skip, take: limitNum, where }),
     componentRepo.count(where),
   ]);
 
@@ -29,9 +30,9 @@ export const getComponents = async (query) => {
     components,
     meta: {
       total,
-      page,
-      limit,
-      totalPages: Math.ceil(total / limit) || 1,
+      page: pageNum,
+      limit: limitNum,
+      totalPages: Math.ceil(total / limitNum) || 1,
     },
   };
 };

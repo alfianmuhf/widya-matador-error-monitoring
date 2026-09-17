@@ -2,40 +2,41 @@ import createError from "http-errors";
 import * as assetRepo from "./asset.repository.js";
 import prisma from "../../config/prisma.js";
 
-export const getAssets = async (query) => {
-  const { page = 1, limit = 10, clientId, locationId, type, status, search, isActive } = query;
-  const skip = (page - 1) * limit;
+export const getAssets = async (query = {}) => {
+  const pageNum = parseInt(query.page, 10) || 1;
+  const limitNum = parseInt(query.limit, 10) || 10;
+  const skip = (pageNum - 1) * limitNum;
 
   const where = {};
 
-  if (clientId) {
-    where.clientId = clientId;
+  if (query.clientId) {
+    where.clientId = query.clientId;
   }
 
-  if (locationId) {
-    where.locationId = locationId;
+  if (query.locationId) {
+    where.locationId = query.locationId;
   }
 
-  if (type) {
-    where.type = type;
+  if (query.type) {
+    where.type = query.type;
   }
 
-  if (status) {
-    where.status = status;
+  if (query.status) {
+    where.status = query.status;
   }
 
-  if (search) {
-    where.unitCode = { contains: search, mode: "insensitive" };
+  if (query.search) {
+    where.unitCode = { contains: query.search, mode: "insensitive" };
   }
 
-  if (isActive === "true") {
+  if (query.isActive === "true" || query.isActive === true) {
     where.isActive = true;
-  } else if (isActive === "false") {
+  } else if (query.isActive === "false" || query.isActive === false) {
     where.isActive = false;
   }
 
   const [assets, total] = await Promise.all([
-    assetRepo.findMany({ skip, take: limit, where }),
+    assetRepo.findMany({ skip, take: limitNum, where }),
     assetRepo.count(where),
   ]);
 
@@ -43,9 +44,9 @@ export const getAssets = async (query) => {
     assets,
     meta: {
       total,
-      page,
-      limit,
-      totalPages: Math.ceil(total / limit) || 1,
+      page: pageNum,
+      limit: limitNum,
+      totalPages: Math.ceil(total / limitNum) || 1,
     },
   };
 };

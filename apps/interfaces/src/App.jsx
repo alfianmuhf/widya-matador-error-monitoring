@@ -3,6 +3,7 @@ import { AuthProvider } from "./context/AuthContext.jsx";
 import Login from "./pages/Login.jsx";
 import DashboardLayout from "./components/layout/DashboardLayout.jsx";
 import PenggunaWhitelist from "./pages/PenggunaWhitelist.jsx";
+import MasterData from "./pages/MasterData.jsx";
 import EmptyPage from "./components/common/EmptyPage.jsx";
 import { ProtectedRoute, PublicOnlyRoute, AdminRoute } from "./components/ProtectedRoute.jsx";
 import "./App.css";
@@ -67,15 +68,13 @@ export default function App() {
               }
             />
 
-            {/* Master Data — kosong */}
+            {/* Master Data — khusus ADMIN & COORDINATOR */}
             <Route
               path="master-data"
               element={
-                <EmptyPage
-                  icon="🗄️"
-                  label="Master Data"
-                  description="Pengelolaan data referensi dan konfigurasi sistem akan tampil di sini."
-                />
+                <ProtectedRoute allowedRoles={["ADMIN", "COORDINATOR"]}>
+                  <MasterData />
+                </ProtectedRoute>
               }
             />
 

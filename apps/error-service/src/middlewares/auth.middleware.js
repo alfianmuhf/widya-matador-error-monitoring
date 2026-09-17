@@ -7,15 +7,16 @@ import { verifyAccessToken } from "../utils/jwt.js";
 export const authenticate = (req, res, next) => {
   try {
     const authHeader = req.headers.authorization;
+    let token;
 
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      throw createError(401, "Akses ditolak: Access token tidak ditemukan atau format tidak valid");
+    if (authHeader && authHeader.startsWith("Bearer ")) {
+      token = authHeader.split(" ")[1];
+    } else if (req.query?.token) {
+      token = req.query.token;
     }
 
-    const token = authHeader.split(" ")[1];
-
     if (!token) {
-      throw createError(401, "Akses ditolak: Access token tidak valid");
+      throw createError(401, "Akses ditolak: Access token tidak ditemukan atau format tidak valid");
     }
 
     try {

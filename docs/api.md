@@ -19,6 +19,7 @@
 - [User Management Module (Admin)](#user-management-module-admin)
   - [Create User Baru](#post-users)
   - [Daftar Pengguna](#get-users)
+  - [Stream Real-time Data Pengguna (SSE)](#get-usersstream)
   - [Detail Pengguna](#get-usersid)
   - [Update Data Pengguna](#patch-usersid)
   - [Hapus Pengguna](#delete-usersid)
@@ -474,6 +475,63 @@ GET /users?page=1&limit=10&role=COORDINATOR
     }
   }
 }
+```
+
+---
+
+### `GET /users/stream` (atau `GET /users` dengan SSE)
+
+Stream data pengguna secara **real-time menggunakan Server-Sent Events (SSE)**. Setiap kali terjadi perubahan data pengguna (Admin membuat user, mengubah data/role/status, atau menghapus user), server akan secara instan mem-broadcast data terbaru ke klien tanpa perlu browser me-refresh atau melakukan polling.
+
+> [!TIP]
+> Endpoint `GET /users` otomatis beralih ke mode SSE jika klien menyertakan header `Accept: text/event-stream` atau parameter query `?stream=true`.
+
+**Auth:**  
+- Header: `Authorization: Bearer <access_token>` ✅, **ATAU**
+- Query Param: `?token=<access_token>` ✅ *(Sangat memudahkan penggunaan objek bawaan browser `new EventSource('/users/stream?token=...')`)*
+**Role Izin:** `ADMIN`
+
+**Response Headers:**
+```http
+Content-Type: text/event-stream
+Cache-Control: no-cache, no-transform
+Connection: keep-alive
+X-Accel-Buffering: no
+```
+
+**Daftar Event SSE yang Dikirim:**
+
+| Event | Deskripsi | Format Payload (`data`) |
+| :--- | :--- | :--- |
+| `connected` | Dikirim saat koneksi SSE pertama kali terhubung | `{"status":"connected","timestamp":"..."}` |
+| `initial` | Snapshot data seluruh pengguna saat ini | `{"users":[...],"pagination":{...}}` |
+| `user:created` | Terpicu saat Admin mendaftarkan user baru | `{"user":{...}}` |
+| `user:updated` | Terpicu saat Admin mengubah data user | `{"user":{...}}` |
+| `user:deleted` | Terpicu saat Admin menghapus user | `{"id":"...","user":{...}}` |
+| `users:refresh` | Daftar seluruh user yang sudah ter-refresh otomatis | `{"users":[...],"pagination":{...}}` |
+| `message` | Event default bawaan browser (untuk `eventSource.onmessage`) | Berisi `type` dan data terkait |
+
+**Contoh Penggunaan di Frontend (JavaScript / React):**
+
+```javascript
+const eventSource = new EventSource(`http://localhost:3000/users/stream?token=${accessToken}`);
+
+// 1. Menerima data awal
+eventSource.addEventListener("initial", (e) => {
+  const data = JSON.parse(e.data);
+  setUsers(data.users);
+});
+
+// 2. Menerima update otomatis saat data pengguna berubah
+eventSource.addEventListener("users:refresh", (e) => {
+  const data = JSON.parse(e.data);
+  setUsers(data.users);
+});
+
+// 3. Menangani penutupan/error koneksi
+eventSource.onerror = (err) => {
+  console.error("SSE connection error:", err);
+};
 ```
 
 ---

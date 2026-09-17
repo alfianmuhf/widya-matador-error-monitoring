@@ -1,6 +1,7 @@
 import createError from "http-errors";
 import * as userRepository from "./user.repository.js";
 import { hashPassword } from "../../utils/hash.js";
+import { userEvents, USER_EVENTS } from "./user.events.js";
 
 /**
  * Admin creates a new user with generated initial password:
@@ -31,6 +32,9 @@ export const createUser = async ({ email, name, role }, adminId) => {
     mustChangePassword: true,
     createdById: adminId || null,
   });
+
+  // 5. Broadcast real-time event
+  userEvents.emit(USER_EVENTS.CREATED, { user: newUser });
 
   return {
     user: newUser,
@@ -138,6 +142,9 @@ export const updateUser = async (id, data, adminId) => {
     await userRepository.revokeUserRefreshTokens(id);
   }
 
+  // 7. Broadcast real-time event
+  userEvents.emit(USER_EVENTS.UPDATED, { user: updatedUser });
+
   return updatedUser;
 };
 
@@ -160,6 +167,9 @@ export const deleteUser = async (id, adminId) => {
 
   // 3. Delete user & unlink relations in transaction
   await userRepository.deleteUser(id);
+
+  // 4. Broadcast real-time event
+  userEvents.emit(USER_EVENTS.DELETED, { id, user: existingUser });
 
   return true;
 };

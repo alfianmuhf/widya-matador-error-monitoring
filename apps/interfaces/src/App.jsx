@@ -4,6 +4,7 @@ import Login from "./pages/Login.jsx";
 import DashboardLayout from "./components/layout/DashboardLayout.jsx";
 import PenggunaWhitelist from "./pages/PenggunaWhitelist.jsx";
 import MasterData from "./pages/MasterData.jsx";
+import DaftarTiket from "./pages/DaftarTiket.jsx";
 import EmptyPage from "./components/common/EmptyPage.jsx";
 import { ProtectedRoute, PublicOnlyRoute, AdminRoute } from "./components/ProtectedRoute.jsx";
 import "./App.css";
@@ -56,17 +57,8 @@ export default function App() {
               }
             />
 
-            {/* Daftar Tiket — kosong */}
-            <Route
-              path="daftar-tiket"
-              element={
-                <EmptyPage
-                  icon="🎫"
-                  label="Daftar Tiket"
-                  description="Daftar tiket aftersales yang masuk melalui bot Telegram beserta status penanganannya akan tampil di sini."
-                />
-              }
-            />
+            {/* Menu Daftar Tiket */}
+            <Route path="daftar-tiket" element={<DaftarTiket />} />
 
             {/* Master Data — khusus ADMIN & COORDINATOR */}
             <Route

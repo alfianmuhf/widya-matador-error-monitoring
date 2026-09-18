@@ -7,7 +7,7 @@ import ChangePasswordModal from "../common/ChangePasswordModal.jsx";
 const PAGE_META = {
   "/": { title: "Ringkasan", subtitle: "Ringkasan dan status keseluruhan sistem aftersales" },
   "/analitik-error": { title: "Analitik Error", subtitle: "Analisis dan statistik error ROS secara rinci" },
-  "/daftar-tiket": { title: "Daftar Tiket", subtitle: "Kelola dan pantau tiket aftersales yang masuk" },
+  "/daftar-tiket": { title: "Daftar Tiket", subtitle: "Telusuri, filter, dan tindak lanjuti tiket error" },
   "/master-data": { title: "Master Data", subtitle: "Pengelolaan data referensi dan konfigurasi sistem" },
   "/pengguna-whitelist": { title: "Pengguna & Whitelist", subtitle: "Akun dashboard dan pengguna bot Telegram" },
   "/audit-log": { title: "Audit Log", subtitle: "Rekam jejak aktivitas dan perubahan dalam sistem" },
@@ -201,8 +201,50 @@ export default function Header() {
           )}
         </div>
 
-        {/* User Profile & Account Menu Dropdown */}
-        <div ref={accountMenuRef} style={{ position: "relative" }}>
+        {/* Right Area: Export Action + User Profile */}
+        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+          {location.pathname === "/daftar-tiket" && (
+            <button
+              type="button"
+              id="header-export-btn"
+              onClick={() => {
+                window.dispatchEvent(new CustomEvent("export-laporan-modal"));
+              }}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "8px",
+                backgroundColor: "#ffffff",
+                color: "#1e293b",
+                border: "1px solid var(--border-light)",
+                borderRadius: "10px",
+                padding: "8px 16px",
+                fontSize: "var(--text-sm)",
+                fontWeight: 600,
+                cursor: "pointer",
+                boxShadow: "0 1px 3px rgba(0, 0, 0, 0.05)",
+                transition: "all 0.15s ease",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = "var(--primary-teal)";
+                e.currentTarget.style.backgroundColor = "var(--surface-hover)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor = "var(--border-light)";
+                e.currentTarget.style.backgroundColor = "#ffffff";
+              }}
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="7 10 12 15 17 10" />
+                <line x1="12" y1="15" x2="12" y2="3" />
+              </svg>
+              Export laporan
+            </button>
+          )}
+
+          {/* User Profile & Account Menu Dropdown */}
+          <div ref={accountMenuRef} style={{ position: "relative" }}>
           <div
             onClick={() => setIsAccountMenuOpen((prev) => !prev)}
             title="Menu Akun"
@@ -491,6 +533,7 @@ export default function Header() {
             </div>
           )}
         </div>
+      </div>
       </header>
 
       {/* Modal Ubah Password */}

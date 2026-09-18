@@ -1,7 +1,8 @@
-import { NavLink } from "react-router-dom";
+import { NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext.jsx";
 
 export default function Sidebar() {
+  const location = useLocation();
   const { user } = useAuth();
   const currentUser = user?.user || user;
   const isAdmin = currentUser?.role === "ADMIN";
@@ -162,45 +163,48 @@ export default function Sidebar() {
         {/* Navigation List */}
         <nav style={{ padding: "0 12px" }}>
           <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: "6px" }}>
-            {navItems.map((item) => (
-              <li key={item.to}>
-                <NavLink
-                  to={item.to}
-                  style={({ isActive }) => ({
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    padding: "10px 14px",
-                    borderRadius: "10px",
-                    textDecoration: "none",
-                    fontSize: "var(--text-sm)",
-                    fontWeight: isActive ? 600 : 500,
-                    color: isActive ? "#ffffff" : "#94a3b8",
-                    backgroundColor: isActive ? "var(--sidebar-active-bg)" : "transparent",
-                    transition: "all 0.15s ease",
-                  })}
-                >
-                  <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                    <span style={{ display: "flex", alignItems: "center" }}>{item.icon}</span>
-                    <span>{item.label}</span>
-                  </div>
-                  {item.badge && (
-                    <span
-                      style={{
-                        backgroundColor: "#ef4444",
-                        color: "#ffffff",
-                        fontSize: "11px",
-                        fontWeight: 700,
-                        padding: "1px 7px",
-                        borderRadius: "9999px",
-                      }}
-                    >
-                      {item.badge}
-                    </span>
-                  )}
-                </NavLink>
-              </li>
-            ))}
+            {navItems.map((item) => {
+              const isActive = location.pathname === item.to;
+              return (
+                <li key={item.to}>
+                  <NavLink
+                    to={item.to}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      padding: "10px 14px",
+                      borderRadius: "10px",
+                      textDecoration: "none",
+                      fontSize: "var(--text-sm)",
+                      fontWeight: isActive ? 600 : 500,
+                      color: isActive ? "#ffffff" : "#94a3b8",
+                      backgroundColor: isActive ? "var(--sidebar-active-bg)" : "transparent",
+                      transition: "all 0.15s ease",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                      <span style={{ display: "flex", alignItems: "center" }}>{item.icon}</span>
+                      <span>{item.label}</span>
+                    </div>
+                    {item.badge && (
+                      <span
+                        style={{
+                          backgroundColor: isActive ? "rgba(0, 0, 0, 0.25)" : "rgba(14, 133, 135, 0.25)",
+                          color: isActive ? "#ffffff" : "#38bdf8",
+                          fontSize: "11px",
+                          fontWeight: 700,
+                          padding: "2px 8px",
+                          borderRadius: "9999px",
+                        }}
+                      >
+                        {item.badge}
+                      </span>
+                    )}
+                  </NavLink>
+                </li>
+              );
+            })}
           </ul>
         </nav>
       </div>

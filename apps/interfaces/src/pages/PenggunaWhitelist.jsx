@@ -4,9 +4,14 @@ import UserModal from "../components/users/UserModal.jsx";
 import TelegramTable from "../components/users/TelegramTable.jsx";
 import TelegramModal from "../components/users/TelegramModal.jsx";
 import DeleteConfirmModal from "../components/common/DeleteConfirmModal.jsx";
+import { useAuth } from "../context/AuthContext.jsx";
 import api from "../lib/api.js";
 
 export default function PenggunaWhitelist() {
+  const { user } = useAuth();
+  const currentUser = user?.user || user;
+  const canManageUsers = currentUser?.role === "ADMIN" || currentUser?.role === "COORDINATOR";
+
   const [activeTab, setActiveTab] = useState("users"); // "users" | "telegram"
 
   // User State
@@ -172,63 +177,71 @@ export default function PenggunaWhitelist() {
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
       {/* Tab Switcher Pills */}
-        <div style={{ display: "flex", gap: "10px", marginBottom: "20px" }}>
-          <button
-            type="button"
-            onClick={() => setActiveTab("users")}
-            style={{
-              padding: "9px 20px",
-              borderRadius: "8px",
-              border: activeTab === "users" ? "none" : "1px solid var(--tab-inactive-border)",
-              backgroundColor: activeTab === "users" ? "var(--tab-active-bg)" : "var(--tab-inactive-bg)",
-              color: activeTab === "users" ? "var(--tab-active-text)" : "var(--tab-inactive-text)",
-              fontWeight: 600,
-              fontSize: "var(--text-sm)",
-              cursor: "pointer",
-              transition: "all 0.15s ease",
-              boxShadow: activeTab === "users" ? "0 2px 4px rgba(0,0,0,0.06)" : "none",
-            }}
-          >
-            Pengguna Dashboard
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab("telegram")}
-            style={{
-              padding: "9px 20px",
-              borderRadius: "8px",
-              border: activeTab === "telegram" ? "none" : "1px solid var(--tab-inactive-border)",
-              backgroundColor: activeTab === "telegram" ? "var(--tab-active-bg)" : "var(--tab-inactive-bg)",
-              color: activeTab === "telegram" ? "var(--tab-active-text)" : "var(--tab-inactive-text)",
-              fontWeight: 600,
-              fontSize: "var(--text-sm)",
-              cursor: "pointer",
-              transition: "all 0.15s ease",
-              boxShadow: activeTab === "telegram" ? "0 2px 4px rgba(0,0,0,0.06)" : "none",
-            }}
-          >
-            Whitelist Telegram
-          </button>
-        </div>
+      <div style={{ display: "flex", gap: "10px", marginBottom: "20px" }}>
+        <button
+          type="button"
+          onClick={() => setActiveTab("users")}
+          style={{
+            padding: "9px 20px",
+            borderRadius: "8px",
+            border: "1px solid",
+            borderColor: activeTab === "users" ? "#2563EB" : "var(--tab-inactive-border, #CBD5E1)",
+            backgroundColor: activeTab === "users" ? "#2563EB" : "#FFFFFF",
+            color: activeTab === "users" ? "#FFFFFF" : "#475569",
+            fontWeight: 600,
+            fontSize: "13px",
+            cursor: "pointer",
+            transition: "background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease",
+            boxShadow: "none",
+            outline: "none",
+            transform: "none",
+          }}
+        >
+          Pengguna Dashboard
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("telegram")}
+          style={{
+            padding: "9px 20px",
+            borderRadius: "8px",
+            border: "1px solid",
+            borderColor: activeTab === "telegram" ? "#2563EB" : "var(--tab-inactive-border, #CBD5E1)",
+            backgroundColor: activeTab === "telegram" ? "#2563EB" : "#FFFFFF",
+            color: activeTab === "telegram" ? "#FFFFFF" : "#475569",
+            fontWeight: 600,
+            fontSize: "13px",
+            cursor: "pointer",
+            transition: "background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease",
+            boxShadow: "none",
+            outline: "none",
+            transform: "none",
+          }}
+        >
+          Whitelist Telegram
+        </button>
+      </div>
 
-        {/* Tab Content Cards */}
-        {activeTab === "users" ? (
-          <UserTable
-            users={users}
-            loading={loadingUsers}
-            onAddUser={handleOpenAddUser}
-            onEditUser={handleOpenEditUser}
-            onDeleteUser={handleOpenDeleteUser}
-          />
-        ) : (
-          <TelegramTable
-            telegramUsers={telegramUsers}
-            loading={loadingTelegram}
-            onAddTelegramUser={handleOpenAddTelegram}
-            onEditTelegramUser={handleOpenEditTelegram}
-            onDeleteTelegramUser={handleOpenDeleteTelegram}
-          />
-        )}
+      {/* Tab Content Cards */}
+      {activeTab === "users" ? (
+        <UserTable
+          users={users}
+          loading={loadingUsers}
+          canManageUsers={canManageUsers}
+          onAddUser={handleOpenAddUser}
+          onEditUser={handleOpenEditUser}
+          onDeleteUser={handleOpenDeleteUser}
+        />
+      ) : (
+        <TelegramTable
+          telegramUsers={telegramUsers}
+          loading={loadingTelegram}
+          canManageUsers={canManageUsers}
+          onAddTelegramUser={handleOpenAddTelegram}
+          onEditTelegramUser={handleOpenEditTelegram}
+          onDeleteTelegramUser={handleOpenDeleteTelegram}
+        />
+      )}
 
       {/* Modals */}
       <UserModal
@@ -254,7 +267,7 @@ export default function PenggunaWhitelist() {
         onConfirm={handleConfirmDeleteUser}
         title="Hapus Pengguna Dashboard"
         itemName={userToDelete ? `${userToDelete.name} (${userToDelete.email})` : ""}
-        description="Apakah Anda yakin ingin menghapus akun pengguna ini? Seluruh sesi login dan token terkait akan dicabut permanen."
+        description="Apakah Anda yakin ingin menghapus akun pengguna ini? Jika pengguna memiliki riwayat tiket atau aktivitas, sistem akan melakukan Soft Delete (SUSPENDED) untuk menjaga integritas data."
         loading={deleteUserLoading}
         error={deleteUserError}
       />
@@ -274,11 +287,10 @@ export default function PenggunaWhitelist() {
               }`
             : ""
         }
-        description="Apakah Anda yakin ingin menghapus pengguna Telegram ini dari whitelist? Pengguna tidak akan dapat mengakses bot lagi."
+        description="Apakah Anda yakin ingin menghapus pengguna Telegram ini dari whitelist? Jika pengguna memiliki riwayat pelaporan tiket, sistem akan melakukan Soft Delete (nonaktifkan)."
         loading={deleteTelegramLoading}
         error={deleteTelegramError}
       />
     </div>
   );
 }
-

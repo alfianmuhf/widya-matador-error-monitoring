@@ -13,35 +13,31 @@ const router = Router();
 // Seluruh endpoint Component wajib terautentikasi (Access Token)
 router.use(authenticate);
 
-// Read (GET all & GET by ID) — dapat diakses oleh ADMIN, COORDINATOR, VIEWER
+// Read (GET all & GET by ID) — dapat diakses oleh semua role
 router.get("/", validate(queryComponentSchema, "query"), componentController.getComponents);
 router.get("/:id", componentController.getComponentById);
 
-// Create, Update, Delete — khusus role ADMIN & COORDINATOR
+// Create, Update, Delete — dapat diakses oleh semua role
 router.post(
   "/",
-  authorize("ADMIN", "COORDINATOR"),
   validate(createComponentSchema, "body"),
   componentController.createComponent
 );
 
 router.patch(
   "/:id",
-  authorize("ADMIN", "COORDINATOR"),
   validate(updateComponentSchema, "body"),
   componentController.updateComponent
 );
 
 router.put(
   "/:id",
-  authorize("ADMIN", "COORDINATOR"),
   validate(updateComponentSchema, "body"),
   componentController.updateComponent
 );
 
 router.delete(
   "/:id",
-  authorize("ADMIN", "COORDINATOR"),
   componentController.deleteComponent
 );
 

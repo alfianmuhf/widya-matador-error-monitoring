@@ -59,3 +59,10 @@ export const countFailureCodesByComponentId = async (componentId) => {
     where: { componentId },
   });
 };
+
+export const countTicketsByComponentId = async (componentId) => {
+  return prisma.ticket.count({
+    where: { componentId },
+  });
+};
+

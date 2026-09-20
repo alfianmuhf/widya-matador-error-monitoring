@@ -91,8 +91,25 @@ p {
 }
 
 /* Reusable buttons & interactive styles */
-button {
+button,
+input[type="button"],
+input[type="submit"],
+input[type="reset"] {
   font-family: inherit;
+  outline: none;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  touch-action: manipulation;
+}
+
+button:focus,
+button:focus-visible,
+button:active {
+  outline: none !important;
+}
+
+button:active {
+  transform: none !important;
 }
 
 /* Custom Scrollbar for clean aesthetics */
@@ -120,3 +137,30 @@ button {
   from { transform: translateX(100%); }
   to { transform: translateX(0); }
 }
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes slideDownFade {
+  0% {
+    opacity: 0;
+    transform: translateY(-14px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes rowFadeIn {
+  0% {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+

@@ -9,15 +9,77 @@ import DeleteConfirmModal from "../components/common/DeleteConfirmModal.jsx";
 import api from "../lib/api.js";
 
 const TABS = [
-  { id: "client", label: "Client", icon: "🏢" },
-  { id: "location", label: "Lokasi", icon: "📍" },
-  { id: "component", label: "Komponen", icon: "⚙️" },
-  { id: "failureCode", label: "Failure Code", icon: "⚠️" },
-  { id: "asset", label: "Asset Robot", icon: "🤖" },
+  { id: "asset", label: "Unit Load Scanner" },
+  { id: "client", label: "Client" },
+  { id: "location", label: "Lokasi" },
+  { id: "component", label: "Component" },
+  { id: "failureCode", label: "Failure Code" },
 ];
 
+const renderTabIcon = (id, isActive) => {
+  const iconColor = isActive ? "#ffffff" : "#64748b";
+  switch (id) {
+    case "asset":
+      return (
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={iconColor} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="4" y="4" width="16" height="16" rx="2" />
+          <rect x="9" y="9" width="6" height="6" />
+          <line x1="9" y1="1" x2="9" y2="4" />
+          <line x1="15" y1="1" x2="15" y2="4" />
+          <line x1="9" y1="20" x2="9" y2="23" />
+          <line x1="15" y1="20" x2="15" y2="23" />
+          <line x1="20" y1="9" x2="23" y2="9" />
+          <line x1="20" y1="14" x2="23" y2="14" />
+          <line x1="1" y1="9" x2="4" y2="9" />
+          <line x1="1" y1="14" x2="4" y2="14" />
+        </svg>
+      );
+    case "client":
+      return (
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={iconColor} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="4" y="2" width="16" height="20" rx="2" />
+          <path d="M9 22v-4h6v4" />
+          <path d="M8 6h.01" />
+          <path d="M16 6h.01" />
+          <path d="M12 6h.01" />
+          <path d="M12 10h.01" />
+          <path d="M12 14h.01" />
+          <path d="M16 10h.01" />
+          <path d="M16 14h.01" />
+          <path d="M8 10h.01" />
+          <path d="M8 14h.01" />
+        </svg>
+      );
+    case "location":
+      return (
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={iconColor} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+          <circle cx="12" cy="10" r="3" />
+        </svg>
+      );
+    case "component":
+      return (
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={iconColor} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <ellipse cx="12" cy="5" rx="9" ry="3" />
+          <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3" />
+          <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5" />
+        </svg>
+      );
+    case "failureCode":
+      return (
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={iconColor} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+          <line x1="12" y1="9" x2="12" y2="13" />
+          <line x1="12" y1="17" x2="12.01" y2="17" />
+        </svg>
+      );
+    default:
+      return null;
+  }
+};
+
 export default function MasterData() {
-  const [activeTab, setActiveTab] = useState("client");
+  const [activeTab, setActiveTab] = useState("asset");
 
   // Search & Filter
   const [searchTerm, setSearchTerm] = useState("");
@@ -166,7 +228,7 @@ export default function MasterData() {
       case "failureCode":
         return "Tambah Failure Code";
       case "asset":
-        return "Tambah Asset Robot";
+        return "Tambah Unit Load Scanner";
       default:
         return "Tambah Data";
     }
@@ -212,20 +274,23 @@ export default function MasterData() {
                 display: "inline-flex",
                 alignItems: "center",
                 gap: "8px",
-                padding: "9px 18px",
+                padding: "8px 16px",
                 borderRadius: "10px",
-                border: isActive ? "none" : "1px solid var(--tab-inactive-border)",
-                backgroundColor: isActive ? "var(--tab-active-bg)" : "var(--tab-inactive-bg)",
-                color: isActive ? "var(--tab-active-text)" : "var(--tab-inactive-text)",
-                fontWeight: isActive ? 650 : 500,
-                fontSize: "var(--text-sm)",
+                border: "1px solid",
+                borderColor: isActive ? "#11222c" : "#e2e8f0",
+                backgroundColor: isActive ? "#11222c" : "#ffffff",
+                color: isActive ? "#ffffff" : "#334155",
+                fontWeight: 600,
+                fontSize: "13.5px",
                 cursor: "pointer",
-                transition: "all 0.15s ease",
-                boxShadow: isActive ? "0 2px 5px rgba(0,0,0,0.06)" : "none",
+                transition: "background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease",
+                boxShadow: isActive ? "0 1px 2px rgba(0,0,0,0.05)" : "0 1px 2px rgba(0,0,0,0.02)",
                 whiteSpace: "nowrap",
+                outline: "none",
+                transform: "none",
               }}
             >
-              <span>{tab.icon}</span>
+              {renderTabIcon(tab.id, isActive)}
               <span>{tab.label}</span>
             </button>
           );
@@ -351,6 +416,8 @@ export default function MasterData() {
                 cursor: "pointer",
                 transition: "background-color 0.15s ease",
                 boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
+                outline: "none",
+                transform: "none",
               }}
               onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "var(--primary-teal-hover)")}
               onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "var(--primary-teal)")}

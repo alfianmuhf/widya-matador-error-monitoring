@@ -1,10 +1,9 @@
-// =========================================================================
-// Domain User — sesuai fitur yang benar-benar ada di PRD:
-//   1. Login dashboard (FR-SEC-01/02) + lockout 5x percobaan gagal
-//   2. Akun dibuat oleh admin untuk user lain (persona Bruno, EP-06)
-//   3. Whitelist pengguna Telegram oleh admin (FR-BOT-03)
-// Tidak ada pembatasan akses per client/lokasi — itu bukan requirement PRD.
-// =========================================================================
+// ERAD — Error Report Automation Dashboard
+// Prisma schema, hasil translasi 1:1 dari erad_schema_v2.dbml
+//
+// Catatan: default uuid pakai gen_random_uuid() (fungsi bawaan extension
+// pgcrypto di Postgres). Pastikan extension-nya aktif, misal lewat migration:
+//   CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 generator client {
   provider = "prisma-client-js"
@@ -14,180 +13,362 @@ datasource db {
   provider = "postgresql"
 }
 
-// ------------------------------- LOGIN & ROLE -----------------------------
-
-enum Role {
-  VIEWER
-  COORDINATOR
-  ADMIN
-}
-
-enum UserStatus {
-  INVITED   // akun dibuat admin, user belum pernah set password / login
-  ACTIVE
-  SUSPENDED // dinonaktifkan admin, tidak bisa login walau password benar
-}
-
-model User {
-  id    String @id @default(uuid())
-  email String @unique
-  name  String
-  role  Role   @default(VIEWER)
-
-  // nullable: kosong selama status masih INVITED, baru terisi setelah user
-  // klik link undangan dan set password sendiri
-  passwordHash String? @map("password_hash")
-
-  status             UserStatus @default(INVITED)
-  mustChangePassword Boolean    @default(true) @map("must_change_password")
-
-  failedLoginAttempts Int       @default(0) @map("failed_login_attempts")
-  lockedUntil         DateTime? @map("locked_until") // dukung lockout 5x percobaan gagal
-  lastLoginAt         DateTime? @map("last_login_at")
-  passwordChangedAt   DateTime? @map("password_changed_at") // diisi tiap kali user ganti password sendiri
-
-  // siapa admin yang membuat akun ini (self-relation). Null khusus untuk admin
-  // pertama yang dibuat lewat seed/bootstrap, bukan lewat dashboard
-  createdById  String? @map("created_by_id")
-  createdBy    User?   @relation("UserCreatedBy", fields: [createdById], references: [id])
-  createdUsers User[]  @relation("UserCreatedBy")
-
-  refreshTokens            RefreshToken[]
-  passwordResetTokens      PasswordResetToken[]
-  whitelistedTelegramUsers TelegramUser[]       @relation("TelegramUserWhitelistedBy")
-
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  @@map("users")
-}
-
-model RefreshToken {
-  id    String @id @default(uuid())
-  token String @unique
-
-  userId String @map("user_id")
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  expiresAt DateTime  @map("expires_at")
-  revoked   Boolean   @default(false)
-  revokedAt DateTime? @map("revoked_at")
-
-  userAgent String? @map("user_agent")
-  ipAddress String? @map("ip_address")
-
-  createdAt DateTime @default(now()) @map("created_at")
-
-  @@map("refresh_tokens")
-  @@index([userId])
-}
-
-// ----------------------- REGISTER AKUN OLEH ADMIN --------------------------
-
-enum PasswordTokenPurpose {
-  INVITE // link pertama kali dari admin, untuk user set password sendiri
-  RESET  // lupa password
-}
-
-model PasswordResetToken {
-  id    String @id @default(uuid())
-  token String @unique // token acak yang dikirim lewat email, bukan password itu sendiri
-
-  userId String @map("user_id")
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  purpose   PasswordTokenPurpose @default(INVITE)
-  expiresAt DateTime             @map("expires_at")
-  usedAt    DateTime?            @map("used_at") // null = belum dipakai; sekali pakai
-
-  createdAt DateTime @default(now()) @map("created_at")
-
-  @@map("password_reset_tokens")
-  @@index([userId])
-}
-
-// --------------------- WHITELIST TELEGRAM OLEH ADMIN ------------------------
-
-model TelegramUser {
-  id         String  @id @default(uuid())
-  telegramId String  @unique @map("telegram_id")
-  username   String? // @username Telegram, bisa kosong kalau user tidak set username
-  fullName   String? @map("full_name") // nama asli, diisi admin biar gampang dikenali di daftar whitelist
-  isActive   Boolean @default(true) @map("is_active")
-
-  // siapa admin yang menambahkan nomor ini ke whitelist
-  whitelistedById String? @map("whitelisted_by_id")
-  whitelistedBy   User?   @relation("TelegramUserWhitelistedBy", fields: [whitelistedById], references: [id])
-
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  @@map("telegram_users")
-}
+// ==================
+// Master Data
+// ==================
 
 model Client {
-  id       String  @id @default(uuid())
-  name     String
+  id       String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name     String  @db.VarChar(100)
   isActive Boolean @default(true) @map("is_active")
 
-  assets Asset[]
+  assets         Asset[]
+  telegramGroups TelegramGroup[]
 
   @@map("clients")
 }
 
 model Location {
-  id       String  @id @default(uuid())
-  name     String
+  id       String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name     String  @db.VarChar(100)
   isActive Boolean @default(true) @map("is_active")
 
-  assets Asset[]
+  assets         Asset[]
+  telegramGroups TelegramGroup[]
 
   @@map("locations")
 }
 
+enum TypeAsset {
+  PORTABLE
+  STATIC
+
+  @@map("type_asset")
+}
+
+enum AssetStatus {
+  ACTIVE
+  MAINTENANCE
+  RETIRED
+
+  @@map("asset_status")
+}
+
 model Asset {
-  id       String @id @default(uuid())
-  unitCode String @unique @map("unit_code") // kode unit, dipakai teknisi lewat bot (/report). Tidak boleh berubah setelah punya tiket (FR-MDM-01)
-  type     String // portable / static
+  id                String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  unitCode          String      @unique @map("unit_code") @db.VarChar(50)
+  type              TypeAsset   @default(PORTABLE)
+  clientId          String      @map("client_id") @db.Uuid
+  locationId        String      @map("location_id") @db.Uuid
+  status            AssetStatus @default(ACTIVE)
+  commissioningDate DateTime?   @map("commissioning_date") @db.Date
+  isActive          Boolean     @default(true) @map("is_active")
 
-  clientId String @map("client_id")
-  client   Client @relation(fields: [clientId], references: [id])
-
-  locationId String   @map("location_id")
-  location   Location @relation(fields: [locationId], references: [id])
-
-  status            String
-  commissioningDate DateTime? @map("commissioning_date")
-  isActive          Boolean   @default(true) @map("is_active")
-
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  client   Client   @relation(fields: [clientId], references: [id])
+  location Location @relation(fields: [locationId], references: [id])
+  tickets  Ticket[]
 
   @@map("asset")
 }
 
 model Component {
-  id        String  @id @default(uuid())
-  prefix    String  // dipakai untuk bentuk kode failure code baru
-  name      String
-  sortOrder Int     @default(0) @map("sort_order") // urutan tombol di keyboard bot (FR-BOT-07)
+  id        String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  prefix    String  @unique @db.VarChar(10)
+  name      String  @db.VarChar(100)
+  sortOrder Int     @default(0) @map("sort_order")
   isActive  Boolean @default(true) @map("is_active")
 
   failureCodes FailureCode[]
+  tickets      Ticket[]
 
   @@map("components")
 }
 
 model FailureCode {
-  id String @id @default(uuid())
-
-  componentId String    @map("component_id")
-  component   Component @relation(fields: [componentId], references: [id])
-
-  code        String
+  id          String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  componentId String  @map("component_id") @db.Uuid
+  code        String  @unique @db.VarChar(20)
   description String?
   isActive    Boolean @default(true) @map("is_active")
 
-  @@unique([componentId, code]) // kode boleh sama di component berbeda, tidak boleh dobel di component yang sama
+  component Component @relation(fields: [componentId], references: [id])
+  tickets   Ticket[]
+
   @@map("failure_codes")
+}
+
+// ==================
+// Tiket
+// ==================
+
+enum TicketStatus {
+  open
+  escalated
+  solved
+  closed
+
+  @@map("ticket_status")
+}
+
+enum TicketSource {
+  telegram
+  dashboard
+
+  @@map("ticket_source")
+}
+
+model Ticket {
+  ticketId           String       @id @map("ticket_id") @db.VarChar(50)
+  unitCode           String       @map("unit_code") @db.VarChar(50)
+  componentId        String       @map("component_id") @db.Uuid
+  failureCodeId      String       @map("failure_code_id") @db.Uuid
+  damageDescription  String?      @map("damage_description")
+  actionTaken        String?      @map("action_taken")
+  rootCause          String?      @map("root_cause")
+  severity           String?      @db.VarChar(20)
+  status             TicketStatus @default(open)
+  source             TicketSource?
+  reporterUserId     String?      @map("reporter_user_id") @db.Uuid
+  reporterTelegramId String?      @map("reporter_telegram_id") @db.VarChar(50)
+  createdAt          DateTime     @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt          DateTime?    @map("updated_at") @db.Timestamptz
+  resolvedAt         DateTime?    @map("resolved_at") @db.Timestamptz
+  closedAt           DateTime?    @map("closed_at") @db.Timestamptz
+
+  asset            Asset          @relation(fields: [unitCode], references: [unitCode])
+  component        Component      @relation(fields: [componentId], references: [id])
+  failureCode      FailureCode    @relation(fields: [failureCodeId], references: [id])
+  reporterUser     User?          @relation("TicketReporterUser", fields: [reporterUserId], references: [id])
+  reporterTelegram TelegramUser?  @relation("TicketReporterTelegram", fields: [reporterTelegramId], references: [telegramId])
+
+  history     TicketHistory[]
+  attachments TicketAttachment[]
+
+  @@map("tickets")
+}
+
+model TicketHistory {
+  id                  String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  ticketId            String   @map("ticket_id") @db.VarChar(50)
+  changedByUserId     String?  @map("changed_by_user_id") @db.Uuid
+  changedByTelegramId String?  @map("changed_by_telegram_id") @db.VarChar(50)
+  oldValue            Json?    @map("old_value")
+  newValue            Json?    @map("new_value")
+  notes               String?
+  changedAt           DateTime @default(now()) @map("changed_at") @db.Timestamptz
+
+  ticket            Ticket        @relation(fields: [ticketId], references: [ticketId], onDelete: Cascade)
+  changedByUser     User?         @relation(fields: [changedByUserId], references: [id])
+  changedByTelegram TelegramUser? @relation(fields: [changedByTelegramId], references: [telegramId])
+
+  @@map("ticket_history")
+}
+
+model TicketAttachment {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  ticketId   String   @map("ticket_id") @db.VarChar(50)
+  fileUrl    String   @map("file_url")
+  fileName   String?  @map("file_name") @db.VarChar(255)
+  mimeType   String?  @map("mime_type") @db.VarChar(100)
+  fileSize   Int?     @map("file_size")
+  uploadedAt DateTime @default(now()) @map("uploaded_at") @db.Timestamptz
+
+  ticket Ticket @relation(fields: [ticketId], references: [ticketId], onDelete: Cascade)
+
+  @@map("ticket_attachments")
+}
+
+// ==================
+// Bot Telegram
+// ==================
+
+model TelegramEvent {
+  updateId    BigInt   @id @map("update_id")
+  processedAt DateTime @default(now()) @map("processed_at") @db.Timestamptz
+
+  @@map("telegram_events")
+}
+
+enum BotState {
+  IDLE
+  AWAIT_ASSET
+  AWAIT_COMPONENT
+  AWAIT_FAILURE_CODE
+  AWAIT_DETAIL
+  AWAIT_UPDATE
+  COMMITTED
+
+  @@map("bot_state")
+}
+
+model BotSession {
+  telegramId  String    @id @map("telegram_id") @db.VarChar(50)
+  state       BotState?
+  sessionData Json?     @map("session_data")
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  expiredAt   DateTime? @map("expired_at") @db.Timestamptz
+
+  telegramUser TelegramUser @relation(fields: [telegramId], references: [telegramId], onDelete: Cascade)
+
+  @@map("bot_sessions")
+}
+
+// ==================
+// User / Web
+// ==================
+
+enum UserRole {
+  ADMIN
+  COORDINATOR
+  VIEWER
+
+  @@map("user_role")
+}
+
+enum UserStatus {
+  INVITED
+  ACTIVE
+  SUSPENDED
+
+  @@map("user_status")
+}
+
+model User {
+  id                  String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email               String     @unique @db.VarChar(100)
+  name                String     @db.VarChar(100)
+  passwordHash        String     @map("password_hash")
+  role                UserRole   @default(VIEWER)
+  status              UserStatus @default(INVITED)
+  mustChangePassword  Boolean    @default(true) @map("must_change_password")
+  failedLoginAttempts Int        @default(0) @map("failed_login_attempts")
+  lockedUntil         DateTime?  @map("locked_until") @db.Timestamptz
+  lastLoginAt         DateTime?  @map("last_login_at") @db.Timestamptz
+  passwordChangedAt   DateTime?  @map("password_changed_at") @db.Timestamptz
+  createdById         String?    @map("created_by_id") @db.Uuid
+  createdAt           DateTime   @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt           DateTime?  @map("updated_at") @db.Timestamptz
+
+  createdBy    User?  @relation("UserCreatedBy", fields: [createdById], references: [id])
+  createdUsers User[] @relation("UserCreatedBy")
+
+  refreshTokens            RefreshToken[]
+  whitelistedTelegramUsers TelegramUser[]  @relation("TelegramWhitelistedBy")
+  exportJobs               ExportJob[]
+  ticketsReported          Ticket[]        @relation("TicketReporterUser")
+  ticketHistoryChanges     TicketHistory[]
+  auditLogs                AuditLog[]
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  token     String    @unique
+  userId    String    @map("user_id") @db.Uuid
+  expiresAt DateTime  @map("expires_at") @db.Timestamptz
+  revoked   Boolean   @default(false)
+  revokedAt DateTime? @map("revoked_at") @db.Timestamptz
+  userAgent String?   @map("user_agent")
+  ipAddress String?   @map("ip_address")
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("refresh_tokens")
+}
+
+model TelegramUser {
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  telegramId      String    @unique @map("telegram_id") @db.VarChar(50)
+  username        String?   @db.VarChar(100)
+  fullName        String?   @map("full_name") @db.VarChar(100)
+  isActive        Boolean   @default(true) @map("is_active")
+  whitelistedById String?   @map("whitelisted_by_id") @db.Uuid
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime? @map("updated_at") @db.Timestamptz
+
+  whitelistedBy User? @relation("TelegramWhitelistedBy", fields: [whitelistedById], references: [id])
+
+  botSession           BotSession?
+  ticketsReported      Ticket[]        @relation("TicketReporterTelegram")
+  ticketHistoryChanges TicketHistory[]
+  auditLogs            AuditLog[]
+
+  @@map("telegram_users")
+}
+
+// ==================
+// Audit Log
+// ==================
+
+enum DeleteStatus {
+  NONE
+  SOFT
+  HARD
+
+  @@map("delete_status")
+}
+
+model AuditLog {
+  id              String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  actor           String?      @db.VarChar(100)
+  actorUserId     String?      @map("actor_user_id") @db.Uuid
+  actorTelegramId String?      @map("actor_telegram_id") @db.Uuid
+  deleteAction    DeleteStatus @default(NONE) @map("delete_action")
+  action          String?      @db.VarChar(20)
+  entityType      String?      @map("entity_type") @db.VarChar(50)
+  entityId        String?      @map("entity_id") @db.VarChar(50)
+  details         Json?
+  createdAt       DateTime     @default(now()) @map("created_at") @db.Timestamptz
+
+  actorUser     User?         @relation(fields: [actorUserId], references: [id])
+  actorTelegram TelegramUser? @relation(fields: [actorTelegramId], references: [id])
+
+  @@map("audit_logs")
+}
+
+// ==================
+// Laporan & Ekspor
+// ==================
+
+enum ExportStatus {
+  QUEUED
+  PROCESSING
+  READY
+  FAILED
+
+  @@map("export_status")
+}
+
+model ExportJob {
+  id                String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  requestedByUserId String       @map("requested_by_user_id") @db.Uuid
+  status            ExportStatus @default(QUEUED)
+  filterParams      Json?        @map("filter_params")
+  fileUrl           String?      @map("file_url")
+  createdAt         DateTime     @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt         DateTime?    @map("updated_at") @db.Timestamptz
+
+  requestedBy User @relation(fields: [requestedByUserId], references: [id], onDelete: Cascade)
+
+  @@map("exports_jobs")
+}
+
+model TelegramGroup {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  groupId    String    @unique @map("group_id") @db.VarChar(50)
+  chatId     String    @unique @map("chat_id") @db.VarChar(50)
+  name       String?   @db.VarChar(100)
+  groupType  String?   @map("group_type") @db.VarChar(30)
+  clientId   String?   @map("client_id") @db.Uuid
+  locationId String?   @map("location_id") @db.Uuid
+  isActive   Boolean   @default(true) @map("is_active")
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt  DateTime? @map("updated_at") @db.Timestamptz
+
+  client   Client?   @relation(fields: [clientId], references: [id])
+  location Location? @relation(fields: [locationId], references: [id])
+
+  @@map("telegram_groups")
 }

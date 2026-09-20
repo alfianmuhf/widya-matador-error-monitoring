@@ -12,7 +12,7 @@ export default function TicketFilterBar({
   components = [],
   clients = [],
   locations = [],
-  statuses = ["Open", "Monitor", "Solved", "Closed"],
+  statuses = ["Open", "Escalated", "Solved", "Closed"],
 }) {
   const timeRanges = [
     { label: "30 hari", value: "30d" },
@@ -22,12 +22,12 @@ export default function TicketFilterBar({
   ];
 
   const selectStyle = {
-    padding: "8px 14px",
+    padding: "7px 12px",
     borderRadius: "8px",
-    border: "1px solid var(--border-light)",
+    border: "1px solid #cbd5e1",
     backgroundColor: "#ffffff",
-    color: "var(--text-dark)",
-    fontSize: "var(--text-sm)",
+    color: "#334155",
+    fontSize: "13px",
     fontWeight: 500,
     outline: "none",
     cursor: "pointer",
@@ -35,79 +35,103 @@ export default function TicketFilterBar({
     transition: "border-color 0.15s ease",
   };
 
+  const isFilterActive =
+    Boolean(selectedComponent) ||
+    Boolean(selectedClient) ||
+    Boolean(selectedLocation) ||
+    Boolean(selectedStatus);
+
   return (
     <div
       style={{
         display: "flex",
-        alignItems: "center",
-        flexWrap: "wrap",
+        flexDirection: "column",
         gap: "12px",
         marginBottom: "20px",
+        alignItems: "flex-start",
       }}
     >
-      {/* Time Range Pill Group */}
+      {/* 1. Time Range Filter Box with its own padding */}
       <div
         style={{
           display: "inline-flex",
           alignItems: "center",
-          gap: "4px",
+          gap: "12px",
           backgroundColor: "#ffffff",
-          padding: "4px 6px",
-          borderRadius: "10px",
+          borderRadius: "12px",
           border: "1px solid var(--border-light)",
-          boxShadow: "0 1px 2px rgba(0,0,0,0.02)",
+          padding: "8px 16px",
+          boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
+          flexWrap: "wrap",
         }}
       >
-        {/* Filter label icon */}
         <div
           style={{
             display: "flex",
             alignItems: "center",
-            gap: "6px",
-            padding: "4px 8px",
-            color: "var(--text-muted)",
-            fontSize: "var(--text-sm)",
-            fontWeight: 600,
+            gap: "8px",
+            color: "#1e293b",
+            fontSize: "13.5px",
+            fontWeight: 650,
+            marginRight: "4px",
           }}
         >
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#475569" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
             <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
           </svg>
           Filter
         </div>
 
-        {timeRanges.map((item) => {
-          const isActive = timeRange === item.value;
-          return (
-            <button
-              key={item.value}
-              type="button"
-              onClick={() => setTimeRange(item.value)}
-              style={{
-                padding: "6px 14px",
-                borderRadius: "7px",
-                border: "none",
-                backgroundColor: isActive ? "var(--tab-active-bg)" : "transparent",
-                color: isActive ? "#ffffff" : "var(--text-secondary)",
-                fontSize: "var(--text-sm)",
-                fontWeight: isActive ? 600 : 500,
-                cursor: "pointer",
-                transition: "all 0.15s ease",
-              }}
-            >
-              {item.label}
-            </button>
-          );
-        })}
+        <div style={{ display: "inline-flex", gap: "6px", alignItems: "center" }}>
+          {timeRanges.map((item) => {
+            const isActive = timeRange === item.value;
+            return (
+              <button
+                key={item.value}
+                type="button"
+                onClick={() => setTimeRange(item.value)}
+                style={{
+                  padding: "6px 14px",
+                  borderRadius: "8px",
+                  border: "1px solid",
+                  borderColor: isActive ? "#10212a" : "#e2e8f0",
+                  backgroundColor: isActive ? "#10212a" : "#ffffff",
+                  color: isActive ? "#ffffff" : "#475569",
+                  fontSize: "12.5px",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  transition: "background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease",
+                  outline: "none",
+                  transform: "none",
+                }}
+              >
+                {item.label}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
-      {/* Dropdown Filters */}
-      <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: "10px" }}>
+      {/* 2. Dropdown Filters Box with its own separated padding underneath */}
+      <div
+        style={{
+          width: "100%",
+          backgroundColor: "#ffffff",
+          borderRadius: "12px",
+          border: "1px solid var(--border-light)",
+          padding: "12px 18px",
+          boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
+          display: "flex",
+          alignItems: "center",
+          flexWrap: "wrap",
+          gap: "10px",
+        }}
+      >
         {/* Component Filter */}
         <select
           value={selectedComponent}
           onChange={(e) => setSelectedComponent(e.target.value)}
-          style={selectStyle}
+          style={{ ...selectStyle, minWidth: "150px" }}
         >
           <option value="">Semua component</option>
           {components.map((c) => (
@@ -121,7 +145,7 @@ export default function TicketFilterBar({
         <select
           value={selectedClient}
           onChange={(e) => setSelectedClient(e.target.value)}
-          style={selectStyle}
+          style={{ ...selectStyle, minWidth: "140px" }}
         >
           <option value="">Semua client</option>
           {clients.map((client) => (
@@ -135,7 +159,7 @@ export default function TicketFilterBar({
         <select
           value={selectedLocation}
           onChange={(e) => setSelectedLocation(e.target.value)}
-          style={selectStyle}
+          style={{ ...selectStyle, minWidth: "130px" }}
         >
           <option value="">Semua lokasi</option>
           {locations.map((loc) => (
@@ -149,7 +173,7 @@ export default function TicketFilterBar({
         <select
           value={selectedStatus}
           onChange={(e) => setSelectedStatus(e.target.value)}
-          style={selectStyle}
+          style={{ ...selectStyle, minWidth: "130px" }}
         >
           <option value="">Semua status</option>
           {statuses.map((st) => (
@@ -159,12 +183,11 @@ export default function TicketFilterBar({
           ))}
         </select>
 
-        {/* Reset Filter if active */}
-        {(selectedComponent || selectedClient || selectedLocation || selectedStatus || timeRange !== "6m") && (
+        {/* Reset Filter Button if active */}
+        {isFilterActive && (
           <button
             type="button"
             onClick={() => {
-              setTimeRange("6m");
               setSelectedComponent("");
               setSelectedClient("");
               setSelectedLocation("");
@@ -174,13 +197,21 @@ export default function TicketFilterBar({
               padding: "7px 12px",
               borderRadius: "8px",
               border: "none",
-              backgroundColor: "transparent",
-              color: "var(--primary-teal)",
-              fontSize: "12px",
+              backgroundColor: "#f1f5f9",
+              color: "#0e8587",
+              fontSize: "12.5px",
               fontWeight: 600,
               cursor: "pointer",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "6px",
+              transition: "background-color 0.15s ease",
             }}
           >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+              <path d="M3 3v5h5" />
+            </svg>
             Reset filter
           </button>
         )}

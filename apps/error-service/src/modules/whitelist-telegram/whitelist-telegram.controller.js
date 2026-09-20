@@ -1,12 +1,11 @@
-import * as telegramService from "./telegram.service.js";
+import * as telegramService from "./whitelist-telegram.service.js";
 
 /**
  * Controller: Admin adds user to Telegram whitelist
  */
 export const createTelegramUser = async (req, res, next) => {
   try {
-    const adminId = req.user?.id;
-    const telegramUser = await telegramService.createTelegramUser(req.body, adminId);
+    const telegramUser = await telegramService.createTelegramUser(req.body, req.user);
 
     res.status(201).json({
       success: true,
@@ -55,7 +54,7 @@ export const getTelegramUserById = async (req, res, next) => {
  */
 export const updateTelegramUser = async (req, res, next) => {
   try {
-    const telegramUser = await telegramService.updateTelegramUser(req.params.id, req.body);
+    const telegramUser = await telegramService.updateTelegramUser(req.params.id, req.body, req.user);
 
     res.status(200).json({
       success: true,
@@ -72,11 +71,12 @@ export const updateTelegramUser = async (req, res, next) => {
  */
 export const deleteTelegramUser = async (req, res, next) => {
   try {
-    await telegramService.deleteTelegramUser(req.params.id);
+    const result = await telegramService.deleteTelegramUser(req.params.id, req.user);
 
     res.status(200).json({
       success: true,
-      message: "User Telegram berhasil dihapus dari whitelist",
+      message: result.message,
+      data: result,
     });
   } catch (error) {
     next(error);

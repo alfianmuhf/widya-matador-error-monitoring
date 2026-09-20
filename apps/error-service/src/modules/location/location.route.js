@@ -13,35 +13,31 @@ const router = Router();
 // Seluruh endpoint Location wajib terautentikasi (Access Token)
 router.use(authenticate);
 
-// Read (GET all & GET by ID) — dapat diakses oleh ADMIN, COORDINATOR, VIEWER
+// Read (GET all & GET by ID) — dapat diakses oleh semua role
 router.get("/", validate(queryLocationSchema, "query"), locationController.getLocations);
 router.get("/:id", locationController.getLocationById);
 
-// Create, Update, Delete — khusus role ADMIN & COORDINATOR
+// Create, Update, Delete — dapat diakses oleh semua role
 router.post(
   "/",
-  authorize("ADMIN", "COORDINATOR"),
   validate(createLocationSchema, "body"),
   locationController.createLocation
 );
 
 router.patch(
   "/:id",
-  authorize("ADMIN", "COORDINATOR"),
   validate(updateLocationSchema, "body"),
   locationController.updateLocation
 );
 
 router.put(
   "/:id",
-  authorize("ADMIN", "COORDINATOR"),
   validate(updateLocationSchema, "body"),
   locationController.updateLocation
 );
 
 router.delete(
   "/:id",
-  authorize("ADMIN", "COORDINATOR"),
   locationController.deleteLocation
 );
 

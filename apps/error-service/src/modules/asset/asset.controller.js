@@ -28,7 +28,7 @@ export const getAssetById = async (req, res, next) => {
 
 export const createAsset = async (req, res, next) => {
   try {
-    const asset = await assetService.createAsset(req.body);
+    const asset = await assetService.createAsset(req.body, req.user);
     res.status(201).json({
       status: "success",
       message: "Asset berhasil ditambahkan",
@@ -41,7 +41,7 @@ export const createAsset = async (req, res, next) => {
 
 export const updateAsset = async (req, res, next) => {
   try {
-    const asset = await assetService.updateAsset(req.params.id, req.body);
+    const asset = await assetService.updateAsset(req.params.id, req.body, req.user);
     res.status(200).json({
       status: "success",
       message: "Asset berhasil diperbarui",
@@ -54,12 +54,14 @@ export const updateAsset = async (req, res, next) => {
 
 export const deleteAsset = async (req, res, next) => {
   try {
-    await assetService.deleteAsset(req.params.id);
+    const result = await assetService.deleteAsset(req.params.id, req.user);
     res.status(200).json({
       status: "success",
-      message: "Asset berhasil dihapus",
+      message: result.message,
+      data: result,
     });
   } catch (error) {
     next(error);
   }
 };
+

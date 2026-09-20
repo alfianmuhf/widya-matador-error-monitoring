@@ -1,12 +1,67 @@
+import { useState, useEffect } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext.jsx";
+import api from "../../lib/api.js";
 
 export default function Sidebar() {
   const location = useLocation();
-  const { user } = useAuth();
+  const { user, accessToken } = useAuth();
   const currentUser = user?.user || user;
   const isAdmin = currentUser?.role === "ADMIN";
   const canAccessMasterData = currentUser?.role === "ADMIN" || currentUser?.role === "COORDINATOR";
+
+  const [openTicketsCount, setOpenTicketsCount] = useState(28);
+
+  useEffect(() => {
+    // Initial fetch
+    api.get("/summary?timeRange=all")
+      .then((res) => {
+        if (res.data?.data?.kpis?.openTickets !== undefined) {
+          setOpenTicketsCount(res.data.data.kpis.openTickets);
+        }
+      })
+      .catch(() => {});
+
+    if (!accessToken) return;
+
+    // Real-time live updates via Server-Sent Events (SSE)
+    const baseURL = import.meta.env.VITE_API_BASE_URL || "http://localhost:3000";
+    const sseUrl = `${baseURL}/tickets/stream?token=${encodeURIComponent(accessToken)}`;
+    const eventSource = new EventSource(sseUrl);
+
+    eventSource.addEventListener("init", (event) => {
+      try {
+        const payload = JSON.parse(event.data);
+        if (payload.openTicketsCount !== undefined) {
+          setOpenTicketsCount(payload.openTicketsCount);
+        }
+      } catch {}
+    });
+
+    const handleTicketChange = (event) => {
+      try {
+        const payload = JSON.parse(event.data);
+        if (payload.openTicketsCount !== undefined) {
+          setOpenTicketsCount(payload.openTicketsCount);
+        } else {
+          api.get("/summary?timeRange=all")
+            .then((res) => {
+              if (res.data?.data?.kpis?.openTickets !== undefined) {
+                setOpenTicketsCount(res.data.data.kpis.openTickets);
+              }
+            })
+            .catch(() => {});
+        }
+      } catch {}
+    };
+
+    eventSource.addEventListener("ticket_created", handleTicketChange);
+    eventSource.addEventListener("ticket_updated", handleTicketChange);
+
+    return () => {
+      eventSource.close();
+    };
+  }, [accessToken]);
 
   const navItems = [
     {
@@ -35,6 +90,9 @@ export default function Sidebar() {
     {
       to: "/daftar-tiket",
       label: "Daftar Tiket",
+      badge: openTicketsCount > 0 ? openTicketsCount : null,
+      badgeBg: "#ef4444",
+      badgeColor: "#ffffff",
       icon: (
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2z" />
@@ -44,37 +102,29 @@ export default function Sidebar() {
         </svg>
       ),
     },
-    ...(canAccessMasterData
-      ? [
-          {
-            to: "/master-data",
-            label: "Master Data",
-            icon: (
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <ellipse cx="12" cy="5" rx="9" ry="3" />
-                <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3" />
-                <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5" />
-              </svg>
-            ),
-          },
-        ]
-      : []),
-    ...(isAdmin
-      ? [
-          {
-            to: "/pengguna-whitelist",
-            label: "Pengguna & Whitelist",
-            icon: (
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-                <circle cx="9" cy="7" r="4" />
-                <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-                <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-              </svg>
-            ),
-          },
-        ]
-      : []),
+    {
+      to: "/master-data",
+      label: "Master Data",
+      icon: (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <ellipse cx="12" cy="5" rx="9" ry="3" />
+          <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3" />
+          <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5" />
+        </svg>
+      ),
+    },
+    {
+      to: "/pengguna-whitelist",
+      label: "Pengguna & Whitelist",
+      icon: (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+          <circle cx="9" cy="7" r="4" />
+          <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+          <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+        </svg>
+      ),
+    },
     {
       to: "/audit-log",
       label: "Audit Log",
@@ -95,13 +145,18 @@ export default function Sidebar() {
       style={{
         width: "250px",
         minWidth: "250px",
+        height: "100vh",
+        position: "sticky",
+        top: 0,
+        flexShrink: 0,
         backgroundColor: "var(--sidebar-bg)",
         color: "var(--sidebar-text)",
         display: "flex",
         flexDirection: "column",
         justifyContent: "space-between",
-        minHeight: "100vh",
         borderRight: "1px solid var(--sidebar-border)",
+        overflowY: "auto",
+        zIndex: 50,
       }}
     >
       {/* Brand Header */}
@@ -177,25 +232,26 @@ export default function Sidebar() {
                       borderRadius: "10px",
                       textDecoration: "none",
                       fontSize: "var(--text-sm)",
-                      fontWeight: isActive ? 600 : 500,
+                      fontWeight: 500,
                       color: isActive ? "#ffffff" : "#94a3b8",
                       backgroundColor: isActive ? "var(--sidebar-active-bg)" : "transparent",
-                      transition: "all 0.15s ease",
+                      transition: "background-color 0.15s ease, color 0.15s ease",
                     }}
                   >
                     <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
                       <span style={{ display: "flex", alignItems: "center" }}>{item.icon}</span>
                       <span>{item.label}</span>
                     </div>
-                    {item.badge && (
+                    {item.badge !== undefined && item.badge !== null && (
                       <span
                         style={{
-                          backgroundColor: isActive ? "rgba(0, 0, 0, 0.25)" : "rgba(14, 133, 135, 0.25)",
-                          color: isActive ? "#ffffff" : "#38bdf8",
+                          backgroundColor: item.badgeBg || (isActive ? "rgba(0, 0, 0, 0.25)" : "rgba(14, 133, 135, 0.25)"),
+                          color: item.badgeColor || (isActive ? "#ffffff" : "#38bdf8"),
                           fontSize: "11px",
                           fontWeight: 700,
-                          padding: "2px 8px",
+                          padding: "2px 7px",
                           borderRadius: "9999px",
+                          lineHeight: 1.2,
                         }}
                       >
                         {item.badge}
@@ -219,12 +275,12 @@ export default function Sidebar() {
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "4px" }}>
-          <span style={{ fontSize: "14px" }}></span>
-          <span style={{ color: "#94a3b8" }}>
-            Bot aftersales · <span style={{ color: "#22c55e" }}>online</span>
+          <span style={{ color: "#94a3b8", fontSize: "12px" }}>
+            🤖 Bot aftersales · <span style={{ color: "#22c55e" }}>online</span>
           </span>
         </div>
-        <div style={{ color: "#475569", fontSize: "11px" }}>
+        <div style={{ color: "#64748b", fontSize: "11px" }}>
+          Prototipe v1.1 · data dummy
         </div>
       </div>
     </aside>

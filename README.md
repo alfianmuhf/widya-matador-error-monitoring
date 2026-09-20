@@ -23,17 +23,23 @@ after-sales-platform/
 ## 🛠️ Arsitektur Sistem & Library yang Digunakan
 
 ### 1. Frontend (`apps/interfaces`)
-Aplikasi frontend dibangun menggunakan ekosistem modern React dan Vite untuk performa tinggi dan pengalaman pengguna yang interaktif.
+Aplikasi frontend dibangun menggunakan ekosistem modern React dan Vite untuk performa tinggi, tampilan premium, dan pengalaman pengguna yang responsif.
 
 | Library / Tool | Versi | Kegunaan |
 | :--- | :--- | :--- |
 | **[React](https://react.dev/)** | `^19.2.8` | Library utama untuk membangun antarmuka pengguna berbasis komponen deklaratif. |
 | **[React DOM](https://react.dev/)** | `^19.2.8` | Paket render React khusus untuk lingkungan Document Object Model (Web Browser). |
-| **[Vite](https://vite.dev/)** | `^8.2.2` | Build tool dan development server generasi baru yang sangat cepat dengan modul Hot Module Replacement (HMR). |
+| **[React Router DOM](https://reactrouter.com/)** | `^7.18.3` | Routing client-side deklaratif, navigasi halaman, dan manajemen state URL. |
+| **[Axios](https://axios-http.com/)** | `^1.20.0` | HTTP client berbasis Promise dengan interceptor autentikasi dan auto-refresh token. |
+| **[Zod](https://zod.dev/)** | `^4.5.4` | Validasi skema data runtime di sisi klien. |
+| **[Vite](https://vite.dev/)** | `^8.2.2` | Build tool dan development server generasi baru yang sangat cepat dengan Hot Module Replacement (HMR). |
 | **[ESLint](https://eslint.org/)** | `^10.9.0` | Linter statis untuk mendeteksi kesalahan sintaks dan menegakkan konsistensi gaya kode. |
+| **[Apache ECharts](https://echarts.apache.org/)** | `^6.1.0` | Pustaka visualisasi grafik data analitik interaktif performa tinggi dari Apache Software Foundation. |
+| **[echarts-for-react](https://github.com/hustcc/echarts-for-react)** | `^3.0.6` | Komponen pembungkus React deklaratif untuk integrasi mulus dengan Apache ECharts. |
+| **Server-Sent Events (SSE)** | Native API | Streaming data tiket dan audit log secara real-time via `EventSource` bawaan browser tanpa library pihak ketiga. |
 
 ### 2. Backend (`apps/error-service`)
-Layanan backend dibangun dengan Node.js dan Express untuk menangani pencatatan error, autentikasi, serta manajemen database.
+Layanan backend dibangun dengan Node.js dan Express untuk menangani pencatatan error, autentikasi, manajemen database, serta streaming event real-time.
 
 | Library / Tool | Versi | Kegunaan |
 | :--- | :--- | :--- |
@@ -43,11 +49,57 @@ Layanan backend dibangun dengan Node.js dan Express untuk menangani pencatatan e
 | **[Zod](https://zod.dev/)** | `^4.5.4` | Library validasi skema data runtime dan TypeScript/JavaScript-first untuk request body dan parameter. |
 | **[jsonwebtoken (JWT)](https://github.com/auth0/node-jsonwebtoken)** | `^9.0.3` | Implementasi token JWT untuk mekanisme autentikasi dan otorisasi pengguna (access token & refresh token). |
 | **[bcrypt](https://github.com/kelektiv/node.bcrypt.js)** | `^6.0.0` | Algoritma hashing password yang aman untuk melindungi kredensial pengguna di database. |
+| **[exceljs](https://github.com/exceljs/exceljs)** | `^4.4.0` | Generator file spreadsheet Microsoft Excel (`.xlsx`) profesional dengan format header, border, dan styling status badge. |
+| **[pdfkit](https://github.com/foliojs/pdfkit)** | `^0.20.2` | Generator dokumen cetak PDF resmi untuk rekapitulasi data tiket. |
 | **[CORS](https://github.com/expressjs/cors)** | `^2.8.6` | Middleware Express untuk mengizinkan permintaan lintas domain (*Cross-Origin Resource Sharing*) dari frontend. |
 | **[cookie-parser](https://github.com/expressjs/cookie-parser)** | `^1.4.7` | Middleware untuk mem-parsing cookie dari HTTP request header (diperlukan untuk membaca refresh token di HttpOnly cookie). |
 | **[http-errors](https://github.com/jshttp/http-errors)** | `^2.0.1` | Utilitas pembuatan objek error HTTP standar dengan kode status yang sesuai. |
 | **[dotenv](https://github.com/motdotla/dotenv)** | `^17.4.2` | Memuat variabel konfigurasi lingkungan dari file `.env` ke `process.env`. |
 | **[nodemon](https://nodemon.io/)** *(Dev)* | `^3.1.14` | Tool otomatis yang merestart server Node.js setiap kali ada perubahan file pada masa pengembangan. |
+
+---
+
+## ✨ Fitur Utama Sistem
+
+1. **Dashboard Ringkasan & Analitik Eksekutif (`/`)**:
+   - **6 Kartu KPI Utama**: Total tiket, Open (*perlu tindakan*), Escalated (*dalam pemantauan*), Selesai/Completion Rate (*solved/closed*), MTTR (*Mean Time to Resolution* dalam hari), dan Unit Robot Terdampak.
+   - **Tren Deret Waktu**: Visualisasi area/line chart Apache ECharts yang mulus (*smooth bezier curve*) per bulan dengan gradien teal dan hover tooltip interaktif.
+   - **Distribusi Status Tiket**: Visualisasi donut chart Apache ECharts dengan proporsi persentase dan legenda warna status.
+   - **Peringkat Masalah**: 5 failure code teratas dan 5 unit robot paling bermasalah.
+   - **Filter Multi-Dimensi**: Filter rentang waktu (`30 hari`, `90 hari`, `6 bulan`, `Semua`), komponen, klien, lokasi, dan status dengan tombol Reset filter instan.
+   - **Real-time Live Sync**: Terhubung ke Server-Sent Events (SSE) sehingga kartu dan grafik otomatis ter-refresh saat ada tiket baru atau perubahan status.
+
+2. **Monitoring Analitik Error (`/analitik-error`)**:
+   - **4 Visualisasi Data Berbasis Apache ECharts**:
+     - **Tiket per component**: Horizontal bar chart warna teal (`#0e8587`) dengan label jumlah tiket dan kemampuan interaktif klik bar untuk memfilter komponen.
+     - **Pareto failure code**: Diagram Pareto dual-axis kombinasi bar frekuensi error + kurva garis persentase kumulatif (`#d97706`) dari 0% hingga 100%.
+     - **Sebaran per client (top 8)**: Horizontal bar chart warna dark navy (`#182a38`) untuk identifikasi klien dengan frekuensi error terbanyak.
+     - **Peta panas unit × component**: Heatmap matriks interaktif unit robot (sumbu Y) vs nama komponen (sumbu X atas) dengan pewarnaan sel bertingkat (0 = netral, 1 = amber `#dfb36c`, 2+ = deep amber `#c27803`) beserta label tebal.
+   - **Filter Multi-Dimensi Terpisah**: Box filter waktu (`30 hari`, `90 hari`, `6 bulan`, `Semua`) dipisah rapi dengan box dropdown filter (`Komponen`, `Klien`, `Lokasi`, `Status`) dan tombol Reset filter instan.
+   - **Ekspor Dokumen**: Tombol "Export laporan" terintegrasi dengan modal pilihan rentang tanggal dan format file (Excel / PDF).
+   - **Sinkronisasi Real-time**: Terhubung ke Server-Sent Events (SSE) `/tickets/stream` sehingga grafik diperbarui secara otomatis saat ada tiket baru atau perubahan status.
+
+3. **Manajemen Tiket After-Sales (`/daftar-tiket`)**:
+   - **Pencarian & Penyaringan Lengkap**: Pencarian teks bebas, pagination, serta filter waktu dan dropdown yang terpisah rapi.
+   - **Siklus Hidup Tiket**: Pelacakan status dari `Open` -> `Escalated` -> `Solved` -> `Closed`.
+   - **Detail Drawer & Timeline**: Informasi aset, deskripsi kerusakan, foto lampiran, akar masalah (*root cause*), tindakan perbaikan (*action taken*), dan riwayat interaksi teknisi.
+   - **Sidebar Live Badge Notification**: Pill badge merah pada menu sidebar yang menghitung tiket berstatus `Open` secara real-time via SSE dan otomatis menghilang saat semua tiket ditangani.
+
+4. **Ekspor Laporan Multi-Format**:
+   - Ekspor data tiket hasil filter ke format spreadsheet **Microsoft Excel (`.xlsx`)**.
+   - Ekspor data tiket ke dokumen cetak resmi **Adobe PDF (`.pdf`)** lengkap dengan ringkasan KPI dan tabel terformat.
+
+5. **Pengelolaan Master Data (`/master-data`)**:
+   - Tab navigasi untuk mengelola **Klien**, **Lokasi Site**, **Komponen Robot**, **Kode Kerusakan (Failure Code)**, dan **Unit Robot (Asset)**.
+   - Dilengkapi validasi integritas relasi referensial database (mencegah penghapusan master data yang masih memiliki relasi aktif).
+
+6. **Pengguna & Whitelist Telegram (`/pengguna-whitelist`)**:
+   - **Dashboard User**: Registrasi, manajemen role (`ADMIN`, `COORDINATOR`, `VIEWER`), status keaktifan, dan proteksi lockout otomatis setelah 5 kali gagal login.
+   - **Telegram Whitelist**: Pengelolaan user Telegram yang diizinkan melaporkan error robot melalui bot Telegram.
+
+7. **Audit Log & Kepatuhan Keamanan (`/audit-logs`)**:
+   - Pencatatan seluruh jejak aktivitas pengguna (login, logout, mutasi tiket, perubahan master data) dengan metadata IP address, user agent, dan timestamp.
+   - Live stream SSE untuk audit log.
 
 ---
 
@@ -161,38 +213,91 @@ Antarmuka web akan aktif di: `http://localhost:5173`
 
 ## 🔐 API Endpoints
 
-### Auth Module
+Seluruh endpoint backend dapat diakses secara langsung (*unversioned*) pada root port server. Dokumentasi detail skema request, response, dan validasi dapat dilihat pada dokumen [docs/api.md](docs/api.md).
+
+### 1. Health Check
 | Method | Endpoint | Auth | Deskripsi |
 | :--- | :--- | :--- | :--- |
-| `GET` | `/health` | Public | Health check status server |
-| `POST` | `/auth/register` | Public | Registrasi akun pengguna mandiri |
-| `POST` | `/auth/login` | Public | Login pengguna, menghasilkan Access Token (body) & Refresh Token (`HttpOnly` cookie) |
+| `GET` | `/health` | Public | Memeriksa status kesehatan server dan konektivitas |
+
+### 2. Auth Module
+| Method | Endpoint | Auth | Deskripsi |
+| :--- | :--- | :--- | :--- |
+| `POST` | `/auth/register` | Public | Registrasi akun pengguna mandiri (*self-service*) |
+| `POST` | `/auth/login` | Public | Login pengguna, mengembalikan Access Token & HttpOnly Refresh Token |
 | `POST` | `/auth/refresh` | Cookie | Memperbarui access token dan melakukan rotasi refresh token |
-| `POST` | `/auth/logout` | Cookie | Mencabut refresh token di database dan membersihkan cookie |
+| `POST` | `/auth/logout` | Cookie | Mencabut refresh token di database dan menghapus cookie |
 | `GET` | `/auth/me` | Bearer Token | Mengambil data profil pengguna yang sedang login |
 | `POST` / `PATCH` | `/auth/change-password` | Bearer Token | Mengubah password akun pengguna yang sedang login |
 
-### User Management Module (Admin & Coordinator)
+### 3. User Management Module
 | Method | Endpoint | Auth | Role | Deskripsi |
 | :--- | :--- | :--- | :--- | :--- |
-| `POST` | `/users` | Bearer Token | `ADMIN` | Registrasi akun baru oleh admin dengan auto-generated initial password |
-| `GET` | `/users` | Bearer Token / Cookie | `ADMIN` | Mengambil daftar seluruh pengguna (JSON atau SSE jika requested) |
-| `GET` | `/users/stream` | Bearer Token / `?token=` | `ADMIN` | Stream real-time data pengguna via Server-Sent Events (SSE) |
-| `GET` | `/users/:id` | Bearer Token | `ADMIN`, `COORDINATOR` | Mengambil detail lengkap pengguna berdasarkan ID |
-| `PATCH` / `PUT` | `/users/:id` | Bearer Token | `ADMIN` | Mengubah data pengguna (email, nama, password, role, status) |
-| `DELETE` | `/users/:id` | Bearer Token | `ADMIN` | Menghapus data pengguna secara permanen beserta sesi terkait |
+| `POST` | `/users` | Bearer Token | `ADMIN` | Registrasi pengguna baru oleh admin dengan initial password |
+| `GET` | `/users` | Bearer Token | `ADMIN` | Mengambil daftar seluruh pengguna dashboard |
+| `GET` | `/users/:id` | Bearer Token | `ADMIN`, `COORDINATOR` | Mengambil rincian detail akun pengguna |
+| `PATCH` | `/users/:id` | Bearer Token | `ADMIN` | Mengubah profil, status aktif/suspend, atau role pengguna |
+| `DELETE` | `/users/:id` | Bearer Token | `ADMIN` | Menghapus data akun pengguna secara permanen |
 
-### Telegram Whitelist Module (Admin)
+### 4. Telegram Whitelist Module
 | Method | Endpoint | Auth | Role | Deskripsi |
 | :--- | :--- | :--- | :--- | :--- |
-| `POST` | `/telegram-users` | Bearer Token | `ADMIN` | Menambahkan pengguna Telegram ke daftar whitelist |
-| `GET` | `/telegram-users` | Bearer Token | `ADMIN` | Mengambil daftar seluruh pengguna Telegram di whitelist |
+| `POST` | `/telegram-users` | Bearer Token | `ADMIN` | Mendaftarkan pengguna Telegram ke whitelist pelapor error |
+| `GET` | `/telegram-users` | Bearer Token | `ADMIN` | Mengambil daftar seluruh whitelist user Telegram |
 | `GET` | `/telegram-users/:id` | Bearer Token | `ADMIN` | Mengambil detail pengguna Telegram di whitelist |
-| `PATCH` / `PUT` | `/telegram-users/:id` | Bearer Token | `ADMIN` | Mengubah data atau status keaktifan user Telegram (`isActive`) |
+| `PATCH` | `/telegram-users/:id` | Bearer Token | `ADMIN` | Memperbarui data atau status keaktifan user Telegram |
 | `DELETE` | `/telegram-users/:id` | Bearer Token | `ADMIN` | Menghapus pengguna Telegram dari whitelist |
+
+### 5. Master Data Modules
+| Method | Endpoint | Auth | Role | Deskripsi |
+| :--- | :--- | :--- | :--- | :--- |
+| `GET` / `POST` | `/clients` | Bearer Token | Read: All, Write: `ADMIN`, `COORDINATOR` | Daftar & tambah data client |
+| `GET` / `PATCH` / `DELETE` | `/clients/:id` | Bearer Token | Read: All, Write: `ADMIN`, `COORDINATOR` | Detail, edit, & hapus data client |
+| `GET` / `POST` | `/locations` | Bearer Token | Read: All, Write: `ADMIN`, `COORDINATOR` | Daftar & tambah data lokasi site/gudang |
+| `GET` / `PATCH` / `DELETE` | `/locations/:id` | Bearer Token | Read: All, Write: `ADMIN`, `COORDINATOR` | Detail, edit, & hapus lokasi site |
+| `GET` / `POST` | `/components` | Bearer Token | Read: All, Write: `ADMIN`, `COORDINATOR` | Daftar & tambah kategori komponen robot |
+| `GET` / `PATCH` / `DELETE` | `/components/:id` | Bearer Token | Read: All, Write: `ADMIN`, `COORDINATOR` | Detail, edit, & hapus komponen robot |
+| `GET` / `POST` | `/failure-codes` | Bearer Token | Read: All, Write: `ADMIN`, `COORDINATOR` | Daftar & tambah kode kerusakan (*failure code*) |
+| `GET` / `PATCH` / `DELETE` | `/failure-codes/:id` | Bearer Token | Read: All, Write: `ADMIN`, `COORDINATOR` | Detail, edit, & hapus kode kerusakan |
+| `GET` / `POST` | `/assets` | Bearer Token | Read: All, Write: `ADMIN`, `COORDINATOR` | Daftar & tambah unit robot operasional (*asset*) |
+| `GET` / `PATCH` / `DELETE` | `/assets/:id` | Bearer Token | Read: All, Write: `ADMIN`, `COORDINATOR` | Detail, edit, & hapus unit robot |
+
+### 6. Ticket Management Module
+| Method | Endpoint | Auth | Role | Deskripsi |
+| :--- | :--- | :--- | :--- | :--- |
+| `GET` | `/tickets/stream` | Bearer Token / Query `token` | All | Real-time Server-Sent Events (SSE) streaming tiket & open count |
+| `GET` | `/tickets` | Bearer Token | All | Daftar tiket terfilter & terpaginasi |
+| `GET` | `/tickets/:id` | Bearer Token | All | Detail tiket lengkap, riwayat status, & komentar penanganan |
+| `PATCH` | `/tickets/:id` | Bearer Token | All | Update status tiket (Open, Escalated, Solved, Closed) & catatan |
+| `POST` | `/tickets/:id/comments` | Bearer Token | All | Menambahkan catatan perkembangan penanganan ke timeline tiket |
+| `POST` | `/tickets` | Bearer Token | `ADMIN`, `COORDINATOR` | Membuat tiket penanganan error baru secara manual |
+
+### 7. Export Module
+| Method | Endpoint | Auth | Role | Deskripsi |
+| :--- | :--- | :--- | :--- | :--- |
+| `GET` | `/exports/excel` | Bearer Token / Query `token` | All | Unduh file laporan tiket terfilter dalam format Excel (`.xlsx`) |
+| `GET` | `/exports/pdf` | Bearer Token / Query `token` | All | Unduh dokumen laporan resmi tiket terfilter dalam format PDF (`.pdf`) |
+| `GET` | `/tickets/export/excel` | Bearer Token / Query `token` | All | Alias unduh laporan Excel |
+| `GET` | `/tickets/export/pdf` | Bearer Token / Query `token` | All | Alias unduh laporan PDF |
+
+### 8. Audit Log Module
+| Method | Endpoint | Auth | Role | Deskripsi |
+| :--- | :--- | :--- | :--- | :--- |
+| `GET` | `/audit-logs/stream` | Bearer Token / Query `token` | `ADMIN` | Real-time Server-Sent Events (SSE) stream audit log |
+| `GET` | `/audit-logs` | Bearer Token | `ADMIN` | Mengambil riwayat log aktivitas sistem dengan paginasi & filter |
+| `GET` | `/audit-logs/:id` | Bearer Token | `ADMIN` | Detail log audit spesifik beserta perbandingan data sebelum/sesudah |
+
+### 9. Summary & Analytics Dashboard Module
+| Method | Endpoint | Auth | Role | Deskripsi |
+| :--- | :--- | :--- | :--- | :--- |
+| `GET` | `/summary` | Bearer Token | All | Mengambil ringkasan agregasi metrik KPI, tren grafik, & ranking kerusakan |
+| `GET` | `/ringkasan` | Bearer Token | All | Alias endpoint `/summary` |
+| `GET` | `/error-analytics` | Bearer Token | All | Mengambil visualisasi data analitik error (tiket per komponen, pareto code, sebaran klien, heatmap unit vs komponen) berbasis format Apache ECharts |
+| `GET` | `/analytics` | Bearer Token | All | Alias endpoint `/error-analytics` |
 
 ---
 
 ## 📌 Catatan Kontribusi & Git
 - Jangan pernah meng-commit file `.env` atau folder `node_modules/` ke repository.
 - Selalu gunakan branch terpisah sebelum melakukan merge ke `main`.
+- Pastikan menjalankan `npm run build` pada folder `apps/interfaces` dan memeriksa server backend sebelum melakukan push.

@@ -7,9 +7,10 @@ export default function DashboardLayout() {
     <div
       style={{
         display: "flex",
-        minHeight: "100vh",
+        height: "100vh",
         width: "100%",
         backgroundColor: "var(--bg-main)",
+        overflow: "hidden",
       }}
     >
       {/* Sidebar Navigation */}
@@ -22,6 +23,7 @@ export default function DashboardLayout() {
           display: "flex",
           flexDirection: "column",
           minWidth: 0,
+          height: "100%",
           overflowY: "auto",
         }}
       >

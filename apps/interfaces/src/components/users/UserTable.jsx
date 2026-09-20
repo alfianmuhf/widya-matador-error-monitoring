@@ -3,6 +3,7 @@ import InfoBanner from "../common/InfoBanner.jsx";
 export default function UserTable({
   users = [],
   loading = false,
+  canManageUsers = true,
   onAddUser,
   onEditUser,
   onDeleteUser,
@@ -44,32 +45,36 @@ export default function UserTable({
         <h2 style={{ fontSize: "1.15rem", fontWeight: 700, color: "var(--text-dark)" }}>
           Pengguna Dashboard
         </h2>
-        <button
-          type="button"
-          onClick={onAddUser}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "8px",
-            backgroundColor: "var(--primary-teal)",
-            color: "#ffffff",
-            border: "none",
-            borderRadius: "8px",
-            padding: "9px 16px",
-            fontSize: "var(--text-sm)",
-            fontWeight: 600,
-            cursor: "pointer",
-            transition: "background-color 0.15s ease",
-          }}
-          onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "var(--primary-teal-hover)")}
-          onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "var(--primary-teal)")}
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-            <line x1="12" y1="5" x2="12" y2="19" />
-            <line x1="5" y1="12" x2="19" y2="12" />
-          </svg>
-          Tambah pengguna
-        </button>
+        {canManageUsers && (
+          <button
+            type="button"
+            onClick={onAddUser}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              backgroundColor: "var(--primary-teal)",
+              color: "#ffffff",
+              border: "none",
+              borderRadius: "8px",
+              padding: "9px 16px",
+              fontSize: "var(--text-sm)",
+              fontWeight: 600,
+              cursor: "pointer",
+              transition: "background-color 0.15s ease",
+              outline: "none",
+              transform: "none",
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "var(--primary-teal-hover)")}
+            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "var(--primary-teal)")}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <line x1="12" y1="5" x2="12" y2="19" />
+              <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+            Tambah pengguna
+          </button>
+        )}
       </div>
 
       {/* Table */}
@@ -176,73 +181,81 @@ export default function UserTable({
                       </span>
                     </td>
                     <td style={{ padding: "16px 14px", textAlign: "right" }}>
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: "8px" }}>
-                        <button
-                          type="button"
-                          onClick={() => onEditUser(item)}
-                          title="Edit Pengguna"
-                          style={{
-                            width: "32px",
-                            height: "32px",
-                            borderRadius: "6px",
-                            border: "1px solid var(--border-light)",
-                            backgroundColor: "#ffffff",
-                            display: "inline-flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            cursor: "pointer",
-                            color: "var(--text-muted)",
-                            transition: "all 0.15s ease",
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.borderColor = "var(--primary-teal)";
-                            e.currentTarget.style.color = "var(--primary-teal)";
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.borderColor = "var(--border-light)";
-                            e.currentTarget.style.color = "var(--text-muted)";
-                          }}
-                        >
-                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
-                          </svg>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => onDeleteUser?.(item)}
-                          title="Hapus Pengguna"
-                          style={{
-                            width: "32px",
-                            height: "32px",
-                            borderRadius: "6px",
-                            border: "1px solid var(--border-light)",
-                            backgroundColor: "#ffffff",
-                            display: "inline-flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            cursor: "pointer",
-                            color: "var(--text-muted)",
-                            transition: "all 0.15s ease",
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.borderColor = "#ef4444";
-                            e.currentTarget.style.color = "#dc2626";
-                            e.currentTarget.style.backgroundColor = "#fef2f2";
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.borderColor = "var(--border-light)";
-                            e.currentTarget.style.color = "var(--text-muted)";
-                            e.currentTarget.style.backgroundColor = "#ffffff";
-                          }}
-                        >
-                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <polyline points="3 6 5 6 21 6" />
-                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                            <line x1="10" y1="11" x2="10" y2="17" />
-                            <line x1="14" y1="11" x2="14" y2="17" />
-                          </svg>
-                        </button>
-                      </div>
+                      {canManageUsers ? (
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: "8px" }}>
+                          <button
+                            type="button"
+                            onClick={() => onEditUser?.(item)}
+                            title="Edit Pengguna"
+                            style={{
+                              width: "32px",
+                              height: "32px",
+                              borderRadius: "6px",
+                              border: "1px solid var(--border-light)",
+                              backgroundColor: "#ffffff",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              cursor: "pointer",
+                              color: "var(--text-muted)",
+                              transition: "border-color 0.15s ease, color 0.15s ease",
+                              outline: "none",
+                              transform: "none",
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.borderColor = "var(--primary-teal)";
+                              e.currentTarget.style.color = "var(--primary-teal)";
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.borderColor = "var(--border-light)";
+                              e.currentTarget.style.color = "var(--text-muted)";
+                            }}
+                          >
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
+                            </svg>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onDeleteUser?.(item)}
+                            title="Hapus Pengguna"
+                            style={{
+                              width: "32px",
+                              height: "32px",
+                              borderRadius: "6px",
+                              border: "1px solid var(--border-light)",
+                              backgroundColor: "#ffffff",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              cursor: "pointer",
+                              color: "var(--text-muted)",
+                              transition: "border-color 0.15s ease, color 0.15s ease, background-color 0.15s ease",
+                              outline: "none",
+                              transform: "none",
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.borderColor = "#ef4444";
+                              e.currentTarget.style.color = "#dc2626";
+                              e.currentTarget.style.backgroundColor = "#fef2f2";
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.borderColor = "var(--border-light)";
+                              e.currentTarget.style.color = "var(--text-muted)";
+                              e.currentTarget.style.backgroundColor = "#ffffff";
+                            }}
+                          >
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <polyline points="3 6 5 6 21 6" />
+                              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                              <line x1="10" y1="11" x2="10" y2="17" />
+                              <line x1="14" y1="11" x2="14" y2="17" />
+                            </svg>
+                          </button>
+                        </div>
+                      ) : (
+                        <span style={{ color: "var(--text-muted)", fontSize: "12px" }}>-</span>
+                      )}
                     </td>
                   </tr>
                 );

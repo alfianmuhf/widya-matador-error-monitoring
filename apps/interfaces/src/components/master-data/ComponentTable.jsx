@@ -7,13 +7,10 @@ export default function ComponentTable({ components, loading, onEdit, onDelete }
             <th style={{ padding: "12px 16px", fontSize: "13px", fontWeight: 600, color: "var(--text-muted)", width: "15%" }}>
               Prefix
             </th>
-            <th style={{ padding: "12px 16px", fontSize: "13px", fontWeight: 600, color: "var(--text-muted)", width: "35%" }}>
+            <th style={{ padding: "12px 16px", fontSize: "13px", fontWeight: 600, color: "var(--text-muted)", width: "45%" }}>
               Nama Komponen
             </th>
-            <th style={{ padding: "12px 16px", fontSize: "13px", fontWeight: 600, color: "var(--text-muted)", width: "15%" }}>
-              Urutan Bot
-            </th>
-            <th style={{ padding: "12px 16px", fontSize: "13px", fontWeight: 600, color: "var(--text-muted)", width: "15%" }}>
+            <th style={{ padding: "12px 16px", fontSize: "13px", fontWeight: 600, color: "var(--text-muted)", width: "20%" }}>
               Failure Code
             </th>
             <th style={{ padding: "12px 16px", fontSize: "13px", fontWeight: 600, color: "var(--text-muted)", width: "10%" }}>
@@ -27,13 +24,13 @@ export default function ComponentTable({ components, loading, onEdit, onDelete }
         <tbody>
           {loading ? (
             <tr>
-              <td colSpan={6} style={{ textAlign: "center", padding: "40px", color: "var(--text-muted)", fontSize: "var(--text-sm)" }}>
+              <td colSpan={5} style={{ textAlign: "center", padding: "40px", color: "var(--text-muted)", fontSize: "var(--text-sm)" }}>
                 Memuat data komponen...
               </td>
             </tr>
           ) : components.length === 0 ? (
             <tr>
-              <td colSpan={6} style={{ textAlign: "center", padding: "40px", color: "var(--text-muted)", fontSize: "var(--text-sm)" }}>
+              <td colSpan={5} style={{ textAlign: "center", padding: "40px", color: "var(--text-muted)", fontSize: "var(--text-sm)" }}>
                 Belum ada data komponen.
               </td>
             </tr>
@@ -70,13 +67,6 @@ export default function ComponentTable({ components, loading, onEdit, onDelete }
                 <td style={{ padding: "14px 16px" }}>
                   <span style={{ fontWeight: 600, fontSize: "var(--text-sm)", color: "var(--text-dark)" }}>
                     {item.name}
-                  </span>
-                </td>
-
-                {/* Sort Order */}
-                <td style={{ padding: "14px 16px" }}>
-                  <span style={{ fontSize: "var(--text-sm)", color: "var(--text-muted)" }}>
-                    Posisi #{item.sortOrder}
                   </span>
                 </td>
 
@@ -133,7 +123,9 @@ export default function ComponentTable({ components, loading, onEdit, onDelete }
                         alignItems: "center",
                         justifyContent: "center",
                         color: "var(--text-muted)",
-                        transition: "all 0.15s ease",
+                        transition: "border-color 0.15s ease, color 0.15s ease",
+                        outline: "none",
+                        transform: "none",
                       }}
                       onMouseEnter={(e) => {
                         e.currentTarget.style.color = "var(--primary-teal)";
@@ -163,7 +155,9 @@ export default function ComponentTable({ components, loading, onEdit, onDelete }
                         alignItems: "center",
                         justifyContent: "center",
                         color: "#ef4444",
-                        transition: "all 0.15s ease",
+                        transition: "border-color 0.15s ease, color 0.15s ease, background-color 0.15s ease",
+                        outline: "none",
+                        transform: "none",
                       }}
                       onMouseEnter={(e) => {
                         e.currentTarget.style.backgroundColor = "#fef2f2";

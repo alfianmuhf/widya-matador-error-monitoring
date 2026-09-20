@@ -9,54 +9,45 @@ const router = Router();
 // Seluruh endpoint manajemen pengguna memerlukan otentikasi login
 router.use(authenticate);
 
-// Khusus ADMIN: Mendaftarkan user baru dengan initial password otomatis
+// ADMIN & COORDINATOR: Mendaftarkan user baru dengan initial password otomatis
 router.post(
   "/",
-  authorize("ADMIN"),
+  authorize("ADMIN", "COORDINATOR"),
   validate(createUserSchema),
   userController.createUser
 );
 
-// Khusus ADMIN: Stream real-time data pengguna via Server-Sent Events (SSE)
-router.get(
-  "/stream",
-  authorize("ADMIN"),
-  userController.streamUsers
-);
-
-// Khusus ADMIN: Melihat daftar pengguna (JSON atau SSE jika accept: text/event-stream / ?stream=true)
+// Melihat daftar pengguna (REST API GET) — dapat diakses oleh semua role terautentikasi
 router.get(
   "/",
-  authorize("ADMIN"),
   userController.getUsers
 );
 
-// ADMIN & COORDINATOR: Melihat detail pengguna berdasarkan ID
+// Melihat detail pengguna berdasarkan ID — dapat diakses oleh semua role terautentikasi
 router.get(
   "/:id",
-  authorize("ADMIN", "COORDINATOR"),
   userController.getUserById
 );
 
-// Khusus ADMIN: Mengubah data pengguna (email, nama, password, role, status)
+// ADMIN & COORDINATOR: Mengubah data pengguna (email, nama, password, role, status)
 router.patch(
   "/:id",
-  authorize("ADMIN"),
+  authorize("ADMIN", "COORDINATOR"),
   validate(updateUserSchema),
   userController.updateUser
 );
 
 router.put(
   "/:id",
-  authorize("ADMIN"),
+  authorize("ADMIN", "COORDINATOR"),
   validate(updateUserSchema),
   userController.updateUser
 );
 
-// Khusus ADMIN: Menghapus pengguna berdasarkan ID
+// ADMIN & COORDINATOR: Menghapus pengguna berdasarkan ID
 router.delete(
   "/:id",
-  authorize("ADMIN"),
+  authorize("ADMIN", "COORDINATOR"),
   userController.deleteUser
 );
 

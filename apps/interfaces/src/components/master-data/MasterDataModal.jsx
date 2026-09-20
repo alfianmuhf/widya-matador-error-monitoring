@@ -245,26 +245,6 @@ export default function MasterDataModal({
                 }}
               />
             </div>
-
-            <div>
-              <label style={{ display: "block", fontSize: "var(--text-sm)", fontWeight: 600, marginBottom: "6px" }}>
-                Urutan Tombol di Bot Telegram
-              </label>
-              <input
-                type="number"
-                value={formData.sortOrder !== undefined ? formData.sortOrder : 0}
-                onChange={(e) => setFormData({ ...formData, sortOrder: parseInt(e.target.value, 10) || 0 })}
-                style={{
-                  width: "100%",
-                  padding: "9px 12px",
-                  borderRadius: "8px",
-                  border: "1px solid var(--border-light)",
-                  fontSize: "var(--text-sm)",
-                  outline: "none",
-                  boxSizing: "border-box",
-                }}
-              />
-            </div>
           </>
         )}
 

@@ -13,35 +13,31 @@ const router = Router();
 // Seluruh endpoint Asset wajib terautentikasi (Access Token)
 router.use(authenticate);
 
-// Read (GET all & GET by ID) — dapat diakses oleh ADMIN, COORDINATOR, VIEWER
+// Read (GET all & GET by ID) — dapat diakses oleh semua role
 router.get("/", validate(queryAssetSchema, "query"), assetController.getAssets);
 router.get("/:id", assetController.getAssetById);
 
-// Create, Update, Delete — khusus role ADMIN & COORDINATOR
+// Create, Update, Delete — dapat diakses oleh semua role
 router.post(
   "/",
-  authorize("ADMIN", "COORDINATOR"),
   validate(createAssetSchema, "body"),
   assetController.createAsset
 );
 
 router.patch(
   "/:id",
-  authorize("ADMIN", "COORDINATOR"),
   validate(updateAssetSchema, "body"),
   assetController.updateAsset
 );
 
 router.put(
   "/:id",
-  authorize("ADMIN", "COORDINATOR"),
   validate(updateAssetSchema, "body"),
   assetController.updateAsset
 );
 
 router.delete(
   "/:id",
-  authorize("ADMIN", "COORDINATOR"),
   assetController.deleteAsset
 );
 

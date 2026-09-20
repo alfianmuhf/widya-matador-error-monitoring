@@ -28,7 +28,7 @@ export const getComponentById = async (req, res, next) => {
 
 export const createComponent = async (req, res, next) => {
   try {
-    const component = await componentService.createComponent(req.body);
+    const component = await componentService.createComponent(req.body, req.user);
     res.status(201).json({
       status: "success",
       message: "Komponen berhasil ditambahkan",
@@ -41,7 +41,7 @@ export const createComponent = async (req, res, next) => {
 
 export const updateComponent = async (req, res, next) => {
   try {
-    const component = await componentService.updateComponent(req.params.id, req.body);
+    const component = await componentService.updateComponent(req.params.id, req.body, req.user);
     res.status(200).json({
       status: "success",
       message: "Komponen berhasil diperbarui",
@@ -54,12 +54,14 @@ export const updateComponent = async (req, res, next) => {
 
 export const deleteComponent = async (req, res, next) => {
   try {
-    await componentService.deleteComponent(req.params.id);
+    const result = await componentService.deleteComponent(req.params.id, req.user);
     res.status(200).json({
       status: "success",
-      message: "Komponen berhasil dihapus",
+      message: result.message,
+      data: result,
     });
   } catch (error) {
     next(error);
   }
 };
+

@@ -1,132 +1,184 @@
-# API Documentation — After-Sales Monitoring System
+# API Documentation — After-Sales Monitoring System (ERAD)
 
-> Base URL: `http://[ip]:[port]` (contoh: `http://localhost:3000` atau `http://10.10.10.10:3000`)
+Dokumentasi teknis resmi Application Programming Interface (API) untuk **Error Report Automation Dashboard (ERAD) / Load Scanner After-Sales Monitoring Platform**.
 
----
-
-## 📋 Daftar Isi
-
-- [Konvensi Umum](#konvensi-umum)
-- [Struktur Endpoint Direct (Tanpa Versi)](#struktur-endpoint-direct-tanpa-versi)
-- [Health Check](#health-check)
-- [Auth Module](#auth-module)
-  - [Register (Self-Service)](#post-authregister)
-  - [Login](#post-authlogin)
-  - [Refresh Token](#post-authrefresh)
-  - [Logout](#post-authlogout)
-  - [Get Current User](#get-authme)
-  - [Change Password (Ubah Password Sendiri)](#post-authchange-password)
-- [User Management Module (Admin)](#user-management-module-admin)
-  - [Create User Baru](#post-users)
-  - [Daftar Pengguna](#get-users)
-  - [Stream Real-time Data Pengguna (SSE)](#get-usersstream)
-  - [Detail Pengguna](#get-usersid)
-  - [Update Data Pengguna](#patch-usersid)
-  - [Hapus Pengguna](#delete-usersid)
-- [Telegram Whitelist Module (Admin)](#telegram-whitelist-module-admin)
-  - [Tambah User Telegram ke Whitelist](#post-telegram-users)
-  - [Daftar Whitelist User Telegram](#get-telegram-users)
-  - [Detail User Telegram](#get-telegram-usersid)
-  - [Edit Status & Data User Telegram](#patch-telegram-usersid)
-  - [Hapus User Telegram dari Whitelist](#delete-telegram-usersid)
-- [Master Data Modules](#master-data-modules)
-  - [Client Module (`/clients`)](#client-module-clients)
-  - [Location Module (`/locations`)](#location-module-locations)
-  - [Component Module (`/components`)](#component-module-components)
-  - [Failure Code Module (`/failure-codes`)](#failure-code-module-failure-codes)
-  - [Asset Module (`/assets`)](#asset-module-assets)
-- [Error Response](#error-response)
+> **Base URL:** `http://[host]:[port]`  
+> **Contoh Lingkungan Lokal:** `http://localhost:3000` atau `http://127.0.0.1:3000`
 
 ---
 
-## Konvensi Umum
+## 🌐 Protokol Komunikasi & Arsitektur Jaringan
 
-### Format Response Sukses
+Sistem ini menerapkan dua protokol komunikasi utama melalui HTTP standar:
 
+1. **REST API (Representational State Transfer)**:
+   - Digunakan untuk operasi transaksional CRUD standar, autentikasi, filtering data, manipulasi tiket, serta streaming file unduhan binary (Excel `.xlsx` dan PDF `.pdf`).
+   - Berjalan di atas HTTP/1.1 dan HTTP/2 dengan format pertukaran data JSON (`application/json`).
+   - Menggunakan HTTP Method standar: `GET`, `POST`, `PATCH`, `PUT`, dan `DELETE`.
+
+2. **Server-Sent Events (SSE)**:
+   - Digunakan untuk komunikasi *real-time* satu arah dari server ke antarmuka pengguna (*unidirectional server-to-client push*) melalui *media type* `text/event-stream`.
+   - Terdapat 2 endpoint streaming SSE aktif:
+     - `GET /tickets/stream`: Menyiarkan event pembuatan tiket baru (`ticket_created`), pembaruan status (`ticket_updated`), dan penambahan komentar (`ticket_comment_added`).
+     - `GET /audit-logs/stream`: Menyiarkan event rekam jejak audit log (`log_created`) seketika saat aksi sistem terjadi.
+
+3. **Catatan Arsitektur: Mengapa SSE, Bukan WebSocket?**:
+   - **Karakteristik Kebutuhan**: Kebutuhan data real-time pada dashboard monitoring after-sales adalah *server push* (server memberitahu dashboard jika ada tiket atau log baru dari bot/lapangan). Tidak diperlukan komunikasi *bidirectional* frekuensi tinggi seperti pada game multipemain atau video call.
+   - **Keandalan & Reconnection Bawaan**: SSE didukung secara native oleh browser melalui antarmuka W3C standard `EventSource` dengan mekanisme *automatic reconnection* bawaan jika koneksi terputus tanpa memerlukan library pihak ketiga yang berat.
+   - **Firewall & Corporate Proxy Friendly**: SSE berjalan murni di atas koneksi HTTP biasa (Port 80/443), sehingga tidak akan diblokir oleh firewall kantor atau reverse proxy yang kerap memutus koneksi protokol WebSocket (`ws://` / `wss://`).
+   - **Interaksi Balik yang Efisien**: Ketika client ingin merespons (misalnya mengubah status tiket atau menambah catatan penanganan), client cukup memanggil endpoint REST API biasa (`PATCH` / `POST`), dan hasilnya secara otomatis disiarkan ulang oleh server ke seluruh client melalui SSE.
+
+---
+
+## 📋 Tabel Direktori Endpoint & Protokol (Master API Directory)
+
+Tabel berikut menyajikan seluruh endpoint yang tersedia pada sistem, metode HTTP, protokol yang digunakan, serta batasan izin peran (*role permissions*):
+
+| No | Modul | Protokol | Method | Endpoint Path | Izin Role | Deskripsi Singkat |
+|:---:|:---|:---:|:---:|:---|:---:|:---|
+| 1 | **System** | REST API | `GET` | `/health` | Publik | Health check status service |
+| 2 | **System** | REST API | `GET` | `/` | Publik | Service information & status |
+| 3 | **Auth** | REST API | `POST` | `/auth/register` | Publik | Pendaftaran mandiri user baru |
+| 4 | **Auth** | REST API | `POST` | `/auth/login` | Publik | Login email & password, set cookie refresh |
+| 5 | **Auth** | REST API | `POST` | `/auth/refresh` | Publik (Cookie) | Rotasi dan perpanjangan access token |
+| 6 | **Auth** | REST API | `POST` | `/auth/logout` | Terautentikasi | Hapus cookie refresh token & cabut sesi |
+| 7 | **Auth** | REST API | `GET` | `/auth/me` | Terautentikasi | Ambil profil pengguna yang sedang login |
+| 8 | **Auth** | REST API | `POST` | `/auth/change-password` | Terautentikasi | Ganti password akun sendiri |
+| 9 | **Users** | REST API | `POST` | `/users` | `ADMIN`, `COORDINATOR` | Buat akun pengguna baru (pass: prefix+12345) |
+| 10 | **Users** | REST API | `GET` | `/users` | Semua Role | Ambil daftar seluruh pengguna dashboard |
+| 11 | **Users** | REST API | `GET` | `/users/:id` | Semua Role | Ambil detail satu pengguna |
+| 12 | **Users** | REST API | `PATCH` | `/users/:id` | `ADMIN`, `COORDINATOR` | Ubah data pengguna (nama, email, role, status) |
+| 13 | **Users** | REST API | `PUT` | `/users/:id` | `ADMIN`, `COORDINATOR` | Ubah data pengguna (alternatif PUT) |
+| 14 | **Users** | REST API | `DELETE` | `/users/:id` | `ADMIN`, `COORDINATOR` | Hapus pengguna dashboard |
+| 15 | **Telegram** | REST API | `POST` | `/telegram-users` | `ADMIN`, `COORDINATOR` | Tambah user Telegram ke whitelist bot |
+| 16 | **Telegram** | REST API | `GET` | `/telegram-users` | Semua Role | Daftar user Telegram yang di-whitelist |
+| 17 | **Telegram** | REST API | `GET` | `/telegram-users/:id` | Semua Role | Detail user Telegram whitelist |
+| 18 | **Telegram** | REST API | `PATCH` | `/telegram-users/:id` | `ADMIN`, `COORDINATOR` | Update status/username user Telegram |
+| 19 | **Telegram** | REST API | `DELETE` | `/telegram-users/:id` | `ADMIN`, `COORDINATOR` | Hapus user Telegram dari whitelist |
+| 20 | **Master Client** | REST API | `GET` | `/clients` | Semua Role | Daftar client perusahaan |
+| 21 | **Master Client** | REST API | `POST` | `/clients` | Semua Role | Tambah data client baru |
+| 22 | **Master Client** | REST API | `GET` | `/clients/:id` | Semua Role | Detail client |
+| 23 | **Master Client** | REST API | `PATCH` | `/clients/:id` | Semua Role | Perbarui data client |
+| 24 | **Master Client** | REST API | `DELETE` | `/clients/:id` | Semua Role | Hapus data client |
+| 25 | **Master Lokasi** | REST API | `GET` | `/locations` | Semua Role | Daftar lokasi operasional site |
+| 26 | **Master Lokasi** | REST API | `POST` | `/locations` | Semua Role | Tambah lokasi baru |
+| 27 | **Master Lokasi** | REST API | `GET` | `/locations/:id` | Semua Role | Detail lokasi |
+| 28 | **Master Lokasi** | REST API | `PATCH` | `/locations/:id` | Semua Role | Perbarui data lokasi |
+| 29 | **Master Lokasi** | REST API | `DELETE` | `/locations/:id` | Semua Role | Hapus data lokasi |
+| 30 | **Master Komponen** | REST API | `GET` | `/components` | Semua Role | Daftar master komponen mesin/robot |
+| 31 | **Master Komponen** | REST API | `POST` | `/components` | Semua Role | Tambah komponen baru |
+| 32 | **Master Komponen** | REST API | `GET` | `/components/:id` | Semua Role | Detail komponen |
+| 33 | **Master Komponen** | REST API | `PATCH` | `/components/:id` | Semua Role | Perbarui data komponen |
+| 34 | **Master Komponen** | REST API | `DELETE` | `/components/:id` | Semua Role | Hapus data komponen |
+| 35 | **Master Failure** | REST API | `GET` | `/failure-codes` | Semua Role | Daftar failure code kerusakan |
+| 36 | **Master Failure** | REST API | `POST` | `/failure-codes` | Semua Role | Tambah failure code baru |
+| 37 | **Master Failure** | REST API | `GET` | `/failure-codes/:id` | Semua Role | Detail failure code |
+| 38 | **Master Failure** | REST API | `PATCH` | `/failure-codes/:id` | Semua Role | Perbarui data failure code |
+| 39 | **Master Failure** | REST API | `DELETE` | `/failure-codes/:id` | Semua Role | Hapus data failure code |
+| 40 | **Master Asset** | REST API | `GET` | `/assets` | Semua Role | Daftar unit Load Scanner |
+| 41 | **Master Asset** | REST API | `POST` | `/assets` | Semua Role | Tambah unit Load Scanner baru |
+| 42 | **Master Asset** | REST API | `GET` | `/assets/:id` | Semua Role | Detail unit Load Scanner |
+| 43 | **Master Asset** | REST API | `PATCH` | `/assets/:id` | Semua Role | Perbarui unit Load Scanner |
+| 44 | **Master Asset** | REST API | `DELETE` | `/assets/:id` | Semua Role | Hapus unit Load Scanner |
+| 45 | **Tiket** | **SSE Stream** | `GET` | `/tickets/stream` | Semua Role | Real-time live update stream tiket |
+| 46 | **Tiket** | REST API | `GET` | `/tickets` | Semua Role | Ambil daftar tiket dengan filter & paginasi |
+| 47 | **Tiket** | REST API | `GET` | `/tickets/:id` | Semua Role | Detail tiket lengkap riwayat & komentar |
+| 48 | **Tiket** | REST API | `PATCH` | `/tickets/:id` | Semua Role | Update status tiket / penanganan |
+| 49 | **Tiket** | REST API | `POST` | `/tickets/:id/comments` | Semua Role | Tambah catatan penanganan ke tiket |
+| 50 | **Tiket** | REST API | `POST` | `/tickets` | Semua Role | Buat tiket baru dari dashboard |
+| 51 | **Export** | REST API | `GET` | `/exports/excel` | Semua Role | Download rekapitulasi file Excel (`.xlsx`) |
+| 52 | **Export** | REST API | `GET` | `/exports/pdf` | Semua Role | Download rekapitulasi file PDF (`.pdf`) |
+| 53 | **Audit Log** | **SSE Stream** | `GET` | `/audit-logs/stream` | Semua Role | Real-time live stream audit log |
+| 54 | **Audit Log** | REST API | `GET` | `/audit-logs` | Semua Role | Daftar rekam jejak audit log |
+| 55 | **Audit Log** | REST API | `GET` | `/audit-logs/:id` | Semua Role | Detail satu rekam jejak audit |
+| 56 | **Ringkasan** | REST API | `GET` | `/summary` | Semua Role | KPI, tren bulanan, top ranking kerusakan |
+| 57 | **Analitik** | REST API | `GET` | `/error-analytics` | Semua Role | Pareto, heatmap unit vs komponen, dsb. |
+
+---
+
+## 🔒 Konvensi Umum & Struktur Error Response
+
+### 1. Format Respons Sukses (Status Code `200` & `201`)
 ```json
 {
   "success": true,
-  "message": "Deskripsi singkat",
+  "message": "Deskripsi hasil operasi",
   "data": { ... }
 }
 ```
 
-### Format Response Error
-
+### 2. Format Respons Error Standar (Status Code `4xx` & `5xx`)
+Ketika request ditolak karena autentikasi, otorisasi, atau duplikasi:
 ```json
 {
   "success": false,
   "statusCode": 401,
-  "message": "Pesan error",
-  "details": [ ... ],
-  "stack": "... (hanya di mode development)"
+  "message": "Access token telah kedaluwarsa"
 }
 ```
 
-### Autentikasi
-
-Endpoint yang membutuhkan autentikasi menggunakan header `Authorization` dengan skema **Bearer Token**:
-
+### 3. Format Respons Error Validasi Input (`422 Unprocessable Entity`)
+Ketika body JSON atau query string melanggar aturan skema validasi (Zod):
+```json
+{
+  "success": false,
+  "statusCode": 422,
+  "message": "Validation Error",
+  "details": [
+    {
+      "field": "email",
+      "message": "Format email tidak valid"
+    },
+    {
+      "field": "password",
+      "message": "Password minimal 6 karakter"
+    }
+  ]
+}
 ```
-Authorization: Bearer <access_token>
-```
-
-### Cookie
-
-Refresh token dikirim dan dibaca melalui **HttpOnly cookie** bernama `refreshToken`. Cookie ini otomatis di-set oleh server saat login dan refresh, serta dihapus saat logout.
 
 ---
 
-## Struktur Endpoint Direct (Tanpa Versi)
-
-Endpoint API diakses langsung seperti : `[ip]:[port]/[endpoint]`
-
-Contoh:
-- `http://10.10.10.10:3000/health`
-- `http://10.10.10.10:3000/auth/login`
-- `http://10.10.10.10:3000/users`
-
----
-
-## Health Check
+## 1. System & Health Check Module
 
 ### `GET /health`
 
-Memeriksa status server.
+| Parameter | Spesifikasi |
+|:---|:---|
+| **Protokol** | **REST API** |
+| **HTTP Method** | `GET` |
+| **Endpoint Path** | `/health` |
+| **Autentikasi** | Tidak Diperlukan (Publik) |
+| **Role Izin** | Publik |
 
-**Auth:** Tidak diperlukan
+Memeriksa ketersediaan dan status kesehatan server backend.
 
-**Response: `200 OK`**
-
+#### Response Sukses: `200 OK`
 ```json
 {
   "status": "ok",
   "service": "error-service",
-  "timestamp": "2026-09-15T07:10:00.000Z"
+  "timestamp": "2026-09-21T05:30:00.000Z"
 }
 ```
 
 ---
 
-## Auth Module
+## 2. Auth Module (`/auth`)
 
 ### `POST /auth/register`
 
-Mendaftarkan akun pengguna baru secara mandiri (*self-service*).
+| Parameter | Spesifikasi |
+|:---|:---|
+| **Protokol** | **REST API** |
+| **HTTP Method** | `POST` |
+| **Endpoint Path** | `/auth/register` |
+| **Autentikasi** | Tidak Diperlukan (Publik) |
+| **Role Izin** | Publik |
 
-**Auth:** Tidak diperlukan
+Mendaftarkan pengguna baru secara mandiri.
 
-**Request Body:**
-
-| Field | Tipe | Wajib | Validasi | Keterangan |
-| :--- | :--- | :---: | :--- | :--- |
-| `email` | `string` | ✅ | Format email valid | Di-trim dan di-lowercase otomatis |
-| `password` | `string` | ✅ | Minimal 6 karakter | Disimpan dalam bentuk `password_hash` |
-| `name` | `string` | ✅ | Minimal 2 karakter | Nama lengkap pengguna |
-| `role` | `string` | ❌ | `"VIEWER"`, `"COORDINATOR"`, atau `"ADMIN"` | Default: `"VIEWER"` |
-
-**Contoh Request:**
-
+#### Request Body Valid
 ```json
 {
   "email": "user@example.com",
@@ -136,8 +188,7 @@ Mendaftarkan akun pengguna baru secara mandiri (*self-service*).
 }
 ```
 
-**Response Sukses: `201 Created`**
-
+#### Response Sukses: `201 Created`
 ```json
 {
   "success": true,
@@ -150,9 +201,51 @@ Mendaftarkan akun pengguna baru secara mandiri (*self-service*).
       "role": "VIEWER",
       "status": "ACTIVE",
       "mustChangePassword": false,
-      "createdAt": "2026-09-16T15:30:00.000Z"
+      "createdAt": "2026-09-21T05:30:00.000Z"
     }
   }
+}
+```
+
+#### ❌ Contoh Input Error & Response: `422 Unprocessable Entity`
+Jika input email tidak valid dan password kurang dari 6 karakter:
+```json
+// Request Body yang Salah:
+{
+  "email": "bukan-format-email",
+  "password": "123",
+  "name": "J"
+}
+
+// Response Error Server:
+{
+  "success": false,
+  "statusCode": 422,
+  "message": "Validation Error",
+  "details": [
+    {
+      "field": "email",
+      "message": "Format email tidak valid"
+    },
+    {
+      "field": "password",
+      "message": "Minimal 6 karakter"
+    },
+    {
+      "field": "name",
+      "message": "Minimal 2 karakter"
+    }
+  ]
+}
+```
+
+#### ❌ Contoh Error Duplikasi Email: `409 Conflict`
+Jika email yang didaftarkan sudah ada di sistem:
+```json
+{
+  "success": false,
+  "statusCode": 409,
+  "message": "Email sudah terdaftar. Silakan gunakan email lain."
 }
 ```
 
@@ -160,28 +253,25 @@ Mendaftarkan akun pengguna baru secara mandiri (*self-service*).
 
 ### `POST /auth/login`
 
-Login pengguna menggunakan email dan password. Mengembalikan Access Token di body dan men-set Refresh Token di HttpOnly cookie. Mendukung proteksi Account Lockout setelah 5 kali gagal berturut-turut (FR-SEC-01/02).
+| Parameter | Spesifikasi |
+|:---|:---|
+| **Protokol** | **REST API** |
+| **HTTP Method** | `POST` |
+| **Endpoint Path** | `/auth/login` |
+| **Autentikasi** | Tidak Diperlukan (Publik) |
+| **Role Izin** | Publik |
 
-**Auth:** Tidak diperlukan
+Autentikasi pengguna menggunakan email dan kata sandi. Menerbitkan Access Token (di response body) dan Refresh Token (di HttpOnly Cookie). Dilengkapi proteksi *Account Lockout* setelah 5 kali gagal berturut-turut.
 
-**Request Body:**
-
-| Field | Tipe | Wajib | Validasi |
-| :--- | :--- | :---: | :--- |
-| `email` | `string` | ✅ | Format email valid |
-| `password` | `string` | ✅ | Minimal 6 karakter |
-
-**Contoh Request:**
-
+#### Request Body Valid
 ```json
 {
-  "email": "user@example.com",
+  "email": "admin@widya.com",
   "password": "password123"
 }
 ```
 
-**Response Sukses: `200 OK`**
-
+#### Response Sukses: `200 OK`
 ```json
 {
   "success": true,
@@ -189,114 +279,83 @@ Login pengguna menggunakan email dan password. Mengembalikan Access Token di bod
   "data": {
     "user": {
       "id": "48247728-9cfe-4789-a01f-bd27ad0272a1",
-      "email": "user@example.com",
-      "name": "John Doe",
-      "role": "VIEWER",
+      "email": "admin@widya.com",
+      "name": "Super Admin",
+      "role": "ADMIN",
       "status": "ACTIVE",
       "mustChangePassword": false
     },
-    "accessToken": "eyJhbGciOiJIUzI1NiIs..."
+    "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
   }
 }
 ```
 
-**Response Header (Set-Cookie):**
-
+#### ❌ Contoh Error Password Salah: `401 Unauthorized`
+Menampilkan sisa percobaan login sebelum akun terkunci:
+```json
+{
+  "success": false,
+  "statusCode": 401,
+  "message": "Email atau password salah. Sisa kesempatan login: 4 kali."
+}
 ```
-Set-Cookie: refreshToken=eyJ...; Max-Age=86400; Path=/; HttpOnly; SameSite=Lax
+
+#### ❌ Contoh Error Akun Terkunci (Account Lockout): `423 Locked`
+Terjadi jika pengguna gagal memasukkan password sebanyak 5 kali berturut-turut:
+```json
+{
+  "success": false,
+  "statusCode": 423,
+  "message": "Akun Anda terkunci selama 15 menit karena 5 kali percobaan login gagal."
+}
 ```
 
-**Response Error:**
-
-| Status | Kondisi |
-| :--- | :--- |
-| `401 Unauthorized` | Email atau password salah (menampilkan sisa kesempatan), atau akun belum aktif |
-| `403 Forbidden` | Akun telah dinonaktifkan (`status: "SUSPENDED"`) |
-| `423 Locked` | Akun terkunci sementara selama 15 menit akibat 5x percobaan gagal (FR-SEC-01/02) |
-| `422 Unprocessable Entity` | Validasi input gagal |
+#### ❌ Contoh Error Akun Dinonaktifkan: `403 Forbidden`
+```json
+{
+  "success": false,
+  "statusCode": 403,
+  "message": "Akun Anda telah dinonaktifkan. Silakan hubungi administrator."
+}
+```
 
 ---
 
 ### `POST /auth/refresh`
 
-Memperbarui Access Token menggunakan Refresh Token yang tersimpan di cookie. Mengimplementasikan **Refresh Token Rotation**: token lama di-revoke dan token baru diterbitkan.
+| Parameter | Spesifikasi |
+|:---|:---|
+| **Protokol** | **REST API** |
+| **HTTP Method** | `POST` |
+| **Endpoint Path** | `/auth/refresh` |
+| **Autentikasi** | Cookie `refreshToken` |
+| **Role Izin** | Publik |
 
-**Auth:** Cookie `refreshToken` (otomatis dikirim browser)
+Menerbitkan Access Token baru menggunakan cookie `refreshToken`.
 
-**Request Body (alternatif, jika cookie tidak tersedia):**
-
-```json
-{
-  "refreshToken": "eyJ..."
-}
-```
-
-**Response Sukses: `200 OK`**
-
+#### Response Sukses: `200 OK`
 ```json
 {
   "success": true,
-  "message": "Access token berhasil diperbarui",
+  "message": "Token berhasil diperbarui",
   "data": {
+    "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
     "user": {
       "id": "48247728-9cfe-4789-a01f-bd27ad0272a1",
-      "email": "user@example.com",
-      "name": "John Doe",
-      "role": "VIEWER",
-      "status": "ACTIVE",
-      "mustChangePassword": false
-    },
-    "accessToken": "eyJhbGciOiJIUzI1NiIs..."
-  }
-}
-```
-
----
-
-### `POST /auth/logout`
-
-Mencabut (revoke) refresh token di database dan menghapus cookie dari browser.
-
-**Auth:** Cookie `refreshToken` (otomatis dikirim browser)
-
-**Response Sukses: `200 OK`**
-
-```json
-{
-  "success": true,
-  "message": "Logout berhasil"
-}
-```
-
----
-
-### `GET /auth/me`
-
-Mengambil data profil pengguna yang sedang login berdasarkan Access Token.
-
-**Auth:** `Authorization: Bearer <access_token>` ✅ **Wajib**
-
-**Response Sukses: `200 OK`**
-
-```json
-{
-  "success": true,
-  "data": {
-    "user": {
-      "id": "48247728-9cfe-4789-a01f-bd27ad0272a1",
-      "email": "user@example.com",
-      "name": "John Doe",
-      "role": "VIEWER",
-      "status": "ACTIVE",
-      "mustChangePassword": false,
-      "failedLoginAttempts": 0,
-      "lockedUntil": null,
-      "lastLoginAt": "2026-09-16T15:30:45.000Z",
-      "passwordChangedAt": null,
-      "createdAt": "2026-09-16T15:30:00.000Z",
-      "updatedAt": "2026-09-16T15:30:45.000Z"
+      "email": "admin@widya.com",
+      "name": "Super Admin",
+      "role": "ADMIN"
     }
   }
+}
+```
+
+#### ❌ Contoh Error Refresh Token Kedaluwarsa / Hilang: `401 Unauthorized`
+```json
+{
+  "success": false,
+  "statusCode": 401,
+  "message": "Refresh token tidak valid atau telah kedaluwarsa"
 }
 ```
 
@@ -304,85 +363,82 @@ Mengambil data profil pengguna yang sedang login berdasarkan Access Token.
 
 ### `POST /auth/change-password`
 
-Mengubah password akun pengguna yang sedang login. Mendukung method `POST` dan `PATCH`.
+| Parameter | Spesifikasi |
+|:---|:---|
+| **Protokol** | **REST API** |
+| **HTTP Method** | `POST` |
+| **Endpoint Path** | `/auth/change-password` |
+| **Autentikasi** | `Authorization: Bearer <access_token>` |
+| **Role Izin** | Semua Pengguna Terautentikasi |
 
-Setelah password berhasil diubah:
-- Nilai `mustChangePassword` di database otomatis berubah menjadi `false`.
-- Waktu perubahan dicatat di `passwordChangedAt`.
-- Seluruh sesi login/refresh token di perangkat lain otomatis dicabut (*revoked*) untuk keamanan.
-- Sesi aktif saat ini tetap berjalan dengan diterbitkannya pasangan access token baru dan refresh token baru pada cookie.
+Mengubah kata sandi akun pengguna yang sedang aktif.
 
-**Auth:** `Authorization: Bearer <access_token>` ✅ **Wajib**
-
-**Request Body:**
-
-| Field | Tipe | Wajib | Aturan | Keterangan |
-| :--- | :--- | :--- | :--- | :--- |
-| `currentPassword` | `string` | Ya | Minimal 1 karakter | Password lama yang sedang aktif |
-| `newPassword` | `string` | Ya | Minimal 6 karakter, tidak boleh sama dengan password lama | Password baru yang diinginkan |
-| `confirmPassword` | `string` | Tidak | Harus sama persis dengan `newPassword` | Konfirmasi password baru (opsional) |
-
+#### Request Body Valid
 ```json
 {
   "currentPassword": "passwordLama123",
-  "newPassword": "passwordBaru456",
-  "confirmPassword": "passwordBaru456"
+  "newPassword": "passwordBaru123",
+  "confirmPassword": "passwordBaru123"
 }
 ```
 
-**Response Sukses: `200 OK`**
-
+#### Response Sukses: `200 OK`
 ```json
 {
   "success": true,
-  "message": "Password berhasil diubah",
-  "data": {
-    "user": {
-      "id": "48247728-9cfe-4789-a01f-bd27ad0272a1",
-      "email": "user@example.com",
-      "name": "John Doe",
-      "role": "VIEWER",
-      "status": "ACTIVE",
-      "mustChangePassword": false,
-      "passwordChangedAt": "2026-09-16T17:30:00.000Z",
-      "updatedAt": "2026-09-16T17:30:00.000Z"
-    },
-    "accessToken": "eyJhbGciOiJIUzI1NiIs..."
-  }
+  "message": "Password berhasil diperbarui. Silakan login kembali dengan password baru."
 }
 ```
 
-**Kode Status HTTP:**
+#### ❌ Contoh Error Konfirmasi Tidak Cocok: `422 Unprocessable Entity`
+```json
+// Request Body yang Salah:
+{
+  "currentPassword": "passwordLama123",
+  "newPassword": "passwordBaru123",
+  "confirmPassword": "passwordBeda123"
+}
 
-| Status Code | Kondisi |
-| :--- | :--- |
-| `200 OK` | Password berhasil diubah |
-| `400 Bad Request` | Password saat ini salah, atau password baru sama dengan password lama |
-| `401 Unauthorized` | Access token tidak disertakan atau sudah kedaluwarsa |
-| `403 Forbidden` | Akun pengguna berstatus `SUSPENDED` |
-| `422 Unprocessable Entity` | Validasi input gagal (panjang kurang dari 6 karakter / konfirmasi tidak cocok) |
+// Response Error Server:
+{
+  "success": false,
+  "statusCode": 422,
+  "message": "Validation Error",
+  "details": [
+    {
+      "field": "confirmPassword",
+      "message": "Konfirmasi password baru tidak cocok"
+    }
+  ]
+}
+```
+
+#### ❌ Contoh Error Password Lama Salah: `401 Unauthorized`
+```json
+{
+  "success": false,
+  "statusCode": 401,
+  "message": "Password saat ini tidak cocok"
+}
+```
 
 ---
 
-## User Management Module (Admin)
+## 3. User Management Module (`/users`)
 
 ### `POST /users`
 
-Mendaftarkan pengguna baru oleh Admin. Password awal otomatis dibuat sama dengan **nama email sebelum tanda `@`** (contoh: `joko@gmail.com` $\rightarrow$ `joko`). Respons mengembalikan data user beserta `initialPassword` dalam bentuk plaintext agar Admin dapat memberikannya kepada user.
+| Parameter | Spesifikasi |
+|:---|:---|
+| **Protokol** | **REST API** |
+| **HTTP Method** | `POST` |
+| **Endpoint Path** | `/users` |
+| **Autentikasi** | `Authorization: Bearer <access_token>` |
+| **Role Izin** | `ADMIN`, `COORDINATOR` |
 
-**Auth:** `Authorization: Bearer <admin_access_token>` ✅  
-**Role Izin:** `ADMIN`
+Mendaftarkan akun pengguna dashboard baru. Password awal otomatis dibuat dengan pola: **nama email sebelum `@` + `12345`** (contoh: `joko@gmail.com` $\rightarrow$ `joko12345`).
 
-**Request Body:**
-
-| Field | Tipe | Wajib | Pilihan Nilai | Keterangan |
-| :--- | :--- | :---: | :--- | :--- |
-| `email` | `string` | ✅ | Email valid | Contoh: `joko@gmail.com` |
-| `name` | `string` | ✅ | Min 2 karakter | Nama lengkap |
-| `role` | `string` | ❌ | `"ADMIN"`, `"COORDINATOR"`, `"VIEWER"` | Default: `"VIEWER"` |
-
-**Contoh Request:**
-
+#### Request Body Valid
 ```json
 {
   "email": "joko@gmail.com",
@@ -391,8 +447,7 @@ Mendaftarkan pengguna baru oleh Admin. Password awal otomatis dibuat sama dengan
 }
 ```
 
-**Response Sukses: `201 Created`**
-
+#### Response Sukses: `201 Created`
 ```json
 {
   "success": true,
@@ -406,181 +461,74 @@ Mendaftarkan pengguna baru oleh Admin. Password awal otomatis dibuat sama dengan
       "status": "ACTIVE",
       "mustChangePassword": true,
       "createdById": "admin-uuid-1234",
-      "createdAt": "2026-09-16T10:13:14.049Z"
+      "createdAt": "2026-09-21T05:30:00.000Z"
     },
-    "initialPassword": "joko"
+    "initialPassword": "joko12345"
   }
 }
 ```
 
-**Response Error:**
+#### ❌ Contoh Input Error & Response: `422 Unprocessable Entity`
+Jika nama kosong atau role tidak valid:
+```json
+// Request Body yang Salah:
+{
+  "email": "invalid-email-address",
+  "name": "",
+  "role": "SUPERUSER"
+}
 
-| Status | Kondisi |
-| :--- | :--- |
-| `401 Unauthorized` | Token tidak ada atau kedaluwarsa |
-| `403 Forbidden` | Bukan role `ADMIN` |
-| `409 Conflict` | Email sudah terdaftar |
-| `422 Unprocessable Entity` | Validasi input gagal |
-
----
-
-### `GET /users`
-
-Mengambil daftar seluruh pengguna dengan fitur pencarian dan pagination.
-
-**Auth:** `Authorization: Bearer <access_token>` ✅  
-**Role Izin:** `ADMIN`
-
-**Query Parameters (Opsional):**
-
-| Parameter | Tipe | Default | Keterangan |
-| :--- | :--- | :---: | :--- |
-| `page` | `number` | `1` | Halaman data |
-| `limit` | `number` | `10` | Jumlah data per halaman (maks: 100) |
-| `search` | `string` | — | Cari berdasarkan nama atau email |
-| `role` | `string` | — | Filter role (`ADMIN`, `COORDINATOR`, `VIEWER`) |
-| `status` | `string` | — | Filter status (`ACTIVE`, `INVITED`, `SUSPENDED`) |
-
-**Contoh Request:**
-
-```
-GET /users?page=1&limit=10&role=COORDINATOR
+// Response Error Server:
+{
+  "success": false,
+  "statusCode": 422,
+  "message": "Validation Error",
+  "details": [
+    {
+      "field": "email",
+      "message": "Format email tidak valid"
+    },
+    {
+      "field": "name",
+      "message": "Nama minimal 2 karakter"
+    },
+    {
+      "field": "role",
+      "message": "Role harus berupa ADMIN, COORDINATOR, atau VIEWER"
+    }
+  ]
+}
 ```
 
-**Response Sukses: `200 OK`**
-
+#### ❌ Contoh Akses Ditolak untuk Viewer: `403 Forbidden`
+Jika pengguna dengan peran `VIEWER` mencoba membuat akun:
 ```json
 {
-  "success": true,
-  "data": {
-    "users": [
-      {
-        "id": "981ba263-8103-4c76-a7ed-f241297e8b27",
-        "email": "joko@gmail.com",
-        "name": "Joko Susilo",
-        "role": "COORDINATOR",
-        "status": "ACTIVE",
-        "mustChangePassword": true,
-        "failedLoginAttempts": 0,
-        "lockedUntil": null,
-        "lastLoginAt": null,
-        "createdAt": "2026-09-16T10:13:14.049Z",
-        "updatedAt": "2026-09-16T10:13:14.049Z",
-        "createdBy": {
-          "id": "admin-uuid-1234",
-          "name": "Super Admin",
-          "email": "admin@widya.com"
-        }
-      }
-    ],
-    "pagination": {
-      "total": 1,
-      "page": 1,
-      "limit": 10,
-      "totalPages": 1
-    }
-  }
+  "success": false,
+  "statusCode": 403,
+  "message": "Akses dilarang: Peran tidak memiliki izin yang cukup"
 }
-```
-
----
-
-### `GET /users/stream` (atau `GET /users` dengan SSE)
-
-Stream data pengguna secara **real-time menggunakan Server-Sent Events (SSE)**. Setiap kali terjadi perubahan data pengguna (Admin membuat user, mengubah data/role/status, atau menghapus user), server akan secara instan mem-broadcast data terbaru ke klien tanpa perlu browser me-refresh atau melakukan polling.
-
-> [!TIP]
-> Endpoint `GET /users` otomatis beralih ke mode SSE jika klien menyertakan header `Accept: text/event-stream` atau parameter query `?stream=true`.
-
-**Auth:**  
-- Header: `Authorization: Bearer <access_token>` ✅, **ATAU**
-- Query Param: `?token=<access_token>` ✅ *(Sangat memudahkan penggunaan objek bawaan browser `new EventSource('/users/stream?token=...')`)*
-**Role Izin:** `ADMIN`
-
-**Response Headers:**
-```http
-Content-Type: text/event-stream
-Cache-Control: no-cache, no-transform
-Connection: keep-alive
-X-Accel-Buffering: no
-```
-
-**Daftar Event SSE yang Dikirim:**
-
-| Event | Deskripsi | Format Payload (`data`) |
-| :--- | :--- | :--- |
-| `connected` | Dikirim saat koneksi SSE pertama kali terhubung | `{"status":"connected","timestamp":"..."}` |
-| `initial` | Snapshot data seluruh pengguna saat ini | `{"users":[...],"pagination":{...}}` |
-| `user:created` | Terpicu saat Admin mendaftarkan user baru | `{"user":{...}}` |
-| `user:updated` | Terpicu saat Admin mengubah data user | `{"user":{...}}` |
-| `user:deleted` | Terpicu saat Admin menghapus user | `{"id":"...","user":{...}}` |
-| `users:refresh` | Daftar seluruh user yang sudah ter-refresh otomatis | `{"users":[...],"pagination":{...}}` |
-| `message` | Event default bawaan browser (untuk `eventSource.onmessage`) | Berisi `type` dan data terkait |
-
-**Contoh Penggunaan di Frontend (JavaScript / React):**
-
-```javascript
-const eventSource = new EventSource(`http://localhost:3000/users/stream?token=${accessToken}`);
-
-// 1. Menerima data awal
-eventSource.addEventListener("initial", (e) => {
-  const data = JSON.parse(e.data);
-  setUsers(data.users);
-});
-
-// 2. Menerima update otomatis saat data pengguna berubah
-eventSource.addEventListener("users:refresh", (e) => {
-  const data = JSON.parse(e.data);
-  setUsers(data.users);
-});
-
-// 3. Menangani penutupan/error koneksi
-eventSource.onerror = (err) => {
-  console.error("SSE connection error:", err);
-};
 ```
 
 ---
 
 ### `GET /users/:id`
 
-Melihat detail lengkap satu akun pengguna berdasarkan ID (termasuk informasi siapa Admin yang membuatnya).
+| Parameter | Spesifikasi |
+|:---|:---|
+| **Protokol** | **REST API** |
+| **HTTP Method** | `GET` |
+| **Endpoint Path** | `/users/:id` |
+| **Autentikasi** | `Authorization: Bearer <access_token>` |
+| **Role Izin** | **Semua Role** (`ADMIN`, `COORDINATOR`, `VIEWER`) |
 
-**Auth:** `Authorization: Bearer <access_token>` ✅  
-**Role Izin:** `ADMIN`, `COORDINATOR`
-
-**Contoh Request:**
-
-```
-GET /users/981ba263-8103-4c76-a7ed-f241297e8b27
-```
-
-**Response Sukses: `200 OK`**
-
+#### ❌ Contoh Error Data Tidak Ditemukan: `404 Not Found`
+Jika ID pengguna tidak terdaftar:
 ```json
 {
-  "success": true,
-  "data": {
-    "user": {
-      "id": "981ba263-8103-4c76-a7ed-f241297e8b27",
-      "email": "joko@gmail.com",
-      "name": "Joko Susilo",
-      "role": "COORDINATOR",
-      "status": "ACTIVE",
-      "mustChangePassword": true,
-      "failedLoginAttempts": 0,
-      "lockedUntil": null,
-      "lastLoginAt": null,
-      "passwordChangedAt": null,
-      "createdAt": "2026-09-16T10:13:14.049Z",
-      "updatedAt": "2026-09-16T10:13:14.049Z",
-      "createdBy": {
-        "id": "admin-uuid-1234",
-        "name": "Super Admin",
-        "email": "admin@widya.com"
-      }
-    }
-  }
+  "success": false,
+  "statusCode": 404,
+  "message": "Pengguna dengan ID tersebut tidak ditemukan"
 }
 ```
 
@@ -588,140 +536,80 @@ GET /users/981ba263-8103-4c76-a7ed-f241297e8b27
 
 ### `PATCH /users/:id`
 
-Memperbarui data pengguna tertentu oleh Admin. Mendukung method `PATCH` dan `PUT`. Admin dapat memperbarui satu atau beberapa field: `email`, `name`, `password`, `role`, dan `status`.
+| Parameter | Spesifikasi |
+|:---|:---|
+| **Protokol** | **REST API** |
+| **HTTP Method** | `PATCH` / `PUT` |
+| **Endpoint Path** | `/users/:id` |
+| **Autentikasi** | `Authorization: Bearer <access_token>` |
+| **Role Izin** | `ADMIN`, `COORDINATOR` |
 
-**Auth:** `Authorization: Bearer <admin_access_token>` ✅  
-**Role Izin:** `ADMIN`
-
-**Request Body (minimal 1 field diisi):**
-
-| Field | Tipe | Wajib | Pilihan / Validasi | Keterangan |
-| :--- | :--- | :---: | :--- | :--- |
-| `email` | `string` | ❌ | Format email valid | Diperiksa agar tidak bentrok dengan email user lain |
-| `name` | `string` | ❌ | Min 2 karakter | Nama lengkap baru |
-| `password` | `string` | ❌ | Min 6 karakter | Otomatis di-hash dengan bcrypt |
-| `role` | `string` | ❌ | `"ADMIN"`, `"COORDINATOR"`, `"VIEWER"` | Peran hak akses |
-| `status` | `string` | ❌ | `"ACTIVE"`, `"INVITED"`, `"SUSPENDED"` | Status keaktifan akun |
-
-> [!NOTE]
-> - Jika `password` diubah atau status diubah menjadi `SUSPENDED`, seluruh refresh token milik user tersebut otomatis dicabut (*revoked*) untuk keamanan.
-> - Admin tidak dapat menonaktifkan (`SUSPENDED`) atau mendemosi role akunnya sendiri demi mencegah penguncian sistem (*lockout*).
-
-**Contoh Request:**
-
+#### ❌ Contoh Error Modifikasi Akun Sendiri: `400 Bad Request`
+Jika admin/koordinator mencoba mendemosi role atau menonaktifkan status akunnya sendiri:
 ```json
 {
-  "name": "Joko Susilo, S.Kom",
-  "role": "COORDINATOR",
-  "status": "ACTIVE",
-  "password": "newPasswordBaru123"
+  "success": false,
+  "statusCode": 400,
+  "message": "Anda tidak dapat menonaktifkan akun Anda sendiri demi menjaga integritas akses sistem"
 }
 ```
 
-**Response Sukses: `200 OK`**
-
+#### ❌ Contoh Error Body Kosong: `422 Unprocessable Entity`
+Jika mengirim body JSON `{}` tanpa perubahan field:
 ```json
 {
-  "success": true,
-  "message": "Data pengguna berhasil diperbarui",
-  "data": {
-    "user": {
-      "id": "981ba263-8103-4c76-a7ed-f241297e8b27",
-      "email": "joko@gmail.com",
-      "name": "Joko Susilo, S.Kom",
-      "role": "COORDINATOR",
-      "status": "ACTIVE",
-      "mustChangePassword": false,
-      "failedLoginAttempts": 0,
-      "lockedUntil": null,
-      "lastLoginAt": null,
-      "passwordChangedAt": "2026-09-16T17:40:00.000Z",
-      "createdAt": "2026-09-16T10:13:14.049Z",
-      "updatedAt": "2026-09-16T17:40:00.000Z",
-      "createdBy": {
-        "id": "admin-uuid-1234",
-        "name": "Super Admin",
-        "email": "admin@widya.com"
-      }
+  "success": false,
+  "statusCode": 422,
+  "message": "Validation Error",
+  "details": [
+    {
+      "field": "",
+      "message": "Minimal satu field harus disertakan untuk pembaruan data"
     }
-  }
+  ]
 }
 ```
-
-**Response Error:**
-
-| Status Code | Kondisi |
-| :--- | :--- |
-| `400 Bad Request` | Admin mencoba menonaktifkan/mengubah role akunnya sendiri |
-| `401 Unauthorized` | Token tidak disertakan atau sudah kedaluwarsa |
-| `403 Forbidden` | Bukan role `ADMIN` |
-| `404 Not Found` | Pengguna dengan ID tersebut tidak ditemukan |
-| `409 Conflict` | Email baru sudah digunakan oleh pengguna lain |
-| `422 Unprocessable Entity` | Validasi input gagal (password < 6 karakter, enum salah, atau body kosong) |
 
 ---
 
 ### `DELETE /users/:id`
 
-Menghapus akun pengguna dari sistem secara permanen. Seluruh sesi login, token reset password, serta relasi data terkait akan dibersihkan secara aman melalui database transaction.
+| Parameter | Spesifikasi |
+|:---|:---|
+| **Protokol** | **REST API** |
+| **HTTP Method** | `DELETE` |
+| **Endpoint Path** | `/users/:id` |
+| **Autentikasi** | `Authorization: Bearer <access_token>` |
+| **Role Izin** | `ADMIN`, `COORDINATOR` |
 
-**Auth:** `Authorization: Bearer <admin_access_token>` ✅  
-**Role Izin:** `ADMIN`
-
-> [!WARNING]
-> Admin tidak dapat menghapus akun miliknya sendiri (`self-deletion prevention`).
-
-**Contoh Request:**
-
-```http
-DELETE /users/981ba263-8103-4c76-a7ed-f241297e8b27
-Authorization: Bearer <admin_access_token>
-```
-
-**Response Sukses: `200 OK`**
-
+#### ❌ Contoh Error Hapus Akun Sendiri: `400 Bad Request`
 ```json
 {
-  "success": true,
-  "message": "Pengguna berhasil dihapus"
+  "success": false,
+  "statusCode": 400,
+  "message": "Anda tidak dapat menghapus akun Anda sendiri"
 }
 ```
 
-**Response Error:**
-
-| Status Code | Kondisi |
-| :--- | :--- |
-| `400 Bad Request` | Admin mencoba menghapus akun miliknya sendiri |
-| `401 Unauthorized` | Token tidak disertakan atau kedaluwarsa |
-| `403 Forbidden` | Bukan role `ADMIN` |
-| `404 Not Found` | Pengguna dengan ID tersebut tidak ditemukan |
-
 ---
 
-## Telegram Whitelist Module (Admin)
+## 4. Telegram Whitelist Module (`/telegram-users`)
 
-Modul ini mengelola daftar putih (*whitelist*) pengguna Telegram yang diizinkan berinteraksi dengan Bot Notifikasi Error (FR-BOT-03). Seluruh endpoint pada modul ini **hanya dapat diakses oleh role `ADMIN`**.
-
----
+Endpoint ini juga dapat diakses melalui alias path `/whitelist-telegram`.
 
 ### `POST /telegram-users`
 
-Menambahkan pengguna Telegram baru ke dalam whitelist.
+| Parameter | Spesifikasi |
+|:---|:---|
+| **Protokol** | **REST API** |
+| **HTTP Method** | `POST` |
+| **Endpoint Path** | `/telegram-users` |
+| **Autentikasi** | `Authorization: Bearer <access_token>` |
+| **Role Izin** | `ADMIN`, `COORDINATOR` |
 
-**Auth:** `Authorization: Bearer <admin_access_token>` ✅  
-**Role Izin:** `ADMIN`
+Menambahkan akun Telegram ke whitelist bot.
 
-**Request Body:**
-
-| Field | Tipe | Wajib | Keterangan |
-| :--- | :--- | :---: | :--- |
-| `telegramId` | `string` / `number` | ✅ | ID numerik unik pengguna Telegram (contoh: `"123456789"` atau `123456789`) |
-| `username` | `string` | ❌ | Username Telegram (simbol `@` di depan otomatis dibersihkan) |
-| `fullName` | `string` | ❌ | Nama lengkap pengguna untuk kemudahan identifikasi di dashboard |
-| `isActive` | `boolean` | ❌ | Status keaktifan akses whitelist (default: `true`) |
-
-**Contoh Request:**
-
+#### Request Body Valid
 ```json
 {
   "telegramId": "123456789",
@@ -731,227 +619,47 @@ Menambahkan pengguna Telegram baru ke dalam whitelist.
 }
 ```
 
-**Response Sukses: `201 Created`**
-
+#### ❌ Contoh Error Input Format: `422 Unprocessable Entity`
+Jika `telegramId` berisi huruf abjad:
 ```json
+// Request Body yang Salah:
 {
-  "success": true,
-  "message": "User Telegram berhasil ditambahkan ke whitelist",
-  "data": {
-    "telegramUser": {
-      "id": "e81d7637-2fb0-4e5a-8b89-1df812d1b0d2",
-      "telegramId": "123456789",
-      "username": "john_doe",
-      "fullName": "John Doe Tele",
-      "isActive": true,
-      "whitelistedById": "admin-uuid-1234",
-      "createdAt": "2026-09-16T18:47:00.000Z",
-      "updatedAt": "2026-09-16T18:47:00.000Z",
-      "whitelistedBy": {
-        "id": "admin-uuid-1234",
-        "name": "Super Admin",
-        "email": "admin@widya.com"
-      }
+  "telegramId": "bukan-angka-id",
+  "fullName": "Budi"
+}
+
+// Response Error Server:
+{
+  "success": false,
+  "statusCode": 422,
+  "message": "Validation Error",
+  "details": [
+    {
+      "field": "telegramId",
+      "message": "ID Telegram harus berupa karakter angka numerik"
     }
-  }
+  ]
 }
 ```
 
-**Response Error:**
-
-| Status Code | Kondisi |
-| :--- | :--- |
-| `401 Unauthorized` | Token tidak disertakan atau kedaluwarsa |
-| `403 Forbidden` | Bukan role `ADMIN` |
-| `409 Conflict` | Telegram ID sudah terdaftar di whitelist |
-| `422 Unprocessable Entity` | Validasi input gagal (telegramId tidak berupa angka numerik) |
-
----
-
-### `GET /telegram-users`
-
-Mengambil daftar seluruh pengguna Telegram di whitelist dengan pagination, pencarian, dan filter status aktif.
-
-**Auth:** `Authorization: Bearer <admin_access_token>` ✅  
-**Role Izin:** `ADMIN`
-
-**Query Parameters (Opsional):**
-
-| Parameter | Tipe | Default | Keterangan |
-| :--- | :--- | :---: | :--- |
-| `page` | `number` | `1` | Halaman data |
-| `limit` | `number` | `10` | Jumlah data per halaman (maks: 100) |
-| `search` | `string` | — | Cari berdasarkan `telegramId`, `username`, atau `fullName` |
-| `isActive` | `boolean` | — | Filter status keaktifan (`true` atau `false`) |
-
-**Response Sukses: `200 OK`**
-
+#### ❌ Contoh Error Duplikasi Telegram ID: `409 Conflict`
 ```json
 {
-  "success": true,
-  "data": {
-    "telegramUsers": [
-      {
-        "id": "e81d7637-2fb0-4e5a-8b89-1df812d1b0d2",
-        "telegramId": "123456789",
-        "username": "john_doe",
-        "fullName": "John Doe Tele",
-        "isActive": true,
-        "createdAt": "2026-09-16T18:47:00.000Z",
-        "updatedAt": "2026-09-16T18:47:00.000Z",
-        "whitelistedBy": {
-          "id": "admin-uuid-1234",
-          "name": "Super Admin",
-          "email": "admin@widya.com"
-        }
-      }
-    ],
-    "pagination": {
-      "total": 1,
-      "page": 1,
-      "limit": 10,
-      "totalPages": 1
-    }
-  }
+  "success": false,
+  "statusCode": 409,
+  "message": "Telegram ID tersebut sudah terdaftar di whitelist"
 }
 ```
 
 ---
 
-### `GET /telegram-users/:id`
+## 5. Master Data Modules (`/clients`, `/locations`, `/components`, `/failure-codes`, `/assets`)
 
-Mengambil detail satu pengguna Telegram di whitelist berdasarkan ID internal.
+Seluruh entitas Master Data dapat diakses (baca maupun modifikasi CRUD) oleh **seluruh peran** (`ADMIN`, `COORDINATOR`, `VIEWER`).
 
-**Auth:** `Authorization: Bearer <admin_access_token>` ✅  
-**Role Izin:** `ADMIN`
+### 5.1 Client Module (`/clients`)
 
-**Response Sukses: `200 OK`**
-
-```json
-{
-  "success": true,
-  "data": {
-    "telegramUser": {
-      "id": "e81d7637-2fb0-4e5a-8b89-1df812d1b0d2",
-      "telegramId": "123456789",
-      "username": "john_doe",
-      "fullName": "John Doe Tele",
-      "isActive": true,
-      "createdAt": "2026-09-16T18:47:00.000Z",
-      "updatedAt": "2026-09-16T18:47:00.000Z",
-      "whitelistedBy": {
-        "id": "admin-uuid-1234",
-        "name": "Super Admin",
-        "email": "admin@widya.com"
-      }
-    }
-  }
-}
-```
-
----
-
-### `PATCH /telegram-users/:id`
-
-Mengubah data atau status keaktifan pengguna Telegram di whitelist (`isActive`, `username`, `fullName`). Mendukung method `PATCH` dan `PUT`.
-
-**Auth:** `Authorization: Bearer <admin_access_token>` ✅  
-**Role Izin:** `ADMIN`
-
-**Request Body (minimal 1 field):**
-
-| Field | Tipe | Wajib | Keterangan |
-| :--- | :--- | :---: | :--- |
-| `isActive` | `boolean` | ❌ | Ubah status aktif/nonaktif (`true` / `false`) |
-| `username` | `string` | ❌ | Username Telegram baru |
-| `fullName` | `string` | ❌ | Nama lengkap baru |
-
-**Contoh Request (Menonaktifkan Akses Telegram):**
-
-```json
-{
-  "isActive": false
-}
-```
-
-**Response Sukses: `200 OK`**
-
-```json
-{
-  "success": true,
-  "message": "Data user Telegram berhasil diperbarui",
-  "data": {
-    "telegramUser": {
-      "id": "e81d7637-2fb0-4e5a-8b89-1df812d1b0d2",
-      "telegramId": "123456789",
-      "username": "john_doe",
-      "fullName": "John Doe Tele",
-      "isActive": false,
-      "updatedAt": "2026-09-16T18:48:00.000Z"
-    }
-  }
-}
-```
-
----
-
-### `DELETE /telegram-users/:id`
-
-Menghapus pengguna Telegram dari daftar whitelist.
-
-**Auth:** `Authorization: Bearer <admin_access_token>` ✅  
-**Role Izin:** `ADMIN`
-
-**Response Sukses: `200 OK`**
-
-```json
-{
-  "success": true,
-  "message": "User Telegram berhasil dihapus dari whitelist"
-}
-```
-
-**Response Error:**
-
-| Status Code | Kondisi |
-| :--- | :--- |
-| `401 Unauthorized` | Token tidak disertakan atau kedaluwarsa |
-| `403 Forbidden` | Bukan role `ADMIN` |
-| `404 Not Found` | User Telegram dengan ID tersebut tidak ditemukan |
-
----
-
-## Master Data Modules
-
-Modul Master Data mengelola entitas operasional sistem aftersales: **Client**, **Location**, **Component**, **FailureCode**, dan **Asset**.
-
-> **Ketentuan Keamanan & Operasi Delete:**
-> 1. **Autentikasi Access Token**: Seluruh endpoint wajib menyertakan `Authorization: Bearer <access_token>`.
-> 2. **RBAC**:
->    - Operasi Baca (`GET`): Dapat diakses oleh semua role (`ADMIN`, `COORDINATOR`, `VIEWER`).
->    - Operasi Mutasi (`POST`, `PATCH`, `PUT`, `DELETE`): Khusus untuk `ADMIN` dan `COORDINATOR`.
-> 3. **Constraint Foreign Key pada Hard Delete**:
->    - **Client**: Ditolak (`400 Bad Request`) jika masih memiliki `Asset` terkait.
->    - **Location**: Ditolak (`400 Bad Request`) jika masih memiliki `Asset` terkait.
->    - **Component**: Ditolak (`400 Bad Request`) jika masih memiliki `FailureCode` terkait.
->    - Data hanya dapat dihapus secara permanen (Hard Delete) jika count relasi foreign key = 0.
-
----
-
-### Client Module (`/clients`)
-
-#### `POST /clients`
-Menambahkan data client/perusahaan customer baru.
-
-**Auth:** `Authorization: Bearer <access_token>` | **Role:** `ADMIN`, `COORDINATOR`
-
-**Request Body:**
-| Field | Tipe | Wajib | Keterangan |
-| :--- | :--- | :---: | :--- |
-| `name` | `string` | ✅ | Nama client (minimal 2 karakter, maksimal 100) |
-| `isActive` | `boolean` | ❌ | Status aktif client (default: `true`) |
-
-**Contoh Body:**
+#### Request Body Valid `POST /clients`
 ```json
 {
   "name": "PT Sumber Rejeki Robotika",
@@ -959,298 +667,100 @@ Menambahkan data client/perusahaan customer baru.
 }
 ```
 
-**Response Sukses: `201 Created`**
+#### ❌ Contoh Error Validasi Input: `422 Unprocessable Entity`
+Jika nama client kosong atau terlalu pendek:
 ```json
+// Request Body yang Salah:
 {
-  "status": "success",
-  "message": "Client berhasil ditambahkan",
-  "data": {
-    "client": {
-      "id": "c1f7b7f1-88bc-4eb7-a720-3b9508bc5c6d",
-      "name": "PT Sumber Rejeki Robotika",
-      "isActive": true
+  "name": "A"
+}
+
+// Response Error Server:
+{
+  "success": false,
+  "statusCode": 422,
+  "message": "Validation Error",
+  "details": [
+    {
+      "field": "name",
+      "message": "Nama client minimal 2 karakter"
     }
-  }
+  ]
 }
 ```
 
-#### `GET /clients`
-Mengambil daftar seluruh client dengan pagination dan pencarian.
-
-**Auth:** `Authorization: Bearer <access_token>` | **Role:** Semua role
-
-**Query Parameters:**
-| Parameter | Tipe | Default | Keterangan |
-| :--- | :--- | :--- | :--- |
-| `page` | `integer` | `1` | Halaman data |
-| `limit` | `integer` | `10` | Jumlah data per halaman |
-| `search` | `string` | - | Pencarian nama client (case-insensitive) |
-| `isActive` | `string` | `"all"` | Filter status: `"true"`, `"false"`, atau `"all"` |
-
-**Response Sukses: `200 OK`**
+#### ❌ Contoh Error Foreign Key Constraint pada Penghapusan: `400 Bad Request`
+Jika menghapus client yang masih memiliki aset unit terhubung:
 ```json
+// Request:
+DELETE /clients/c1f7b7f1-88bc-4eb7-a720-3b9508bc5c6d
+
+// Response Error Server:
 {
-  "status": "success",
-  "message": "Berhasil mengambil daftar client",
-  "data": {
-    "clients": [
-      {
-        "id": "c1f7b7f1-88bc-4eb7-a720-3b9508bc5c6d",
-        "name": "PT Sumber Rejeki Robotika",
-        "isActive": true,
-        "_count": {
-          "assets": 3
-        }
-      }
-    ],
-    "meta": {
-      "total": 1,
-      "page": 1,
-      "limit": 10,
-      "totalPages": 1
+  "success": false,
+  "statusCode": 400,
+  "message": "Tidak dapat menghapus client karena masih terdapat 3 aset/unit Load Scanner yang terhubung. Nonaktifkan client (isActive: false) sebagai alternatif."
+}
+```
+
+---
+
+### 5.2 Failure Code Module (`/failure-codes`)
+
+#### ❌ Contoh Error Input Foreign Key Component Tidak Valid: `422 Unprocessable Entity`
+Jika format UUID komponen salah:
+```json
+// Request Body yang Salah:
+{
+  "code": "MPC-001",
+  "description": "Mini PC hang",
+  "componentId": "bukan-uuid-valid"
+}
+
+// Response Error Server:
+{
+  "success": false,
+  "statusCode": 422,
+  "message": "Validation Error",
+  "details": [
+    {
+      "field": "componentId",
+      "message": "Format Component ID harus berupa UUID valid"
     }
-  }
+  ]
 }
 ```
 
-#### `GET /clients/:id`
-Mengambil detail satu client beserta daftar asset yang dimiliki.
-
-**Response Sukses: `200 OK`**
+#### ❌ Contoh Error Duplikasi Kode Failure: `409 Conflict`
 ```json
 {
-  "status": "success",
-  "message": "Berhasil mengambil detail client",
-  "data": {
-    "client": {
-      "id": "c1f7b7f1-88bc-4eb7-a720-3b9508bc5c6d",
-      "name": "PT Sumber Rejeki Robotika",
-      "isActive": true,
-      "_count": { "assets": 1 },
-      "assets": [
-        {
-          "id": "asset-uuid-1234",
-          "unitCode": "ROBOT-01",
-          "type": "portable",
-          "status": "OPERATIONAL",
-          "isActive": true
-        }
-      ]
-    }
-  }
-}
-```
-
-#### `PATCH /clients/:id` & `PUT /clients/:id`
-Memperbarui nama atau status aktif client.
-
-**Request Body:** Minimal 1 field disertakan.
-```json
-{
-  "name": "PT Sumber Rejeki Robotika Perkasa",
-  "isActive": false
-}
-```
-
-**Response Sukses: `200 OK`**
-
-#### `DELETE /clients/:id`
-Menghapus data client secara permanen.
-
-> [!WARNING]
-> Request akan **ditolak (`400 Bad Request`)** jika client masih terhubung dengan record Asset (`assets.count > 0`).
-
-**Response Gagal Constraint: `400 Bad Request`**
-```json
-{
-  "status": "error",
-  "message": "Tidak dapat menghapus client karena masih terdapat 3 asset yang terhubung. Hapus atau pindahkan asset terlebih dahulu."
-}
-```
-
-**Response Sukses: `200 OK`**
-```json
-{
-  "status": "success",
-  "message": "Client berhasil dihapus"
+  "success": false,
+  "statusCode": 409,
+  "message": "Failure code 'LID-003' sudah terdaftar pada sistem"
 }
 ```
 
 ---
 
-### Location Module (`/locations`)
+## 6. Ticket Management Module (`/tickets`)
 
-#### `POST /locations`
-Menambahkan data lokasi site/gudang baru.
+### `GET /tickets`
 
-**Auth:** `Authorization: Bearer <access_token>` | **Role:** `ADMIN`, `COORDINATOR`
+| Parameter | Spesifikasi |
+|:---|:---|
+| **Protokol** | **REST API** |
+| **HTTP Method** | `GET` |
+| **Endpoint Path** | `/tickets` |
+| **Autentikasi** | `Authorization: Bearer <access_token>` |
+| **Role Izin** | **Semua Role** (`ADMIN`, `COORDINATOR`, `VIEWER`) |
 
-**Request Body:**
-| Field | Tipe | Wajib | Keterangan |
-| :--- | :--- | :---: | :--- |
-| `name` | `string` | ✅ | Nama lokasi (minimal 2 karakter, maksimal 100) |
-| `isActive` | `boolean` | ❌ | Status aktif lokasi (default: `true`) |
+Mengambil daftar tiket dengan filter dan pagination.
 
-```json
-{
-  "name": "Warehouse Cakung Hub",
-  "isActive": true
-}
+#### ❌ Contoh Error Query Parameter Input: `422 Unprocessable Entity`
+Jika mengirimkan parameter status yang tidak dikenal atau tanggal tidak valid:
+```http
+GET /tickets?status=unknown_status&startDate=2026-99-99
 ```
-
-#### `GET /locations`
-Mengambil daftar lokasi dengan query `page`, `limit`, `search`, dan `isActive`.
-
-#### `GET /locations/:id`
-Mengambil detail lokasi beserta daftar asset di lokasi tersebut.
-
-#### `PATCH /locations/:id`
-Memperbarui nama atau status lokasi.
-
-#### `DELETE /locations/:id`
-Menghapus lokasi permanen. Ditolak (`400 Bad Request`) bila masih terdapat asset di lokasi tersebut (`assets.count > 0`).
-
----
-
-### Component Module (`/components`)
-
-#### `POST /components`
-Menambahkan kategori komponen robot baru.
-
-**Auth:** `Authorization: Bearer <access_token>` | **Role:** `ADMIN`, `COORDINATOR`
-
-**Request Body:**
-| Field | Tipe | Wajib | Keterangan |
-| :--- | :--- | :---: | :--- |
-| `prefix` | `string` | ✅ | Prefix kode failure (contoh: `"SEN"`, `"MOT"`, otomatis dikonversi ke uppercase) |
-| `name` | `string` | ✅ | Nama komponen (minimal 2 karakter) |
-| `sortOrder` | `integer` | ❌ | Urutan tombol pada bot Telegram (default: `0`) |
-| `isActive` | `boolean` | ❌ | Status aktif (default: `true`) |
-
-```json
-{
-  "prefix": "SEN",
-  "name": "Sensor Unit",
-  "sortOrder": 1,
-  "isActive": true
-}
-```
-
-#### `GET /components`
-Mengambil daftar komponen (diurutkan berdasarkan `sortOrder` ASC).
-
-#### `GET /components/:id`
-Mengambil detail komponen beserta daftar `failureCodes` yang terhubung.
-
-#### `PATCH /components/:id`
-Memperbarui prefix, name, sortOrder, atau isActive.
-
-#### `DELETE /components/:id`
-Menghapus komponen permanen. Ditolak (`400 Bad Request`) bila masih terdapat failure code yang terhubung (`failureCodes.count > 0`).
-
----
-
-### Failure Code Module (`/failure-codes`)
-
-#### `POST /failure-codes`
-Menambahkan kode kegagalan baru untuk komponen tertentu.
-
-**Auth:** `Authorization: Bearer <access_token>` | **Role:** `ADMIN`, `COORDINATOR`
-
-**Request Body:**
-| Field | Tipe | Wajib | Keterangan |
-| :--- | :--- | :---: | :--- |
-| `componentId` | `string` (UUID) | ✅ | ID komponen terkait |
-| `code` | `string` | ✅ | Kode kegagalan (contoh: `"SEN-001"`) |
-| `description` | `string` | ❌ | Penjelasan rincian kerusakan |
-| `isActive` | `boolean` | ❌ | Status aktif (default: `true`) |
-
-> [!NOTE]
-> Kombinasi `[componentId, code]` bersifat unik. Jika kode yang sama ditambahkan pada komponen yang sama, server mengembalikan `409 Conflict`.
-
-```json
-{
-  "componentId": "c1f7b7f1-88bc-4eb7-a720-3b9508bc5c6d",
-  "code": "SEN-001",
-  "description": "LiDAR sensor lost communication with ROS node",
-  "isActive": true
-}
-```
-
-#### `GET /failure-codes`
-Mengambil daftar failure code dengan filter query: `page`, `limit`, `componentId`, `search`, `isActive`. Menyertakan detail `component` (id, prefix, name).
-
-#### `GET /failure-codes/:id`
-Mengambil detail satu failure code beserta data komponennya.
-
-#### `PATCH /failure-codes/:id`
-Memperbarui kode, deskripsi, komponen, atau status aktif.
-
-#### `DELETE /failure-codes/:id`
-Menghapus record failure code secara permanen.
-
----
-
-### Asset Module (`/assets`)
-
-#### `POST /assets`
-Menambahkan unit robot baru ke sistem.
-
-**Auth:** `Authorization: Bearer <access_token>` | **Role:** `ADMIN`, `COORDINATOR`
-
-**Request Body:**
-| Field | Tipe | Wajib | Keterangan |
-| :--- | :--- | :---: | :--- |
-| `unitCode` | `string` | ✅ | Kode unit robot unik (contoh: `"ROBOT-A01"`), tidak boleh duplikat (`409 Conflict`) |
-| `type` | `string` | ✅ | Tipe robot (contoh: `"portable"` atau `"static"`) |
-| `clientId` | `string` (UUID) | ✅ | ID Client pemilik unit |
-| `locationId` | `string` (UUID) | ✅ | ID Lokasi operasional unit |
-| `status` | `string` | ✅ | Status operasional (contoh: `"OPERATIONAL"`, `"MAINTENANCE"`) |
-| `commissioningDate` | `string` | ❌ | Tanggal commissioning (format ISO datetime atau `YYYY-MM-DD`) |
-| `isActive` | `boolean` | ❌ | Status aktif unit (default: `true`) |
-
-```json
-{
-  "unitCode": "ROBOT-A01",
-  "type": "portable",
-  "clientId": "c1f7b7f1-88bc-4eb7-a720-3b9508bc5c6d",
-  "locationId": "loc-uuid-1234",
-  "status": "OPERATIONAL",
-  "commissioningDate": "2026-03-15",
-  "isActive": true
-}
-```
-
-#### `GET /assets`
-Mengambil daftar asset dengan filter query: `page`, `limit`, `clientId`, `locationId`, `type`, `status`, `search` (unitCode), `isActive`. Menyertakan nama `client` dan `location`.
-
-#### `GET /assets/:id`
-Mengambil detail asset lengkap beserta info client dan lokasi.
-
-#### `PATCH /assets/:id`
-Memperbarui data unit robot (tipe, client, lokasi, status, commissioningDate, isActive).
-
-#### `DELETE /assets/:id`
-Menghapus unit robot secara permanen.
-
----
-
-## Error Response
-
-### Kode Status yang Digunakan
-
-| Status | Nama | Kapan Dipakai |
-| :--- | :--- | :--- |
-| `400` | Bad Request | JSON body tidak valid (syntax error) |
-| `401` | Unauthorized | Token tidak ada, expired, atau invalid; password salah |
-| `403` | Forbidden | Akun dinonaktifkan (`status: "SUSPENDED"`); role tidak memiliki izin (bukan Admin) |
-| `404` | Not Found | Route atau data pengguna tidak ditemukan |
-| `409` | Conflict | Data duplikat (contoh: email sudah terdaftar) |
-| `422` | Unprocessable Entity | Validasi Zod gagal pada input |
-| `423` | Locked | Akun terkunci sementara karena 5x percobaan login gagal (FR-SEC-01/02) |
-| `500` | Internal Server Error | Kesalahan tidak terduga pada server |
-
-### Contoh: Validasi Error (`422`)
 
 ```json
 {
@@ -1259,29 +769,145 @@ Menghapus unit robot secara permanen.
   "message": "Validation Error",
   "details": [
     {
-      "field": "email",
-      "message": "Invalid email address"
+      "field": "status",
+      "message": "Status harus berupa open, escalated, solved, atau closed"
     },
     {
-      "field": "password",
-      "message": "Password minimal 6 karakter"
+      "field": "startDate",
+      "message": "Format tanggal tidak valid"
     }
   ]
 }
 ```
 
-### Contoh: Akun Terkunci / Lockout (`423`)
+---
 
+### `PATCH /tickets/:id`
+
+| Parameter | Spesifikasi |
+|:---|:---|
+| **Protokol** | **REST API** |
+| **HTTP Method** | `PATCH` |
+| **Endpoint Path** | `/tickets/:id` |
+| **Autentikasi** | `Authorization: Bearer <access_token>` |
+| **Role Izin** | **Semua Role** (`ADMIN`, `COORDINATOR`, `VIEWER`) |
+
+Memperbarui penanganan tiket.
+
+#### ❌ Contoh Error Status Salah: `422 Unprocessable Entity`
 ```json
+// Request Body yang Salah:
+{
+  "status": "pending_approval"
+}
+
+// Response Error Server:
 {
   "success": false,
-  "statusCode": 423,
-  "message": "Akun Anda terkunci selama 15 menit karena 5 kali percobaan login gagal."
+  "statusCode": 422,
+  "message": "Validation Error",
+  "details": [
+    {
+      "field": "status",
+      "message": "Status harus berupa open, escalated, solved, atau closed"
+    }
+  ]
 }
 ```
 
-### Contoh: Token Expired (`401`)
+#### ❌ Contoh Error Tiket Tidak Ditemukan: `404 Not Found`
+```json
+{
+  "success": false,
+  "statusCode": 404,
+  "message": "Tiket dengan ID 'TICK-99999999-0000' tidak ditemukan"
+}
+```
 
+---
+
+### `POST /tickets`
+
+| Parameter | Spesifikasi |
+|:---|:---|
+| **Protokol** | **REST API** |
+| **HTTP Method** | `POST` |
+| **Endpoint Path** | `/tickets` |
+| **Autentikasi** | `Authorization: Bearer <access_token>` |
+| **Role Izin** | **Semua Role** (`ADMIN`, `COORDINATOR`, `VIEWER`) |
+
+Membuat tiket baru manual dari dashboard.
+
+#### ❌ Contoh Input Kurang Lengkap: `422 Unprocessable Entity`
+Jika tidak menyertakan kode unit atau ID failure code:
+```json
+// Request Body yang Salah:
+{
+  "damageDescription": "Lidar rusak"
+}
+
+// Response Error Server:
+{
+  "success": false,
+  "statusCode": 422,
+  "message": "Validation Error",
+  "details": [
+    {
+      "field": "unitCode",
+      "message": "Kode unit wajib disertakan"
+    },
+    {
+      "field": "componentId",
+      "message": "ID komponen wajib disertakan"
+    },
+    {
+      "field": "failureCodeId",
+      "message": "ID failure code wajib disertakan"
+    }
+  ]
+}
+```
+
+---
+
+## 7. Export Module (`/exports` & `/tickets/export`)
+
+### `GET /exports/excel` & `GET /exports/pdf`
+
+| Parameter | Spesifikasi |
+|:---|:---|
+| **Protokol** | **REST API (Binary Stream)** |
+| **HTTP Method** | `GET` |
+| **Endpoint Path** | `/exports/excel` / `/exports/pdf` |
+| **Autentikasi** | `Authorization: Bearer <access_token>` atau `?token=<access_token>` |
+| **Role Izin** | **Semua Role** (`ADMIN`, `COORDINATOR`, `VIEWER`) |
+
+Mengunduh dataset tiket dalam format binary file Excel atau PDF.
+
+#### ❌ Contoh Error Tanpa Token: `401 Unauthorized`
+```json
+{
+  "success": false,
+  "statusCode": 401,
+  "message": "Akses ditolak: Access token tidak ditemukan atau format tidak valid"
+}
+```
+
+---
+
+## 8. Audit Log Module (`/audit-logs`)
+
+### `GET /audit-logs/stream` (SSE Stream) & `GET /audit-logs` (REST API)
+
+| Parameter | Spesifikasi |
+|:---|:---|
+| **Protokol** | **Server-Sent Events (SSE)** / **REST API** |
+| **HTTP Method** | `GET` |
+| **Endpoint Path** | `/audit-logs/stream` & `/audit-logs` |
+| **Autentikasi** | `Authorization: Bearer <access_token>` atau `?token=<access_token>` |
+| **Role Izin** | **Semua Role** (`ADMIN`, `COORDINATOR`, `VIEWER`) |
+
+#### ❌ Contoh Error Token Kedaluwarsa pada Stream SSE: `401 Unauthorized`
 ```json
 {
   "success": false,
@@ -1289,3 +915,48 @@ Menghapus unit robot secara permanen.
   "message": "Access token telah kedaluwarsa"
 }
 ```
+
+---
+
+## 9. Summary & Error Analytics Modules
+
+### `GET /summary` & `GET /error-analytics`
+
+| Parameter | Spesifikasi |
+|:---|:---|
+| **Protokol** | **REST API** |
+| **HTTP Method** | `GET` |
+| **Endpoint Path** | `/summary` & `/error-analytics` |
+| **Autentikasi** | `Authorization: Bearer <access_token>` |
+| **Role Izin** | **Semua Role** (`ADMIN`, `COORDINATOR`, `VIEWER`) |
+
+#### ❌ Contoh Error Filter timeRange Tidak Valid: `422 Unprocessable Entity`
+Jika mengirim query filter `?timeRange=10tahun`:
+```json
+{
+  "success": false,
+  "statusCode": 422,
+  "message": "Validation Error",
+  "details": [
+    {
+      "field": "timeRange",
+      "message": "timeRange harus salah satu dari: 30d, 90d, 6m, all"
+    }
+  ]
+}
+```
+
+---
+
+## 10. Daftar Kode Status Error HTTP & Penjelasan
+
+| Status Code | Label Standar | Penyebab & Skenario Error | Contoh Respons JSON |
+|:---:|:---|:---|:---|
+| `400` | **Bad Request** | Body JSON sintaks salah, atau constraint foreign key melarang penghapusan data. | `{"success":false,"statusCode":400,"message":"Tidak dapat menghapus client karena masih terdapat unit terhubung"}` |
+| `401` | **Unauthorized** | Token tidak dikirim, token expired, atau kata sandi login salah. | `{"success":false,"statusCode":401,"message":"Email atau password salah. Sisa kesempatan login: 3 kali."}` |
+| `403` | **Forbidden** | Akun dinonaktifkan (`SUSPENDED`), atau peran pengguna tidak memiliki hak akses (misal Viewer mencoba buat user). | `{"success":false,"statusCode":403,"message":"Akses dilarang: Peran tidak memiliki izin yang cukup"}` |
+| `404` | **Not Found** | ID data atau endpoint URL tidak ditemukan. | `{"success":false,"statusCode":404,"message":"Pengguna dengan ID tersebut tidak ditemukan"}` |
+| `409` | **Conflict** | Terjadi duplikasi data unik (email sudah terdaftar, telegramId sudah ada). | `{"success":false,"statusCode":409,"message":"Email sudah terdaftar. Silakan gunakan email lain."}` |
+| `422` | **Unprocessable Entity** | Validasi input skema gagal (panjang kurang, format email salah, enum tidak cocok). | `{"success":false,"statusCode":422,"message":"Validation Error","details":[{"field":"email","message":"Format email tidak valid"}]}` |
+| `423` | **Locked** | Akun terkunci sementara selama 15 menit akibat 5 kali percobaan login berturut-turut gagal. | `{"success":false,"statusCode":423,"message":"Akun Anda terkunci selama 15 menit karena 5 kali percobaan login gagal."}` |
+| `500` | **Internal Server Error** | Kesalahan sistem atau database yang tidak terduga pada server backend. | `{"success":false,"statusCode":500,"message":"Terjadi kesalahan internal pada server"}` |

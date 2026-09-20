@@ -223,6 +223,11 @@ function UserModalContent({ onClose, user, onSuccess }) {
           required
         />
         {errors.email && <span style={{ color: "#ef4444", fontSize: "12px", marginTop: "4px", display: "block" }}>{errors.email}</span>}
+        {!isEdit && (
+          <small style={{ color: "var(--text-muted)", fontSize: "12px", marginTop: "4px", display: "block" }}>
+            Password awal otomatis dibuat dari nama email + <code>12345</code> (contoh: <code>bruno12345</code>)
+          </small>
+        )}
       </div>
 
       {/* Peran / Role */}

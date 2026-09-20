@@ -15,7 +15,7 @@ export default function AssetTable({ assets, loading, onEdit, onDelete }) {
 
   const renderStatusBadge = (status) => {
     const s = (status || "").toUpperCase();
-    if (s === "OPERATIONAL") {
+    if (s === "OPERATIONAL" || s === "ACTIVE") {
       return (
         <span
           style={{
@@ -31,7 +31,7 @@ export default function AssetTable({ assets, loading, onEdit, onDelete }) {
           }}
         >
           <span style={{ width: "6px", height: "6px", borderRadius: "50%", backgroundColor: "#22c55e" }} />
-          Operasional
+          {s === "ACTIVE" ? "Aktif" : "Operasional"}
         </span>
       );
     }
@@ -52,6 +52,26 @@ export default function AssetTable({ assets, loading, onEdit, onDelete }) {
         >
           <span style={{ width: "6px", height: "6px", borderRadius: "50%", backgroundColor: "#f59e0b" }} />
           Maintenance
+        </span>
+      );
+    }
+    if (s === "RETIRED" || s === "INACTIVE" || s === "NONOPERATIONAL") {
+      return (
+        <span
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "5px",
+            padding: "3px 9px",
+            borderRadius: "6px",
+            fontSize: "11px",
+            fontWeight: 600,
+            backgroundColor: "#fee2e2",
+            color: "#b91c1c",
+          }}
+        >
+          <span style={{ width: "6px", height: "6px", borderRadius: "50%", backgroundColor: "#ef4444" }} />
+          {s === "RETIRED" ? "Retired" : "Nonaktif"}
         </span>
       );
     }

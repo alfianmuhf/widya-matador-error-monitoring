@@ -38,14 +38,9 @@ export const findById = async (id) => {
   });
 };
 
-export const findByComponentAndCode = async (componentId, code) => {
+export const findByCode = async (code) => {
   return prisma.failureCode.findUnique({
-    where: {
-      componentId_code: {
-        componentId,
-        code,
-      },
-    },
+    where: { code },
   });
 };
 
@@ -85,3 +80,10 @@ export const deleteById = async (id) => {
     where: { id },
   });
 };
+
+export const countTicketsByFailureCodeId = async (failureCodeId) => {
+  return prisma.ticket.count({
+    where: { failureCodeId },
+  });
+};
+

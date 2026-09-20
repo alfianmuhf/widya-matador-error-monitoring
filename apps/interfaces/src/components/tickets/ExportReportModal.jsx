@@ -7,13 +7,16 @@ export default function ExportReportModal({ isOpen, onClose, totalTickets = 0, o
 
   if (!isOpen) return null;
 
-  const handleDownload = () => {
+  const handleDownload = async () => {
     setIsExporting(true);
-    setTimeout(() => {
-      onExport(reportFormat);
-      setIsExporting(false);
+    try {
+      await onExport(reportFormat, dateRange);
       onClose();
-    }, 500);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   return (

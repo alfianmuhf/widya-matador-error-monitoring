@@ -7,16 +7,28 @@ import { notFoundHandler, errorHandler } from "./middlewares/error.middleware.js
 
 const app = express();
 
+// Disable X-Powered-By header to prevent server fingerprinting
+app.disable("x-powered-by");
+
+// Allowed origins for CORS
+const allowedOrigins = [
+  env.FRONTEND_URL,
+  "http://localhost:5173",
+  "http://127.0.0.1:5173",
+].filter(Boolean);
+
 // Enable Cross-Origin Resource Sharing (CORS) with credentials support
 app.use(
   cors({
     origin: (origin, callback) => {
-      // Allow requests with no origin (like mobile apps, curl, postman) or matching FRONTEND_URL
-      if (!origin || origin === env.FRONTEND_URL) {
-        callback(null, true);
-      } else {
-        callback(null, true); // Alternatively allow in development: callback(null, true)
+      // Allow requests with no origin (like mobile apps, curl, postman)
+      if (!origin) return callback(null, true);
+
+      if (env.NODE_ENV === "development" || allowedOrigins.includes(origin)) {
+        return callback(null, true);
       }
+
+      callback(new Error(`Akses diblokir oleh kebijakan CORS untuk origin: ${origin}`));
     },
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
@@ -24,10 +36,10 @@ app.use(
   })
 );
 
-// Standard parsers
+// Standard parsers with body size limits to prevent DoS
 app.use(cookieParser());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: "2mb" }));
+app.use(express.urlencoded({ extended: true, limit: "2mb" }));
 
 // Base route
 app.get("/", (req, res) => {

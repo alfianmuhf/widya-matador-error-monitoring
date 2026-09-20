@@ -1,6 +1,6 @@
 import prisma from "../../config/prisma.js";
 
-export const findMany = async ({ skip = 0, take = 10, where = {}, orderBy = { createdAt: "desc" } }) => {
+export const findMany = async ({ skip = 0, take = 10, where = {}, orderBy = { unitCode: "asc" } }) => {
   return prisma.asset.findMany({
     skip,
     take,
@@ -103,3 +103,10 @@ export const deleteById = async (id) => {
     where: { id },
   });
 };
+
+export const countTicketsByUnitCode = async (unitCode) => {
+  return prisma.ticket.count({
+    where: { unitCode },
+  });
+};
+

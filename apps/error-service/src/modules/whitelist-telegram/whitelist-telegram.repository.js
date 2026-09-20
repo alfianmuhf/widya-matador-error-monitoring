@@ -1,4 +1,4 @@
-import { prisma } from "../../config/prisma.js";
+import prisma from "../../config/prisma.js";
 
 const includeWhitelistedBy = {
   whitelistedBy: {
@@ -96,4 +96,23 @@ export const deleteTelegramUser = async (id) => {
   return prisma.telegramUser.delete({
     where: { id },
   });
+};
+
+/**
+ * Count active relations / foreign keys referencing this Telegram user
+ * @param {object} user - TelegramUser entity
+ */
+export const countTelegramUserDependencies = async (user) => {
+  const [tickets, ticketHistories, auditLogs] = await Promise.all([
+    prisma.ticket.count({ where: { reporterTelegramId: user.telegramId } }),
+    prisma.ticketHistory.count({ where: { changedByTelegramId: user.telegramId } }),
+    prisma.auditLog.count({ where: { actorTelegramId: user.id } }),
+  ]);
+
+  return {
+    tickets,
+    ticketHistories,
+    auditLogs,
+    total: tickets + ticketHistories + auditLogs,
+  };
 };

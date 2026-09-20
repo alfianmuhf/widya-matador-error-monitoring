@@ -1,41 +1,6 @@
-.dashboard-page {
+/* App-level global styles / utility resets */
+#root {
   min-height: 100vh;
-  width: 100%;
   display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--bg);
-  padding: 24px;
-}
-
-.dashboard-card {
-  width: 100%;
-  max-width: 420px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 28px 24px;
-  text-align: center;
-}
-
-.dashboard-title {
-  font-size: var(--text-xl);
-  margin: 0;
-}
-
-.dashboard-role {
-  margin: 8px 0 20px;
-  font-size: var(--text-sm);
-  color: var(--muted);
-}
-
-.dashboard-logout {
-  padding: 10px 24px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  background: var(--surface);
-  color: var(--heading);
-  font-size: var(--text-sm);
-  font-weight: 600;
-  cursor: pointer;
+  flex-direction: column;
 }

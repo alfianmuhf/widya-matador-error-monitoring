@@ -1,6 +1,7 @@
 import createError from "http-errors";
 import * as assetRepo from "./asset.repository.js";
 import prisma from "../../config/prisma.js";
+import { recordLog } from "../audit-log/audit-log.service.js";
 
 export const getAssets = async (query = {}) => {
   const pageNum = parseInt(query.page, 10) || 1;
@@ -59,7 +60,7 @@ export const getAssetById = async (id) => {
   return asset;
 };
 
-export const createAsset = async (data) => {
+export const createAsset = async (data, actorUser = null) => {
   // Verifikasi Client ada
   const client = await prisma.client.findUnique({
     where: { id: data.clientId },
@@ -87,10 +88,28 @@ export const createAsset = async (data) => {
     commissioningDate: data.commissioningDate ? new Date(data.commissioningDate) : null,
   };
 
-  return assetRepo.create(formattedData);
+  const created = await assetRepo.create(formattedData);
+
+  await recordLog({
+    actor: actorUser?.email || actorUser?.name || "Sistem",
+    actorUserId: actorUser?.id || null,
+    action: "create",
+    deleteAction: "NONE",
+    entityType: "Asset",
+    entityId: created.id,
+    details: {
+      identifier: created.unitCode,
+      changeSummary: `tambah asset baru`,
+      unitCode: created.unitCode,
+      type: created.type,
+      status: created.status,
+    },
+  });
+
+  return created;
 };
 
-export const updateAsset = async (id, data) => {
+export const updateAsset = async (id, data, actorUser = null) => {
   const current = await getAssetById(id);
 
   if (data.clientId && data.clientId !== current.clientId) {
@@ -102,13 +121,15 @@ export const updateAsset = async (id, data) => {
     }
   }
 
+  let locationNameChange = null;
   if (data.locationId && data.locationId !== current.locationId) {
-    const location = await prisma.location.findUnique({
+    const newLocation = await prisma.location.findUnique({
       where: { id: data.locationId },
     });
-    if (!location) {
+    if (!newLocation) {
       throw createError(404, "Lokasi tidak ditemukan");
     }
+    locationNameChange = `lokasi: ${current.location?.name || 'Lama'} → ${newLocation.name}`;
   }
 
   if (data.unitCode && data.unitCode !== current.unitCode) {
@@ -125,10 +146,89 @@ export const updateAsset = async (id, data) => {
       : null;
   }
 
-  return assetRepo.update(id, formattedData);
+  const updated = await assetRepo.update(id, formattedData);
+
+  let changeSummary = locationNameChange;
+  if (!changeSummary) {
+    changeSummary = Object.keys(data)
+      .map((k) => `${k}: ${current[k]} → ${data[k]}`)
+      .join(", ");
+  }
+
+  await recordLog({
+    actor: actorUser?.email || actorUser?.name || "Sistem",
+    actorUserId: actorUser?.id || null,
+    action: "update",
+    deleteAction: "NONE",
+    entityType: "Asset",
+    entityId: updated.id,
+    details: {
+      identifier: updated.unitCode,
+      changeSummary: changeSummary || "pembaruan data asset",
+      before: { unitCode: current.unitCode, status: current.status },
+      after: formattedData,
+    },
+  });
+
+  return updated;
 };
 
-export const deleteAsset = async (id) => {
-  await getAssetById(id);
-  return assetRepo.deleteById(id);
+export const deleteAsset = async (id, actorUser = null) => {
+  const asset = await getAssetById(id);
+
+  // Constraint check: apakah ada tiket yang nyangkut menggunakan unitCode asset ini?
+  const ticketCount = await assetRepo.countTicketsByUnitCode(asset.unitCode);
+
+  if (ticketCount > 0) {
+    // Masih ada tiket yang terhubung -> JANGAN DI-HARD DELETE! Lakukan SOFT DELETE (nonaktifkan & RETIRED)
+    const softDeleted = await assetRepo.update(id, { isActive: false, status: "RETIRED" });
+
+    await recordLog({
+      actor: actorUser?.email || actorUser?.name || "Sistem",
+      actorUserId: actorUser?.id || null,
+      action: "delete",
+      deleteAction: "SOFT",
+      entityType: "Asset",
+      entityId: id,
+      details: {
+        identifier: asset.unitCode,
+        changeSummary: `nonaktifkan & RETIRED (terdapat ${ticketCount} tiket)`,
+        reason: `Terdapat ${ticketCount} tiket yang terhubung dengan unit code '${asset.unitCode}'. Entitas dinonaktifkan & status diubah menjadi RETIRED (Soft Delete).`,
+        ticketCount,
+        unitCode: asset.unitCode,
+      },
+    });
+
+    return {
+      asset: softDeleted,
+      deleteAction: "SOFT",
+      message: `Asset memiliki ${ticketCount} tiket terhubung, sehingga dinonaktifkan (Soft Delete & RETIRED).`,
+    };
+  }
+
+  // Tidak ada tiket yang nyangkut -> Boleh HARD DELETE
+  await assetRepo.deleteById(id);
+
+  await recordLog({
+    actor: actorUser?.email || actorUser?.name || "Sistem",
+    actorUserId: actorUser?.id || null,
+    action: "delete",
+    deleteAction: "HARD",
+    entityType: "Asset",
+    entityId: id,
+    details: {
+      identifier: asset.unitCode,
+      changeSummary: "hapus permanen",
+      reason: "Tidak ada tiket terhubung. Entitas dihapus secara permanen dari basis data.",
+      unitCode: asset.unitCode,
+    },
+  });
+
+  return {
+    asset: { id, unitCode: asset.unitCode },
+    deleteAction: "HARD",
+    message: "Asset berhasil dihapus secara permanen (Hard Delete)",
+  };
 };
+
+

@@ -5,7 +5,9 @@ import DashboardLayout from "./components/layout/DashboardLayout.jsx";
 import PenggunaWhitelist from "./pages/PenggunaWhitelist.jsx";
 import MasterData from "./pages/MasterData.jsx";
 import DaftarTiket from "./pages/DaftarTiket.jsx";
-import EmptyPage from "./components/common/EmptyPage.jsx";
+import Ringkasan from "./pages/Ringkasan.jsx";
+import AnalitikError from "./pages/AnalitikError.jsx";
+import AuditLogPage from "./pages/AuditLogPage.jsx";
 import { ProtectedRoute, PublicOnlyRoute, AdminRoute } from "./components/ProtectedRoute.jsx";
 import "./App.css";
 
@@ -33,64 +35,24 @@ export default function App() {
               </ProtectedRoute>
             }
           >
-            {/* Ringkasan — kosong, belum diimplementasi */}
-            <Route
-              index
-              element={
-                <EmptyPage
-                  icon="📊"
-                  label="Ringkasan"
-                  description="Dashboard ringkasan sistem aftersales, statistik tiket, dan status bot Telegram akan tampil di sini."
-                />
-              }
-            />
+            {/* Ringkasan */}
+            <Route index element={<Ringkasan />} />
 
-            {/* Analitik Error — kosong */}
-            <Route
-              path="analitik-error"
-              element={
-                <EmptyPage
-                  icon="🔍"
-                  label="Analitik Error"
-                  description="Grafik dan analisis error ROS secara rinci termasuk tren dan distribusi kategori akan tampil di sini."
-                />
-              }
-            />
+            {/* Analitik Error */}
+            <Route path="analitik-error" element={<AnalitikError />} />
 
             {/* Menu Daftar Tiket */}
             <Route path="daftar-tiket" element={<DaftarTiket />} />
 
-            {/* Master Data — khusus ADMIN & COORDINATOR */}
-            <Route
-              path="master-data"
-              element={
-                <ProtectedRoute allowedRoles={["ADMIN", "COORDINATOR"]}>
-                  <MasterData />
-                </ProtectedRoute>
-              }
-            />
+            {/* Master Data — semua role */}
+            <Route path="master-data" element={<MasterData />} />
 
-            {/* Pengguna & Whitelist — hanya untuk admin */}
-            <Route
-              path="pengguna-whitelist"
-              element={
-                <AdminRoute>
-                  <PenggunaWhitelist />
-                </AdminRoute>
-              }
-            />
+            {/* Pengguna & Whitelist — dapat dilihat semua role, create/manage khusus ADMIN & COORDINATOR */}
+            <Route path="pengguna-whitelist" element={<PenggunaWhitelist />} />
 
-            {/* Audit Log — kosong */}
-            <Route
-              path="audit-log"
-              element={
-                <EmptyPage
-                  icon="📋"
-                  label="Audit Log"
-                  description="Rekam jejak seluruh aktivitas dan perubahan pada sistem akan tampil di sini."
-                />
-              }
-            />
+            {/* Audit Log — semua role dapat melihat */}
+            <Route path="audit-log" element={<AuditLogPage />} />
+
           </Route>
 
           {/* Catch-all redirect */}

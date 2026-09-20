@@ -180,9 +180,8 @@ export const deleteUser = async (id) => {
       data: { whitelistedById: null },
     });
 
-    // 3. Delete related refresh tokens & password reset tokens
+    // 3. Delete related refresh tokens
     await tx.refreshToken.deleteMany({ where: { userId: id } });
-    await tx.passwordResetToken.deleteMany({ where: { userId: id } });
 
     // 4. Delete the user
     return tx.user.delete({
@@ -190,4 +189,26 @@ export const deleteUser = async (id) => {
     });
   });
 };
+
+/**
+ * Count active relations / foreign keys that reference this user
+ * @param {string} userId
+ */
+export const countUserDependencies = async (userId) => {
+  const [tickets, ticketHistories, exportJobs, auditLogs] = await Promise.all([
+    prisma.ticket.count({ where: { reporterUserId: userId } }),
+    prisma.ticketHistory.count({ where: { changedByUserId: userId } }),
+    prisma.exportJob.count({ where: { requestedByUserId: userId } }),
+    prisma.auditLog.count({ where: { actorUserId: userId } }),
+  ]);
+
+  return {
+    tickets,
+    ticketHistories,
+    exportJobs,
+    auditLogs,
+    total: tickets + ticketHistories + exportJobs + auditLogs,
+  };
+};
+
 

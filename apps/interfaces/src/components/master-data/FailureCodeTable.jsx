@@ -111,7 +111,9 @@ export default function FailureCodeTable({ failureCodes, loading, onEdit, onDele
                         alignItems: "center",
                         justifyContent: "center",
                         color: "var(--text-muted)",
-                        transition: "all 0.15s ease",
+                        transition: "border-color 0.15s ease, color 0.15s ease",
+                        outline: "none",
+                        transform: "none",
                       }}
                       onMouseEnter={(e) => {
                         e.currentTarget.style.color = "var(--primary-teal)";
@@ -141,7 +143,9 @@ export default function FailureCodeTable({ failureCodes, loading, onEdit, onDele
                         alignItems: "center",
                         justifyContent: "center",
                         color: "#ef4444",
-                        transition: "all 0.15s ease",
+                        transition: "border-color 0.15s ease, color 0.15s ease, background-color 0.15s ease",
+                        outline: "none",
+                        transform: "none",
                       }}
                       onMouseEnter={(e) => {
                         e.currentTarget.style.backgroundColor = "#fef2f2";

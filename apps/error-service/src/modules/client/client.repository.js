@@ -60,3 +60,9 @@ export const countAssetsByClientId = async (clientId) => {
     where: { clientId },
   });
 };
+
+export const countTelegramGroupsByClientId = async (clientId) => {
+  return prisma.telegramGroup.count({
+    where: { clientId },
+  });
+};

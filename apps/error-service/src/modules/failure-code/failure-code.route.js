@@ -13,35 +13,31 @@ const router = Router();
 // Seluruh endpoint Failure Code wajib terautentikasi (Access Token)
 router.use(authenticate);
 
-// Read (GET all & GET by ID) — dapat diakses oleh ADMIN, COORDINATOR, VIEWER
+// Read (GET all & GET by ID) — dapat diakses oleh semua role
 router.get("/", validate(queryFailureCodeSchema, "query"), failureCodeController.getFailureCodes);
 router.get("/:id", failureCodeController.getFailureCodeById);
 
-// Create, Update, Delete — khusus role ADMIN & COORDINATOR
+// Create, Update, Delete — dapat diakses oleh semua role
 router.post(
   "/",
-  authorize("ADMIN", "COORDINATOR"),
   validate(createFailureCodeSchema, "body"),
   failureCodeController.createFailureCode
 );
 
 router.patch(
   "/:id",
-  authorize("ADMIN", "COORDINATOR"),
   validate(updateFailureCodeSchema, "body"),
   failureCodeController.updateFailureCode
 );
 
 router.put(
   "/:id",
-  authorize("ADMIN", "COORDINATOR"),
   validate(updateFailureCodeSchema, "body"),
   failureCodeController.updateFailureCode
 );
 
 router.delete(
   "/:id",
-  authorize("ADMIN", "COORDINATOR"),
   failureCodeController.deleteFailureCode
 );
 

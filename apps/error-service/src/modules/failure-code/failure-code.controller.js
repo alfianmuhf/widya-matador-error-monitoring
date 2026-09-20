@@ -28,7 +28,7 @@ export const getFailureCodeById = async (req, res, next) => {
 
 export const createFailureCode = async (req, res, next) => {
   try {
-    const failureCode = await failureCodeService.createFailureCode(req.body);
+    const failureCode = await failureCodeService.createFailureCode(req.body, req.user);
     res.status(201).json({
       status: "success",
       message: "Failure code berhasil ditambahkan",
@@ -41,7 +41,7 @@ export const createFailureCode = async (req, res, next) => {
 
 export const updateFailureCode = async (req, res, next) => {
   try {
-    const failureCode = await failureCodeService.updateFailureCode(req.params.id, req.body);
+    const failureCode = await failureCodeService.updateFailureCode(req.params.id, req.body, req.user);
     res.status(200).json({
       status: "success",
       message: "Failure code berhasil diperbarui",
@@ -54,12 +54,14 @@ export const updateFailureCode = async (req, res, next) => {
 
 export const deleteFailureCode = async (req, res, next) => {
   try {
-    await failureCodeService.deleteFailureCode(req.params.id);
+    const result = await failureCodeService.deleteFailureCode(req.params.id, req.user);
     res.status(200).json({
       status: "success",
-      message: "Failure code berhasil dihapus",
+      message: result.message,
+      data: result,
     });
   } catch (error) {
     next(error);
   }
 };
+

@@ -18,33 +18,22 @@ export default function TicketDetailDrawer({
 
   if (!ticket) return null;
 
-  const handleSave = () => {
+  const handleSave = async () => {
     setSaving(true);
-    setTimeout(() => {
-      const now = new Date();
-      const timeStr = `${String(now.getDate()).padStart(2, "0")} Sep ${now.getFullYear()}, ${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
-
-      const newHistoryItem = {
-        action: `Status diubah ke ${selectedStatus}${handlingNote ? `: "${handlingNote}"` : ""}`,
-        timestamp: timeStr,
-        author: "Admin ERAD",
-        type: "update",
-      };
-
-      const updatedTicket = {
-        ...ticket,
-        status: selectedStatus,
-        handling: handlingNote || ticket.handling,
-        history: [newHistoryItem, ...(ticket.history || [])],
-      };
-
-      onUpdateTicket(updatedTicket);
-      setSaving(false);
+    try {
+      await onUpdateTicket(ticket.id, {
+        status: selectedStatus.toLowerCase(),
+        handlingNote: handlingNote.trim() || undefined,
+      });
       setHandlingNote("");
-    }, 250);
+    } catch (err) {
+      console.error("Failed to update ticket:", err);
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const statusOptions = ["Open", "Monitor", "Solved", "Closed"];
+  const statusOptions = ["Open", "Escalated", "Solved", "Closed"];
 
   const getStatusButtonColors = (st, isCurrent) => {
     if (!isCurrent) {
@@ -61,6 +50,7 @@ export default function TicketDetailDrawer({
           backgroundColor: "#fef2f2",
           color: "#dc2626",
         };
+      case "Escalated":
       case "Monitor":
         return {
           border: "1px solid #d97706",

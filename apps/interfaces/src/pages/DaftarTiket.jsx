@@ -1,12 +1,15 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import TicketFilterBar from "../components/tickets/TicketFilterBar.jsx";
 import TicketTable from "../components/tickets/TicketTable.jsx";
 import TicketDetailDrawer from "../components/tickets/TicketDetailDrawer.jsx";
 import ExportReportModal from "../components/tickets/ExportReportModal.jsx";
-import { INITIAL_TICKETS } from "../data/mockTickets.js";
+import api from "../lib/api.js";
+import { useAuth } from "../context/AuthContext.jsx";
 
 export default function DaftarTiket() {
-  const [tickets, setTickets] = useState(INITIAL_TICKETS);
+  const { accessToken } = useAuth();
+  const [tickets, setTickets] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [selectedTicket, setSelectedTicket] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [timeRange, setTimeRange] = useState("6m");
@@ -20,6 +23,96 @@ export default function DaftarTiket() {
 
   const itemsPerPage = 10;
 
+  const showToast = (msg) => {
+    setToastMessage(msg);
+    setTimeout(() => {
+      setToastMessage(null);
+    }, 3500);
+  };
+
+  // Fetch tickets from Backend API
+  const fetchTickets = useCallback(async () => {
+    try {
+      setLoading(true);
+      const res = await api.get("/tickets", {
+        params: {
+          limit: 500, // fetch all tickets for interactive filtering and pagination
+        },
+      });
+      const data = res.data?.data || [];
+      setTickets(data);
+    } catch (err) {
+      console.error("Failed to fetch tickets:", err);
+      showToast("Gagal memuat data tiket dari server.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchTickets();
+  }, [fetchTickets]);
+
+  // Real-time updates via Server-Sent Events (SSE)
+  useEffect(() => {
+    if (!accessToken) return;
+
+    const baseURL = import.meta.env.VITE_API_BASE_URL || "http://localhost:3000";
+    const sseUrl = `${baseURL}/tickets/stream?token=${encodeURIComponent(accessToken)}`;
+    const eventSource = new EventSource(sseUrl);
+
+    eventSource.addEventListener("init", () => {
+      // Connected to SSE stream
+    });
+
+    eventSource.addEventListener("ticket_updated", (event) => {
+      try {
+        const updated = JSON.parse(event.data);
+        setTickets((prev) =>
+          prev.map((t) => (t.id === updated.id ? updated : t))
+        );
+        setSelectedTicket((prev) => (prev?.id === updated.id ? updated : prev));
+        showToast(`Tiket ${updated.id} diperbarui via real-time`);
+      } catch (err) {
+        console.error("Error parsing ticket_updated SSE:", err);
+      }
+    });
+
+    eventSource.addEventListener("ticket_created", (event) => {
+      try {
+        const created = JSON.parse(event.data);
+        setTickets((prev) => [created, ...prev.filter((t) => t.id !== created.id)]);
+        showToast(`Tiket baru masuk: ${created.id}`);
+      } catch (err) {
+        console.error("Error parsing ticket_created SSE:", err);
+      }
+    });
+
+    eventSource.addEventListener("ticket_comment_added", (event) => {
+      try {
+        const { ticketId } = JSON.parse(event.data);
+        // Refresh ticket detail if currently opened
+        api.get(`/tickets/${ticketId}`).then((res) => {
+          const fresh = res.data?.data;
+          if (fresh) {
+            setTickets((prev) => prev.map((t) => (t.id === ticketId ? fresh : t)));
+            setSelectedTicket((prev) => (prev?.id === ticketId ? fresh : prev));
+          }
+        }).catch(() => {});
+      } catch (err) {
+        console.error("Error parsing ticket_comment_added SSE:", err);
+      }
+    });
+
+    eventSource.onerror = () => {
+      // EventSource auto-reconnects automatically on connection drops
+    };
+
+    return () => {
+      eventSource.close();
+    };
+  }, [accessToken]);
+
   // Listen to header export button event
   useEffect(() => {
     const handleHeaderExport = () => {
@@ -28,13 +121,6 @@ export default function DaftarTiket() {
     window.addEventListener("export-laporan-modal", handleHeaderExport);
     return () => window.removeEventListener("export-laporan-modal", handleHeaderExport);
   }, []);
-
-  const showToast = (msg) => {
-    setToastMessage(msg);
-    setTimeout(() => {
-      setToastMessage(null);
-    }, 3500);
-  };
 
   // Distinct filter options extracted from tickets
   const { components, clients, locations } = useMemo(() => {
@@ -50,10 +136,10 @@ export default function DaftarTiket() {
       // Search match
       if (searchTerm) {
         const query = searchTerm.toLowerCase();
-        const matchId = t.id.toLowerCase().includes(query);
-        const matchUnit = t.unit.toLowerCase().includes(query);
-        const matchComponent = t.component.toLowerCase().includes(query);
-        const matchClient = t.client.toLowerCase().includes(query);
+        const matchId = t.id?.toLowerCase().includes(query);
+        const matchUnit = t.unit?.toLowerCase().includes(query);
+        const matchComponent = t.component?.toLowerCase().includes(query);
+        const matchClient = t.client?.toLowerCase().includes(query);
         const matchFailure = t.failureCode?.toLowerCase().includes(query);
         if (!matchId && !matchUnit && !matchComponent && !matchClient && !matchFailure) {
           return false;
@@ -64,7 +150,11 @@ export default function DaftarTiket() {
       if (selectedComponent && t.component !== selectedComponent) return false;
       if (selectedClient && t.client !== selectedClient) return false;
       if (selectedLocation && t.location !== selectedLocation) return false;
-      if (selectedStatus && t.status !== selectedStatus) return false;
+      if (selectedStatus) {
+        const queryStatus = selectedStatus.toLowerCase();
+        const itemStatus = (t.status || "").toLowerCase();
+        if (itemStatus !== queryStatus) return false;
+      }
 
       return true;
     });
@@ -77,38 +167,101 @@ export default function DaftarTiket() {
     return filteredTickets.slice(start, start + itemsPerPage);
   }, [filteredTickets, currentPage]);
 
-  const handleUpdateTicket = (updated) => {
-    setTickets((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
-    setSelectedTicket(updated);
-    showToast(`Status tiket ${updated.id} berhasil diperbarui.`);
+  // Handle select ticket: fetch fresh detail with history
+  const handleSelectTicket = async (t) => {
+    setSelectedTicket(t);
+    try {
+      const res = await api.get(`/tickets/${t.id}`);
+      if (res.data?.data) {
+        setSelectedTicket(res.data.data);
+      }
+    } catch {
+      // fallback to selected item
+    }
   };
 
-  const handleExportDownload = (format) => {
-    // Generate CSV data for demonstration
-    const headers = ["Ticket ID", "Unit", "Client", "Component", "Failure Code", "Severity", "Status", "Tanggal"];
-    const rows = filteredTickets.map((t) => [
-      t.id,
-      t.unit,
-      `"${t.client}"`,
-      `"${t.component}"`,
-      t.failureCode,
-      t.severity,
-      t.status,
-      t.createdDateText,
-    ]);
-    const csvContent = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+  // Handle update status / comment via Backend API
+  const handleUpdateTicket = async (ticketId, payload) => {
+    try {
+      const res = await api.patch(`/tickets/${ticketId}`, payload);
+      const updated = res.data?.data;
+      if (updated) {
+        setTickets((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
+        setSelectedTicket(updated);
+        showToast(`Status tiket ${updated.id} berhasil diperbarui.`);
+        return updated;
+      }
+    } catch (err) {
+      console.error("Error updating ticket:", err);
+      const msg = err.response?.data?.message || "Gagal memperbarui tiket.";
+      showToast(msg);
+      throw err;
+    }
+  };
 
-    const blob = new Blob([csvContent], { type: format === "pdf" ? "application/pdf" : "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.setAttribute("download", `laporan-tiket-aftersales-${format}.${format === "pdf" ? "pdf" : "csv"}`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+  const handleExportDownload = async (format, customDateRange = null) => {
+    try {
+      const isPdf = String(format || "").toLowerCase().includes("pdf");
+      const ext = isPdf ? "pdf" : "xlsx";
+      const endpoint = isPdf ? "/tickets/export/pdf" : "/tickets/export/excel";
 
-    showToast(`Laporan format ${format.toUpperCase()} berhasil diekspor.`);
+      showToast(`Menyiapkan file ${ext.toUpperCase()} dari server...`);
+
+      const params = {};
+      if (searchTerm) params.search = searchTerm;
+      if (selectedStatus) params.status = selectedStatus.toLowerCase();
+      if (selectedComponent) {
+        const comp = tickets.find((t) => t.component === selectedComponent);
+        if (comp?.componentId) params.componentId = comp.componentId;
+      }
+      if (selectedClient) {
+        const cl = tickets.find((t) => t.client === selectedClient);
+        if (cl?.clientId) params.clientId = cl.clientId;
+      }
+      if (selectedLocation) {
+        const loc = tickets.find((t) => t.location === selectedLocation);
+        if (loc?.locationId) params.locationId = loc.locationId;
+      }
+
+      // Handle date range
+      const range = customDateRange || timeRange;
+      const now = new Date();
+      if (range === "30hari" || range === "30d") {
+        const d = new Date(now.getTime() - 30 * 24 * 3600000);
+        params.startDate = d.toISOString();
+      } else if (range === "90hari" || range === "90d") {
+        const d = new Date(now.getTime() - 90 * 24 * 3600000);
+        params.startDate = d.toISOString();
+      } else if (range === "6bulan" || range === "6m") {
+        const d = new Date(now.getTime() - 180 * 24 * 3600000);
+        params.startDate = d.toISOString();
+      }
+
+      const res = await api.get(endpoint, {
+        params,
+        responseType: "blob",
+      });
+
+      const blob = new Blob([res.data], {
+        type: isPdf
+          ? "application/pdf"
+          : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      const dateStr = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}`;
+      link.setAttribute("download", `laporan-tiket-erad-${dateStr}.${ext}`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      showToast(`Laporan ${ext.toUpperCase()} berhasil diunduh!`);
+    } catch (err) {
+      console.error("Export download failed:", err);
+      showToast("Gagal mengunduh dokumen laporan.");
+    }
   };
 
   return (
@@ -165,7 +318,7 @@ export default function DaftarTiket() {
         totalTickets={filteredTickets.length}
         searchTerm={searchTerm}
         setSearchTerm={setSearchTerm}
-        onSelectTicket={(ticket) => setSelectedTicket(ticket)}
+        onSelectTicket={handleSelectTicket}
         selectedTicketId={selectedTicket?.id}
         onExportExcel={() => handleExportDownload("xlsx")}
         onExportPdf={() => handleExportDownload("pdf")}
@@ -173,6 +326,7 @@ export default function DaftarTiket() {
         totalPages={totalPages}
         onPrevPage={() => setCurrentPage((p) => Math.max(1, p - 1))}
         onNextPage={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+        loading={loading}
       />
 
       {/* Detail Slideout Drawer */}

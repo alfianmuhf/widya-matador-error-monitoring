@@ -13,6 +13,7 @@ export default function TicketTable({
   totalPages = 1,
   onPrevPage,
   onNextPage,
+  loading = false,
 }) {
   const [sortAsc, setSortAsc] = useState(false);
 
@@ -20,6 +21,7 @@ export default function TicketTable({
   const renderStatusBadge = (status) => {
     switch (status) {
       case "Open":
+      case "open":
         return (
           <span
             style={{
@@ -41,6 +43,8 @@ export default function TicketTable({
             Open
           </span>
         );
+      case "Escalated":
+      case "escalated":
       case "Monitor":
         return (
           <span
@@ -61,10 +65,11 @@ export default function TicketTable({
               <circle cx="12" cy="12" r="10" />
               <polyline points="12 6 12 12 16 14" />
             </svg>
-            Monitor
+            Escalated
           </span>
         );
       case "Solved":
+      case "solved":
         return (
           <span
             style={{
@@ -335,7 +340,13 @@ export default function TicketTable({
             </tr>
           </thead>
           <tbody>
-            {tickets.length === 0 ? (
+            {loading ? (
+              <tr>
+                <td colSpan="8" style={{ padding: "50px", textAlign: "center", color: "var(--text-muted)" }}>
+                  Memuat data tiket dari server...
+                </td>
+              </tr>
+            ) : tickets.length === 0 ? (
               <tr>
                 <td colSpan="8" style={{ padding: "50px", textAlign: "center", color: "var(--text-muted)" }}>
                   Tidak ada tiket yang sesuai dengan filter pencarian.

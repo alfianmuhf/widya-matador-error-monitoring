@@ -28,7 +28,7 @@ export const getLocationById = async (req, res, next) => {
 
 export const createLocation = async (req, res, next) => {
   try {
-    const location = await locationService.createLocation(req.body);
+    const location = await locationService.createLocation(req.body, req.user);
     res.status(201).json({
       status: "success",
       message: "Lokasi berhasil ditambahkan",
@@ -41,7 +41,7 @@ export const createLocation = async (req, res, next) => {
 
 export const updateLocation = async (req, res, next) => {
   try {
-    const location = await locationService.updateLocation(req.params.id, req.body);
+    const location = await locationService.updateLocation(req.params.id, req.body, req.user);
     res.status(200).json({
       status: "success",
       message: "Lokasi berhasil diperbarui",
@@ -54,12 +54,14 @@ export const updateLocation = async (req, res, next) => {
 
 export const deleteLocation = async (req, res, next) => {
   try {
-    await locationService.deleteLocation(req.params.id);
+    const result = await locationService.deleteLocation(req.params.id, req.user);
     res.status(200).json({
       status: "success",
-      message: "Lokasi berhasil dihapus",
+      message: result.message,
+      data: result,
     });
   } catch (error) {
     next(error);
   }
 };
+

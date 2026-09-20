@@ -28,7 +28,7 @@ export const getClientById = async (req, res, next) => {
 
 export const createClient = async (req, res, next) => {
   try {
-    const client = await clientService.createClient(req.body);
+    const client = await clientService.createClient(req.body, req.user);
     res.status(201).json({
       status: "success",
       message: "Client berhasil ditambahkan",
@@ -41,7 +41,7 @@ export const createClient = async (req, res, next) => {
 
 export const updateClient = async (req, res, next) => {
   try {
-    const client = await clientService.updateClient(req.params.id, req.body);
+    const client = await clientService.updateClient(req.params.id, req.body, req.user);
     res.status(200).json({
       status: "success",
       message: "Client berhasil diperbarui",
@@ -54,12 +54,14 @@ export const updateClient = async (req, res, next) => {
 
 export const deleteClient = async (req, res, next) => {
   try {
-    await clientService.deleteClient(req.params.id);
+    const result = await clientService.deleteClient(req.params.id, req.user);
     res.status(200).json({
       status: "success",
-      message: "Client berhasil dihapus",
+      message: result.message,
+      data: result,
     });
   } catch (error) {
     next(error);
   }
 };
+

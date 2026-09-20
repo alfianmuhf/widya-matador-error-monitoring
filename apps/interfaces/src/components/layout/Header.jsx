@@ -6,11 +6,11 @@ import ChangePasswordModal from "../common/ChangePasswordModal.jsx";
 // Map route path ke judul & subtitle
 const PAGE_META = {
   "/": { title: "Ringkasan", subtitle: "Ringkasan dan status keseluruhan sistem aftersales" },
-  "/analitik-error": { title: "Analitik Error", subtitle: "Analisis dan statistik error ROS secara rinci" },
+  "/analitik-error": { title: "Analitik Error", subtitle: "Distribusi kegagalan per component, failure code, dan unit" },
   "/daftar-tiket": { title: "Daftar Tiket", subtitle: "Telusuri, filter, dan tindak lanjuti tiket error" },
   "/master-data": { title: "Master Data", subtitle: "Pengelolaan data referensi dan konfigurasi sistem" },
   "/pengguna-whitelist": { title: "Pengguna & Whitelist", subtitle: "Akun dashboard dan pengguna bot Telegram" },
-  "/audit-log": { title: "Audit Log", subtitle: "Rekam jejak aktivitas dan perubahan dalam sistem" },
+  "/audit-log": { title: "Audit Log", subtitle: "Jejak seluruh perubahan data pada sistem" },
 };
 
 // Modal konfirmasi logout
@@ -203,7 +203,7 @@ export default function Header() {
 
         {/* Right Area: Export Action + User Profile */}
         <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-          {location.pathname === "/daftar-tiket" && (
+          {(location.pathname === "/daftar-tiket" || location.pathname === "/analitik-error") && (
             <button
               type="button"
               id="header-export-btn"
@@ -223,7 +223,9 @@ export default function Header() {
                 fontWeight: 600,
                 cursor: "pointer",
                 boxShadow: "0 1px 3px rgba(0, 0, 0, 0.05)",
-                transition: "all 0.15s ease",
+                transition: "border-color 0.15s ease, background-color 0.15s ease",
+                outline: "none",
+                transform: "none",
               }}
               onMouseEnter={(e) => {
                 e.currentTarget.style.borderColor = "var(--primary-teal)";
@@ -258,8 +260,10 @@ export default function Header() {
               border: isAccountMenuOpen ? "1px solid var(--primary-teal)" : "1px solid var(--border-light)",
               backgroundColor: isAccountMenuOpen ? "var(--surface-card)" : "#ffffff",
               boxShadow: "0 1px 3px rgba(0, 0, 0, 0.05)",
-              transition: "all 0.15s ease",
+              transition: "border-color 0.15s ease, background-color 0.15s ease",
               userSelect: "none",
+              outline: "none",
+              transform: "none",
             }}
             onMouseEnter={(e) => {
               if (!isAccountMenuOpen) e.currentTarget.style.borderColor = "var(--primary-teal)";
@@ -450,8 +454,10 @@ export default function Header() {
                     fontWeight: 500,
                     color: "var(--text-dark)",
                     cursor: "pointer",
-                    transition: "all 0.15s ease",
+                    transition: "background-color 0.15s ease, color 0.15s ease",
                     textAlign: "left",
+                    outline: "none",
+                    transform: "none",
                   }}
                   onMouseEnter={(e) => {
                     e.currentTarget.style.backgroundColor = "var(--surface-hover)";
@@ -507,8 +513,10 @@ export default function Header() {
                     fontWeight: 500,
                     color: "#dc2626",
                     cursor: "pointer",
-                    transition: "all 0.15s ease",
+                    transition: "background-color 0.15s ease",
                     textAlign: "left",
+                    outline: "none",
+                    transform: "none",
                   }}
                   onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#fef2f2")}
                   onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}

@@ -93,15 +93,25 @@ export default function ComponentTable({ components, loading, onEdit, onDelete }
                 <td style={{ padding: "14px 16px" }}>
                   <span
                     style={{
-                      display: "inline-block",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "5px",
                       padding: "3px 9px",
                       borderRadius: "6px",
                       fontSize: "11px",
                       fontWeight: 600,
-                      backgroundColor: item.isActive ? "var(--badge-active-bg)" : "var(--badge-inactive-bg)",
-                      color: item.isActive ? "var(--badge-active-text)" : "var(--badge-inactive-text)",
+                      backgroundColor: item.isActive ? "#dcfce7" : "#fee2e2",
+                      color: item.isActive ? "#15803d" : "#b91c1c",
                     }}
                   >
+                    <span
+                      style={{
+                        width: "6px",
+                        height: "6px",
+                        borderRadius: "50%",
+                        backgroundColor: item.isActive ? "#22c55e" : "#ef4444",
+                      }}
+                    />
                     {item.isActive ? "Aktif" : "Nonaktif"}
                   </span>
                 </td>

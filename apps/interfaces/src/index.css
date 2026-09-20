@@ -42,6 +42,14 @@
   --status-active-text: #166534;
   --status-suspended-dot: #dc2626;
   --status-suspended-text: #991b1b;
+
+  /* Badge Colors */
+  --badge-active-bg: #dcfce7;
+  --badge-active-text: #15803d;
+  --badge-active-dot: #22c55e;
+  --badge-inactive-bg: #fee2e2;
+  --badge-inactive-text: #b91c1c;
+  --badge-inactive-dot: #ef4444;
   
   /* Typography */
   --sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;

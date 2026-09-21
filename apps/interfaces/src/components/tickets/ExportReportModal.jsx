@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-export default function ExportReportModal({ isOpen, onClose, totalTickets = 0, onExport }) {
+export default function ExportReportModal({ isOpen, onClose, totalTickets = 0, onExport, onDownload }) {
   const [reportFormat, setReportFormat] = useState("excel");
   const [dateRange, setDateRange] = useState("6bulan");
   const [isExporting, setIsExporting] = useState(false);
@@ -10,7 +10,10 @@ export default function ExportReportModal({ isOpen, onClose, totalTickets = 0, o
   const handleDownload = async () => {
     setIsExporting(true);
     try {
-      await onExport(reportFormat, dateRange);
+      const action = onExport || onDownload;
+      if (typeof action === "function") {
+        await action(reportFormat, dateRange);
+      }
       onClose();
     } catch (err) {
       console.error(err);
@@ -68,7 +71,7 @@ export default function ExportReportModal({ isOpen, onClose, totalTickets = 0, o
         </div>
 
         <p style={{ fontSize: "var(--text-sm)", color: "var(--text-muted)", marginBottom: "18px", lineHeight: 1.4 }}>
-          Ekspor rekapitulasi data tiket aftersales ({totalTickets} tiket) ke dalam format dokumen yang Anda pilih.
+          Ekspor rekapitulasi data tiket aftersales{totalTickets > 0 ? ` (${totalTickets} tiket)` : ""} ke dalam format dokumen yang Anda pilih.
         </p>
 
         {/* Format Selection */}

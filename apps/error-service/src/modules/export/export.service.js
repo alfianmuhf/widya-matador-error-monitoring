@@ -188,6 +188,7 @@ export const generateTicketsPdf = async (tickets = [], meta = {}) => {
         size: "A4",
         layout: "landscape",
         margin: 30,
+        bufferPages: true,
         info: {
           Title: "Laporan Rekapitulasi Tiket - ERAD",
           Author: "ERAD Aftersales System",
@@ -298,15 +299,15 @@ export const generateTicketsPdf = async (tickets = [], meta = {}) => {
           .font("Helvetica")
           .text("Tidak ada tiket yang ditemukan.", 30, yPos + 10, { align: "center", width: pageWidth });
       } else {
+        const rowHeight = 24;
         tickets.forEach((t, i) => {
           // Check page break
-          if (yPos > 520) {
+          if (yPos + rowHeight > 535) {
             doc.addPage({ size: "A4", layout: "landscape", margin: 30 });
             yPos = 30;
             yPos = drawTableHeader(yPos);
           }
 
-          const rowHeight = 24;
           const bg = i % 2 === 1 ? "#f8fafc" : "#ffffff";
           doc.rect(30, yPos, pageWidth, rowHeight).fill(bg).stroke("#e2e8f0");
 
@@ -368,11 +369,12 @@ export const generateTicketsPdf = async (tickets = [], meta = {}) => {
           .text(
             `Dokumen dibuat otomatis oleh ERAD System | Halaman ${i + 1} dari ${range.count}`,
             30,
-            570,
-            { align: "center", width: pageWidth }
+            548,
+            { align: "center", width: pageWidth, lineBreak: false }
           );
       }
 
+      doc.flushPages();
       doc.end();
     } catch (error) {
       reject(error);

@@ -3,6 +3,7 @@ import TicketFilterBar from "../components/tickets/TicketFilterBar.jsx";
 import TicketTable from "../components/tickets/TicketTable.jsx";
 import TicketDetailDrawer from "../components/tickets/TicketDetailDrawer.jsx";
 import ExportReportModal from "../components/tickets/ExportReportModal.jsx";
+import { downloadTicketReport } from "../lib/exportReport.js";
 import api from "../lib/api.js";
 import { useAuth } from "../context/AuthContext.jsx";
 
@@ -200,68 +201,34 @@ export default function DaftarTiket() {
   };
 
   const handleExportDownload = async (format, customDateRange = null) => {
-    try {
-      const isPdf = String(format || "").toLowerCase().includes("pdf");
-      const ext = isPdf ? "pdf" : "xlsx";
-      const endpoint = isPdf ? "/tickets/export/pdf" : "/tickets/export/excel";
-
-      showToast(`Menyiapkan file ${ext.toUpperCase()} dari server...`);
-
-      const params = {};
-      if (searchTerm) params.search = searchTerm;
-      if (selectedStatus) params.status = selectedStatus.toLowerCase();
-      if (selectedComponent) {
-        const comp = tickets.find((t) => t.component === selectedComponent);
-        if (comp?.componentId) params.componentId = comp.componentId;
-      }
-      if (selectedClient) {
-        const cl = tickets.find((t) => t.client === selectedClient);
-        if (cl?.clientId) params.clientId = cl.clientId;
-      }
-      if (selectedLocation) {
-        const loc = tickets.find((t) => t.location === selectedLocation);
-        if (loc?.locationId) params.locationId = loc.locationId;
-      }
-
-      // Handle date range
-      const range = customDateRange || timeRange;
-      const now = new Date();
-      if (range === "30hari" || range === "30d") {
-        const d = new Date(now.getTime() - 30 * 24 * 3600000);
-        params.startDate = d.toISOString();
-      } else if (range === "90hari" || range === "90d") {
-        const d = new Date(now.getTime() - 90 * 24 * 3600000);
-        params.startDate = d.toISOString();
-      } else if (range === "6bulan" || range === "6m") {
-        const d = new Date(now.getTime() - 180 * 24 * 3600000);
-        params.startDate = d.toISOString();
-      }
-
-      const res = await api.get(endpoint, {
-        params,
-        responseType: "blob",
-      });
-
-      const blob = new Blob([res.data], {
-        type: isPdf
-          ? "application/pdf"
-          : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      const dateStr = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}`;
-      link.setAttribute("download", `laporan-tiket-erad-${dateStr}.${ext}`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-
-      showToast(`Laporan ${ext.toUpperCase()} berhasil diunduh!`);
-    } catch (err) {
-      console.error("Export download failed:", err);
-      showToast("Gagal mengunduh dokumen laporan.");
+    let compId = undefined;
+    if (selectedComponent) {
+      const comp = tickets.find((t) => t.component === selectedComponent);
+      if (comp?.componentId) compId = comp.componentId;
     }
+    let clId = undefined;
+    if (selectedClient) {
+      const cl = tickets.find((t) => t.client === selectedClient);
+      if (cl?.clientId) clId = cl.clientId;
+    }
+    let locId = undefined;
+    if (selectedLocation) {
+      const loc = tickets.find((t) => t.location === selectedLocation);
+      if (loc?.locationId) locId = loc.locationId;
+    }
+
+    await downloadTicketReport(
+      format,
+      customDateRange || timeRange,
+      {
+        search: searchTerm,
+        status: selectedStatus,
+        componentId: compId,
+        clientId: clId,
+        locationId: locId,
+      },
+      showToast
+    );
   };
 
   return (

@@ -203,7 +203,7 @@ export default function Header() {
 
         {/* Right Area: Export Action + User Profile */}
         <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-          {(location.pathname === "/daftar-tiket" || location.pathname === "/analitik-error") && (
+          {(location.pathname === "/" || location.pathname === "/ringkasan" || location.pathname === "/daftar-tiket" || location.pathname === "/analitik-error") && (
             <button
               type="button"
               id="header-export-btn"

@@ -3,6 +3,7 @@ import ReactECharts from "echarts-for-react";
 import { useAuth } from "../context/AuthContext.jsx";
 import api from "../lib/api.js";
 import ExportReportModal from "../components/tickets/ExportReportModal.jsx";
+import { downloadTicketReport } from "../lib/exportReport.js";
 
 const TIME_RANGES = [
   { id: "30d", label: "30 hari" },
@@ -89,62 +90,17 @@ export default function AnalitikError() {
   }, []);
 
   const handleExportDownload = async (format, customDateRange = null) => {
-    try {
-      const isPdf = String(format || "").toLowerCase().includes("pdf");
-      const ext = isPdf ? "pdf" : "xlsx";
-      const endpoint = isPdf ? "/tickets/export/pdf" : "/tickets/export/excel";
-
-      showToast(`Menyiapkan file ${ext.toUpperCase()} dari server...`);
-
-      const params = {};
-      if (selectedStatus && selectedStatus !== "all") {
-        params.status = selectedStatus.toLowerCase();
-      }
-      if (selectedComponent && selectedComponent !== "all") {
-        params.componentId = selectedComponent;
-      }
-      if (selectedClient && selectedClient !== "all") {
-        params.clientId = selectedClient;
-      }
-      if (selectedLocation && selectedLocation !== "all") {
-        params.locationId = selectedLocation;
-      }
-
-      const range = customDateRange || timeRange;
-      const now = new Date();
-      if (range === "30d" || range === "30hari") {
-        params.startDate = new Date(now.getTime() - 30 * 24 * 3600000).toISOString();
-      } else if (range === "90d" || range === "90hari") {
-        params.startDate = new Date(now.getTime() - 90 * 24 * 3600000).toISOString();
-      } else if (range === "6m" || range === "6bulan") {
-        params.startDate = new Date(now.getTime() - 180 * 24 * 3600000).toISOString();
-      }
-
-      const res = await api.get(endpoint, {
-        params,
-        responseType: "blob",
-      });
-
-      const blob = new Blob([res.data], {
-        type: isPdf
-          ? "application/pdf"
-          : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      const dateStr = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}`;
-      link.setAttribute("download", `laporan-analitik-error-${dateStr}.${ext}`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-
-      showToast(`Laporan ${ext.toUpperCase()} berhasil diunduh!`);
-    } catch (err) {
-      console.error("Export download failed:", err);
-      showToast("Gagal mengunduh dokumen laporan.");
-    }
+    await downloadTicketReport(
+      format,
+      customDateRange || timeRange,
+      {
+        status: selectedStatus !== "all" ? selectedStatus : undefined,
+        componentId: selectedComponent !== "all" ? selectedComponent : undefined,
+        clientId: selectedClient !== "all" ? selectedClient : undefined,
+        locationId: selectedLocation !== "all" ? selectedLocation : undefined,
+      },
+      showToast
+    );
   };
 
   // Datasets from backend
@@ -1087,11 +1043,40 @@ export default function AnalitikError() {
         </div>
       </div>
 
+      {/* Floating Toast Notification */}
+      {toastMessage && (
+        <div
+          style={{
+            position: "fixed",
+            bottom: "24px",
+            right: "24px",
+            zIndex: 99999,
+            backgroundColor: "#11222c",
+            color: "#ffffff",
+            padding: "12px 20px",
+            borderRadius: "10px",
+            boxShadow: "0 10px 25px rgba(0,0,0,0.2)",
+            display: "flex",
+            alignItems: "center",
+            gap: "10px",
+            fontSize: "13px",
+            fontWeight: 600,
+            animation: "fadeIn 0.2s ease",
+          }}
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2.5">
+            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+            <polyline points="22 4 12 14.01 9 11.01" />
+          </svg>
+          {toastMessage}
+        </div>
+      )}
+
       {/* Export Report Modal */}
       <ExportReportModal
         isOpen={isExportModalOpen}
         onClose={() => setIsExportModalOpen(false)}
-        onDownload={handleExportDownload}
+        onExport={handleExportDownload}
       />
     </div>
   );

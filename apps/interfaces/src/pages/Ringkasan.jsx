@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import ReactECharts from "echarts-for-react";
 import { useAuth } from "../context/AuthContext.jsx";
 import api from "../lib/api.js";
+import ExportReportModal from "../components/tickets/ExportReportModal.jsx";
+import { downloadTicketReport } from "../lib/exportReport.js";
 
 const TIME_RANGES = [
   { id: "30d", label: "30 hari" },
@@ -21,6 +23,37 @@ export default function Ringkasan() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+  const [toastMessage, setToastMessage] = useState(null);
+
+  const showToast = (msg) => {
+    setToastMessage(msg);
+    setTimeout(() => {
+      setToastMessage(null);
+    }, 3500);
+  };
+
+  // Listen to header export button event
+  useEffect(() => {
+    const handleOpenExport = () => setIsExportModalOpen(true);
+    window.addEventListener("export-laporan-modal", handleOpenExport);
+    return () => window.removeEventListener("export-laporan-modal", handleOpenExport);
+  }, []);
+
+  const handleExportDownload = async (format, customDateRange = null) => {
+    await downloadTicketReport(
+      format,
+      customDateRange || timeRange,
+      {
+        componentId: selectedComponent !== "all" ? selectedComponent : undefined,
+        clientId: selectedClient !== "all" ? selectedClient : undefined,
+        locationId: selectedLocation !== "all" ? selectedLocation : undefined,
+        status: selectedStatus !== "all" ? selectedStatus : undefined,
+      },
+      showToast
+    );
+  };
 
   // Fetch summary data from backend
   const fetchSummary = useCallback(async (isBackground = false) => {
@@ -888,6 +921,43 @@ export default function Ringkasan() {
           </div>
         </div>
       </div>
+
+      {/* Floating Toast Notification */}
+      {toastMessage && (
+        <div
+          style={{
+            position: "fixed",
+            bottom: "24px",
+            right: "24px",
+            zIndex: 99999,
+            backgroundColor: "#11222c",
+            color: "#ffffff",
+            padding: "12px 20px",
+            borderRadius: "10px",
+            boxShadow: "0 10px 25px rgba(0,0,0,0.2)",
+            display: "flex",
+            alignItems: "center",
+            gap: "10px",
+            fontSize: "13px",
+            fontWeight: 600,
+            animation: "fadeIn 0.2s ease",
+          }}
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2.5">
+            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+            <polyline points="22 4 12 14.01 9 11.01" />
+          </svg>
+          {toastMessage}
+        </div>
+      )}
+
+      {/* Export Report Modal */}
+      <ExportReportModal
+        isOpen={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+        totalTickets={data?.kpi?.totalTiket || 0}
+        onExport={handleExportDownload}
+      />
     </div>
   );
 }

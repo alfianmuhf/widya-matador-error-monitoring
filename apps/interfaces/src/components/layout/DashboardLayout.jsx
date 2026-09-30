@@ -1,8 +1,19 @@
-import { Outlet } from "react-router-dom";
+import { Outlet, useLocation } from "react-router-dom";
+import { useRef, useEffect } from "react";
 import Sidebar from "./Sidebar.jsx";
 import Header from "./Header.jsx";
 
 export default function DashboardLayout() {
+  const location = useLocation();
+  const mainRef = useRef(null);
+
+  // Otomatis reset scroll ke paling atas setiap rute halaman berganti
+  useEffect(() => {
+    if (mainRef.current) {
+      mainRef.current.scrollTo({ top: 0, behavior: "instant" });
+    }
+  }, [location.pathname]);
+
   return (
     <div
       style={{
@@ -18,6 +29,7 @@ export default function DashboardLayout() {
 
       {/* Main Content Area */}
       <main
+        ref={mainRef}
         style={{
           flex: 1,
           display: "flex",

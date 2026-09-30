@@ -232,7 +232,7 @@ export default function DaftarTiket() {
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+    <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "20px" }}>
       {/* Toast Notification */}
       {toastMessage && (
         <div

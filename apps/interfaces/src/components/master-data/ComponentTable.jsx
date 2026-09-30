@@ -76,7 +76,6 @@ export default function ComponentTable({ components, loading, onEdit, onDelete }
                     style={{
                       display: "inline-flex",
                       alignItems: "center",
-                      gap: "6px",
                       padding: "3px 10px",
                       borderRadius: "6px",
                       fontSize: "12px",
@@ -85,7 +84,7 @@ export default function ComponentTable({ components, loading, onEdit, onDelete }
                       color: (item._count?.failureCodes || 0) > 0 ? "#b45309" : "#64748b",
                     }}
                   >
-                    ⚠️ {item._count?.failureCodes || 0} Kode
+                    {item._count?.failureCodes || 0} Kode
                   </span>
                 </td>
 

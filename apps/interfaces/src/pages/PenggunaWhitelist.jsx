@@ -176,49 +176,94 @@ export default function PenggunaWhitelist() {
 
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
-      {/* Tab Switcher Pills */}
-      <div style={{ display: "flex", gap: "10px", marginBottom: "20px" }}>
+      {/* Tab Switcher Navigation Bar (Matching Master Data style) */}
+      <div
+        style={{
+          display: "flex",
+          gap: "8px",
+          marginBottom: "20px",
+          overflowX: "auto",
+          paddingBottom: "4px",
+        }}
+      >
         <button
           type="button"
           onClick={() => setActiveTab("users")}
           style={{
-            padding: "9px 20px",
-            borderRadius: "8px",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "8px",
+            padding: "8px 16px",
+            borderRadius: "10px",
             border: "1px solid",
-            borderColor: activeTab === "users" ? "#2563EB" : "var(--tab-inactive-border, #CBD5E1)",
-            backgroundColor: activeTab === "users" ? "#2563EB" : "#FFFFFF",
-            color: activeTab === "users" ? "#FFFFFF" : "#475569",
+            borderColor: activeTab === "users" ? "#11222c" : "#e2e8f0",
+            backgroundColor: activeTab === "users" ? "#11222c" : "#ffffff",
+            color: activeTab === "users" ? "#ffffff" : "#334155",
             fontWeight: 600,
-            fontSize: "13px",
+            fontSize: "13.5px",
             cursor: "pointer",
             transition: "background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease",
-            boxShadow: "none",
+            boxShadow: activeTab === "users" ? "0 1px 2px rgba(0,0,0,0.05)" : "0 1px 2px rgba(0,0,0,0.02)",
+            whiteSpace: "nowrap",
             outline: "none",
             transform: "none",
           }}
         >
-          Pengguna Dashboard
+          <svg
+            width="17"
+            height="17"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke={activeTab === "users" ? "#ffffff" : "#64748b"}
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+            <circle cx="9" cy="7" r="4" />
+            <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+            <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+          </svg>
+          <span>Pengguna Dashboard</span>
         </button>
+
         <button
           type="button"
           onClick={() => setActiveTab("telegram")}
           style={{
-            padding: "9px 20px",
-            borderRadius: "8px",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "8px",
+            padding: "8px 16px",
+            borderRadius: "10px",
             border: "1px solid",
-            borderColor: activeTab === "telegram" ? "#2563EB" : "var(--tab-inactive-border, #CBD5E1)",
-            backgroundColor: activeTab === "telegram" ? "#2563EB" : "#FFFFFF",
-            color: activeTab === "telegram" ? "#FFFFFF" : "#475569",
+            borderColor: activeTab === "telegram" ? "#11222c" : "#e2e8f0",
+            backgroundColor: activeTab === "telegram" ? "#11222c" : "#ffffff",
+            color: activeTab === "telegram" ? "#ffffff" : "#334155",
             fontWeight: 600,
-            fontSize: "13px",
+            fontSize: "13.5px",
             cursor: "pointer",
             transition: "background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease",
-            boxShadow: "none",
+            boxShadow: activeTab === "telegram" ? "0 1px 2px rgba(0,0,0,0.05)" : "0 1px 2px rgba(0,0,0,0.02)",
+            whiteSpace: "nowrap",
             outline: "none",
             transform: "none",
           }}
         >
-          Whitelist Telegram
+          <svg
+            width="17"
+            height="17"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke={activeTab === "telegram" ? "#ffffff" : "#64748b"}
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <line x1="22" y1="2" x2="11" y2="13" />
+            <polygon points="22 2 15 22 11 13 2 9 22 2" />
+          </svg>
+          <span>Whitelist Telegram</span>
         </button>
       </div>
 

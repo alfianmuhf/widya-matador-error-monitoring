@@ -61,32 +61,42 @@ export default function TelegramTable({
         <div style={{ display: "flex", flexWrap: "wrap", gap: "10px", alignItems: "center" }}>
           {/* Search Input */}
           <div style={{ position: "relative" }}>
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              style={{
+                position: "absolute",
+                left: "12px",
+                top: "50%",
+                transform: "translateY(-50%)",
+                color: "var(--text-muted, #94A3B8)",
+                pointerEvents: "none",
+              }}
+            >
+              <circle cx="11" cy="11" r="8" />
+              <line x1="21" y1="21" x2="16.65" y2="16.65" />
+            </svg>
             <input
               type="text"
               placeholder="Cari ID, username, nama..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               style={{
-                padding: "8px 12px 8px 34px",
+                padding: "8px 12px 8px 36px",
                 borderRadius: "8px",
-                border: "1px solid #CBD5E1",
+                border: "1px solid var(--border-light, #CBD5E1)",
                 fontSize: "13px",
                 width: "240px",
                 outline: "none",
+                transition: "border-color 0.15s ease",
               }}
+              onFocus={(e) => (e.target.style.borderColor = "var(--primary-teal, #0d9488)")}
+              onBlur={(e) => (e.target.style.borderColor = "var(--border-light, #CBD5E1)")}
             />
-            <span
-              style={{
-                position: "absolute",
-                left: "10px",
-                top: "50%",
-                transform: "translateY(-50%)",
-                fontSize: "14px",
-                color: "#94A3B8",
-              }}
-            >
-              🔍
-            </span>
           </div>
 
           {/* Filter Status */}
@@ -114,25 +124,29 @@ export default function TelegramTable({
             type="button"
             onClick={onAddTelegramUser}
             style={{
-              display: "inline-flex",
+              display: "flex",
               alignItems: "center",
-              gap: "6px",
-              padding: "8px 16px",
-              backgroundColor: "#2563EB",
-              color: "#FFFFFF",
-              borderRadius: "8px",
-              fontWeight: 600,
-              fontSize: "13px",
+              gap: "8px",
+              backgroundColor: "var(--primary-teal)",
+              color: "#ffffff",
               border: "none",
+              borderRadius: "8px",
+              padding: "8px 16px",
+              fontSize: "var(--text-sm, 13px)",
+              fontWeight: 600,
               cursor: "pointer",
               transition: "background-color 0.15s ease",
+              boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
               outline: "none",
               transform: "none",
             }}
-            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#1D4ED8")}
-            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#2563EB")}
+            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "var(--primary-teal-hover)")}
+            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "var(--primary-teal)")}
           >
-            <span>➕</span>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <line x1="12" y1="5" x2="12" y2="19" />
+              <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
             <span>Tambah User Telegram</span>
           </button>
         )}
@@ -149,7 +163,7 @@ export default function TelegramTable({
               <th style={{ padding: "12px 16px", fontWeight: 600 }}>Status Whitelist</th>
               <th style={{ padding: "12px 16px", fontWeight: 600 }}>Didafkarkan Oleh</th>
               <th style={{ padding: "12px 16px", fontWeight: 600 }}>Tanggal Daftar</th>
-              <th style={{ padding: "12px 16px", fontWeight: 600, textAlign: "right" }}>Aksi</th>
+              <th style={{ padding: "12px 16px", fontWeight: 700, color: "#1E293B", textAlign: "right" }}>Aksi</th>
             </tr>
           </thead>
           <tbody>
@@ -209,42 +223,72 @@ export default function TelegramTable({
                   </td>
                   <td style={{ padding: "12px 16px", textAlign: "right" }}>
                     {canManageUsers ? (
-                      <div style={{ display: "inline-flex", gap: "6px" }}>
+                      <div style={{ display: "inline-flex", gap: "6px", alignItems: "center" }}>
                         <button
                           type="button"
                           onClick={() => onEditTelegramUser(user)}
+                          title="Edit User Telegram"
                           style={{
-                            padding: "4px 10px",
-                            borderRadius: "6px",
-                            border: "1px solid #CBD5E1",
-                            backgroundColor: "#FFFFFF",
-                            color: "#334155",
-                            fontSize: "12px",
+                            background: "none",
+                            border: "1px solid var(--border-light, #CBD5E1)",
                             cursor: "pointer",
-                            fontWeight: 500,
+                            padding: "6px",
+                            borderRadius: "6px",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            color: "var(--text-muted, #64748B)",
+                            transition: "border-color 0.15s ease, color 0.15s ease",
                             outline: "none",
                             transform: "none",
                           }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.color = "var(--primary-teal, #0d9488)";
+                            e.currentTarget.style.borderColor = "var(--primary-teal, #0d9488)";
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.color = "var(--text-muted, #64748B)";
+                            e.currentTarget.style.borderColor = "var(--border-light, #CBD5E1)";
+                          }}
                         >
-                          Edit
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                          </svg>
                         </button>
                         <button
                           type="button"
                           onClick={() => onDeleteTelegramUser(user)}
+                          title="Hapus User Telegram"
                           style={{
-                            padding: "4px 10px",
-                            borderRadius: "6px",
-                            border: "1px solid #FCA5A5",
-                            backgroundColor: "#FEF2F2",
-                            color: "#DC2626",
-                            fontSize: "12px",
+                            background: "none",
+                            border: "1px solid var(--border-light, #CBD5E1)",
                             cursor: "pointer",
-                            fontWeight: 500,
+                            padding: "6px",
+                            borderRadius: "6px",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            color: "#ef4444",
+                            transition: "border-color 0.15s ease, color 0.15s ease, background-color 0.15s ease",
                             outline: "none",
                             transform: "none",
                           }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.backgroundColor = "#fef2f2";
+                            e.currentTarget.style.borderColor = "#f87171";
+                            e.currentTarget.style.color = "#dc2626";
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.backgroundColor = "transparent";
+                            e.currentTarget.style.borderColor = "var(--border-light, #CBD5E1)";
+                            e.currentTarget.style.color = "#ef4444";
+                          }}
                         >
-                          Hapus
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <polyline points="3 6 5 6 21 6" />
+                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                          </svg>
                         </button>
                       </div>
                     ) : (

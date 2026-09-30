@@ -224,6 +224,7 @@ export default function Header() {
                 cursor: "pointer",
                 boxShadow: "0 1px 3px rgba(0, 0, 0, 0.05)",
                 transition: "border-color 0.15s ease, background-color 0.15s ease",
+                animation: "fadeIn 0.2s ease",
                 outline: "none",
                 transform: "none",
               }}

@@ -82,22 +82,24 @@ export default function UserTable({
         <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
           <thead>
             <tr style={{ borderBottom: "1px solid var(--border-light)" }}>
-              <th style={{ padding: "12px 14px", fontSize: "13px", fontWeight: 600, color: "var(--text-muted)", width: "24%" }}>
+              <th style={{ padding: "12px 14px", fontSize: "13px", fontWeight: 600, color: "var(--text-muted)", width: "23%" }}>
                 Nama
               </th>
-              <th style={{ padding: "12px 14px", fontSize: "13px", fontWeight: 600, color: "var(--text-muted)", width: "24%" }}>
+              <th style={{ padding: "12px 14px", fontSize: "13px", fontWeight: 600, color: "var(--text-muted)", width: "23%" }}>
                 Email
               </th>
-              <th style={{ padding: "12px 14px", fontSize: "13px", fontWeight: 600, color: "var(--text-muted)", width: "16%" }}>
+              <th style={{ padding: "12px 14px", fontSize: "13px", fontWeight: 600, color: "var(--text-muted)", width: "15%" }}>
                 Peran
               </th>
               <th style={{ padding: "12px 14px", fontSize: "13px", fontWeight: 600, color: "var(--text-muted)", width: "18%" }}>
                 Login terakhir
               </th>
-              <th style={{ padding: "12px 14px", fontSize: "13px", fontWeight: 600, color: "var(--text-muted)", width: "12%" }}>
+              <th style={{ padding: "12px 14px", fontSize: "13px", fontWeight: 600, color: "var(--text-muted)", width: "11%" }}>
                 Status
               </th>
-              <th style={{ padding: "12px 14px", width: "6%" }}></th>
+              <th style={{ padding: "12px 14px", fontSize: "13px", fontWeight: 700, color: "var(--text-dark)", width: "10%", textAlign: "right" }}>
+                Aksi
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -182,21 +184,20 @@ export default function UserTable({
                     </td>
                     <td style={{ padding: "16px 14px", textAlign: "right" }}>
                       {canManageUsers ? (
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: "8px" }}>
+                        <div style={{ display: "inline-flex", gap: "6px", alignItems: "center", justifyContent: "flex-end" }}>
                           <button
                             type="button"
                             onClick={() => onEditUser?.(item)}
                             title="Edit Pengguna"
                             style={{
-                              width: "32px",
-                              height: "32px",
-                              borderRadius: "6px",
+                              background: "none",
                               border: "1px solid var(--border-light)",
-                              backgroundColor: "#ffffff",
+                              cursor: "pointer",
+                              padding: "6px",
+                              borderRadius: "6px",
                               display: "inline-flex",
                               alignItems: "center",
                               justifyContent: "center",
-                              cursor: "pointer",
                               color: "var(--text-muted)",
                               transition: "border-color 0.15s ease, color 0.15s ease",
                               outline: "none",
@@ -211,8 +212,9 @@ export default function UserTable({
                               e.currentTarget.style.color = "var(--text-muted)";
                             }}
                           >
-                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                              <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
                             </svg>
                           </button>
                           <button
@@ -220,36 +222,33 @@ export default function UserTable({
                             onClick={() => onDeleteUser?.(item)}
                             title="Hapus Pengguna"
                             style={{
-                              width: "32px",
-                              height: "32px",
-                              borderRadius: "6px",
+                              background: "none",
                               border: "1px solid var(--border-light)",
-                              backgroundColor: "#ffffff",
+                              cursor: "pointer",
+                              padding: "6px",
+                              borderRadius: "6px",
                               display: "inline-flex",
                               alignItems: "center",
                               justifyContent: "center",
-                              cursor: "pointer",
-                              color: "var(--text-muted)",
+                              color: "#ef4444",
                               transition: "border-color 0.15s ease, color 0.15s ease, background-color 0.15s ease",
                               outline: "none",
                               transform: "none",
                             }}
                             onMouseEnter={(e) => {
-                              e.currentTarget.style.borderColor = "#ef4444";
+                              e.currentTarget.style.borderColor = "#f87171";
                               e.currentTarget.style.color = "#dc2626";
                               e.currentTarget.style.backgroundColor = "#fef2f2";
                             }}
                             onMouseLeave={(e) => {
                               e.currentTarget.style.borderColor = "var(--border-light)";
-                              e.currentTarget.style.color = "var(--text-muted)";
-                              e.currentTarget.style.backgroundColor = "#ffffff";
+                              e.currentTarget.style.color = "#ef4444";
+                              e.currentTarget.style.backgroundColor = "transparent";
                             }}
                           >
-                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                               <polyline points="3 6 5 6 21 6" />
                               <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                              <line x1="10" y1="11" x2="10" y2="17" />
-                              <line x1="14" y1="11" x2="14" y2="17" />
                             </svg>
                           </button>
                         </div>

@@ -154,6 +154,14 @@ function TelegramModalContent({ onClose, telegramUser, onSuccess }) {
                   backgroundColor: isEdit ? "#F8FAFC" : "#FFFFFF",
                   cursor: isEdit ? "not-allowed" : "text",
                   boxSizing: "border-box",
+                  outline: "none",
+                  transition: "border-color 0.15s ease",
+                }}
+                onFocus={(e) => {
+                  if (!isEdit) e.target.style.borderColor = "var(--primary-teal, #0d9488)";
+                }}
+                onBlur={(e) => {
+                  if (!isEdit) e.target.style.borderColor = "#CBD5E1";
                 }}
               />
               {!isEdit && (
@@ -196,7 +204,11 @@ function TelegramModalContent({ onClose, telegramUser, onSuccess }) {
                     border: "1px solid #CBD5E1",
                     fontSize: "13px",
                     boxSizing: "border-box",
+                    outline: "none",
+                    transition: "border-color 0.15s ease",
                   }}
+                  onFocus={(e) => (e.target.style.borderColor = "var(--primary-teal, #0d9488)")}
+                  onBlur={(e) => (e.target.style.borderColor = "#CBD5E1")}
                 />
               </div>
             </div>
@@ -218,7 +230,11 @@ function TelegramModalContent({ onClose, telegramUser, onSuccess }) {
                   border: "1px solid #CBD5E1",
                   fontSize: "13px",
                   boxSizing: "border-box",
+                  outline: "none",
+                  transition: "border-color 0.15s ease",
                 }}
+                onFocus={(e) => (e.target.style.borderColor = "var(--primary-teal, #0d9488)")}
+                onBlur={(e) => (e.target.style.borderColor = "#CBD5E1")}
               />
             </div>
 
@@ -229,7 +245,12 @@ function TelegramModalContent({ onClose, telegramUser, onSuccess }) {
                 id="isActiveTg"
                 checked={isActive}
                 onChange={(e) => setIsActive(e.target.checked)}
-                style={{ width: "16px", height: "16px", cursor: "pointer" }}
+                style={{
+                  width: "16px",
+                  height: "16px",
+                  cursor: "pointer",
+                  accentColor: "var(--primary-teal, #0d9488)",
+                }}
               />
               <label htmlFor="isActiveTg" style={{ fontSize: "13px", color: "#334155", fontWeight: 500, cursor: "pointer" }}>
                 Aktifkan izin akses bot Telegram (Whitelist)
@@ -251,6 +272,15 @@ function TelegramModalContent({ onClose, telegramUser, onSuccess }) {
                 fontSize: "13px",
                 fontWeight: 600,
                 cursor: "pointer",
+                transition: "background-color 0.15s ease, border-color 0.15s ease",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = "#F8FAFC";
+                e.currentTarget.style.borderColor = "#94A3B8";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = "#FFFFFF";
+                e.currentTarget.style.borderColor = "#CBD5E1";
               }}
             >
               Batal
@@ -262,12 +292,23 @@ function TelegramModalContent({ onClose, telegramUser, onSuccess }) {
                 padding: "8px 20px",
                 borderRadius: "8px",
                 border: "none",
-                backgroundColor: "#2563EB",
+                backgroundColor: "var(--primary-teal, #0d9488)",
                 color: "#FFFFFF",
                 fontSize: "13px",
                 fontWeight: 600,
                 cursor: loading ? "not-allowed" : "pointer",
                 opacity: loading ? 0.7 : 1,
+                transition: "background-color 0.15s ease",
+                boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+              }}
+              onMouseEnter={(e) => {
+                if (!loading) e.currentTarget.style.backgroundColor = "var(--primary-teal-hover, #0f766e)";
+              }}
+              onMouseLeave={(e) => {
+                if (!loading) e.currentTarget.style.backgroundColor = "var(--primary-teal, #0d9488)";
               }}
             >
               {loading ? "Menyimpan..." : isEdit ? "Simpan Perubahan" : "Tambahkan ke Whitelist"}

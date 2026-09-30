@@ -55,7 +55,6 @@ export default function ClientTable({ clients, loading, onEdit, onDelete }) {
                     style={{
                       display: "inline-flex",
                       alignItems: "center",
-                      gap: "6px",
                       padding: "3px 10px",
                       borderRadius: "6px",
                       fontSize: "12px",
@@ -64,7 +63,7 @@ export default function ClientTable({ clients, loading, onEdit, onDelete }) {
                       color: (item._count?.assets || 0) > 0 ? "#0284c7" : "#64748b",
                     }}
                   >
-                    📦 {item._count?.assets || 0} Unit
+                    {item._count?.assets || 0} Unit
                   </span>
                 </td>
 

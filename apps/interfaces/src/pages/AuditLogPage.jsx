@@ -262,7 +262,7 @@ export default function AuditLogPage() {
     'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace';
 
   return (
-    <div style={{ width: "100%", paddingBottom: "32px" }}>
+    <div style={{ width: "100%" }}>
       {/* Main Table Card */}
       <div
         style={{

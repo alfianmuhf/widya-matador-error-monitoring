@@ -425,34 +425,13 @@ export default function TicketDetailDrawer({
             }}
           >
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "14px" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                <div
-                  style={{
-                    width: "28px",
-                    height: "28px",
-                    borderRadius: "8px",
-                    backgroundColor: "#e0f2fe",
-                    color: "#0284c7",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-                    <circle cx="9" cy="7" r="4" />
-                    <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-                    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-                  </svg>
-                </div>
-                <div>
-                  <h3 style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-dark)", margin: 0 }}>
-                    Tim Penanganan (PIC)
-                  </h3>
-                  <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>
-                    Anggota yang ditugaskan menangani tiket ini
-                  </span>
-                </div>
+              <div>
+                <h3 style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-dark)", margin: 0 }}>
+                  Tim Penanganan (PIC)
+                </h3>
+                <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>
+                  Anggota yang ditugaskan menangani tiket ini
+                </span>
               </div>
 
               {!isAssignFormOpen && (
@@ -901,34 +880,13 @@ export default function TicketDetailDrawer({
               boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
             }}
           >
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "14px" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                <div
-                  style={{
-                    width: "28px",
-                    height: "28px",
-                    borderRadius: "8px",
-                    backgroundColor: "#fef3c7",
-                    color: "#b45309",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="12" cy="12" r="10" />
-                    <polyline points="12 6 12 12 16 14" />
-                  </svg>
-                </div>
-                <div>
-                  <h3 style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-dark)", margin: 0 }}>
-                    Riwayat Tiket ({ticket.history?.length || 0})
-                  </h3>
-                  <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>
-                    Jejak perubahan status, penugasan, dan catatan teknisi
-                  </span>
-                </div>
-              </div>
+            <div style={{ marginBottom: "14px" }}>
+              <h3 style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-dark)", margin: 0 }}>
+                Riwayat Tiket ({ticket.history?.length || 0})
+              </h3>
+              <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>
+                Jejak perubahan status, penugasan, dan catatan teknisi
+              </span>
             </div>
 
             {/* Form Cepat Tambah Catatan Riwayat */}

@@ -4,12 +4,21 @@ import TicketTable from "../components/tickets/TicketTable.jsx";
 import TicketDetailDrawer from "../components/tickets/TicketDetailDrawer.jsx";
 import ExportReportModal from "../components/tickets/ExportReportModal.jsx";
 import { downloadTicketReport } from "../lib/exportReport.js";
+import {
+  getAllTicketAssignments,
+  getAssignmentsForTicket,
+  assignMemberToTicket,
+  removeMemberFromTicket,
+  DEFAULT_TEAM_MEMBERS,
+} from "../lib/ticketAssignees.js";
 import api from "../lib/api.js";
 import { useAuth } from "../context/AuthContext.jsx";
 
 export default function DaftarTiket() {
-  const { accessToken } = useAuth();
-  const [tickets, setTickets] = useState([]);
+  const { accessToken, user } = useAuth();
+  const currentUser = user?.user || user;
+
+  const [rawTickets, setRawTickets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedTicket, setSelectedTicket] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
@@ -18,9 +27,15 @@ export default function DaftarTiket() {
   const [selectedClient, setSelectedClient] = useState("");
   const [selectedLocation, setSelectedLocation] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("");
+  const [selectedAssignee, setSelectedAssignee] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState(null);
+
+  // Available users for assignment
+  const [availableUsers, setAvailableUsers] = useState(DEFAULT_TEAM_MEMBERS);
+  // Assignments map version counter to trigger reactive re-render
+  const [assignmentVersion, setAssignmentVersion] = useState(0);
 
   const itemsPerPage = 10;
 
@@ -30,6 +45,29 @@ export default function DaftarTiket() {
       setToastMessage(null);
     }, 3500);
   };
+
+  // Fetch available users from backend
+  useEffect(() => {
+    api
+      .get("/users?limit=50")
+      .then((res) => {
+        const users = res.data?.data?.users;
+        if (users && users.length > 0) {
+          // Merge with defaults to ensure complete role representation
+          const combined = [...users];
+          DEFAULT_TEAM_MEMBERS.forEach((dt) => {
+            if (!combined.some((u) => u.email === dt.email)) {
+              combined.push(dt);
+            }
+          });
+          setAvailableUsers(combined);
+        }
+      })
+      .catch(() => {
+        // Fallback to default team members if offline
+        setAvailableUsers(DEFAULT_TEAM_MEMBERS);
+      });
+  }, []);
 
   // Fetch tickets from Backend API
   const fetchTickets = useCallback(async () => {
@@ -41,7 +79,7 @@ export default function DaftarTiket() {
         },
       });
       const data = res.data?.data || [];
-      setTickets(data);
+      setRawTickets(data);
     } catch (err) {
       console.error("Failed to fetch tickets:", err);
       showToast("Gagal memuat data tiket dari server.");
@@ -53,6 +91,20 @@ export default function DaftarTiket() {
   useEffect(() => {
     fetchTickets();
   }, [fetchTickets]);
+
+  // Merge tickets with team assignment info
+  const tickets = useMemo(() => {
+    // dependency on assignmentVersion forces recomputation when assignments change
+    void assignmentVersion;
+    const assignmentsMap = getAllTicketAssignments();
+    return rawTickets.map((t) => {
+      const assigned = assignmentsMap[t.id] || [];
+      return {
+        ...t,
+        assignedMembers: assigned,
+      };
+    });
+  }, [rawTickets, assignmentVersion]);
 
   // Real-time updates via Server-Sent Events (SSE)
   useEffect(() => {
@@ -69,10 +121,16 @@ export default function DaftarTiket() {
     eventSource.addEventListener("ticket_updated", (event) => {
       try {
         const updated = JSON.parse(event.data);
-        setTickets((prev) =>
+        setRawTickets((prev) =>
           prev.map((t) => (t.id === updated.id ? updated : t))
         );
-        setSelectedTicket((prev) => (prev?.id === updated.id ? updated : prev));
+        setSelectedTicket((prev) => {
+          if (prev?.id === updated.id) {
+            const assigned = getAssignmentsForTicket(updated.id);
+            return { ...updated, assignedMembers: assigned };
+          }
+          return prev;
+        });
         showToast(`Tiket ${updated.id} diperbarui via real-time`);
       } catch (err) {
         console.error("Error parsing ticket_updated SSE:", err);
@@ -82,7 +140,7 @@ export default function DaftarTiket() {
     eventSource.addEventListener("ticket_created", (event) => {
       try {
         const created = JSON.parse(event.data);
-        setTickets((prev) => [created, ...prev.filter((t) => t.id !== created.id)]);
+        setRawTickets((prev) => [created, ...prev.filter((t) => t.id !== created.id)]);
         showToast(`Tiket baru masuk: ${created.id}`);
       } catch (err) {
         console.error("Error parsing ticket_created SSE:", err);
@@ -96,8 +154,14 @@ export default function DaftarTiket() {
         api.get(`/tickets/${ticketId}`).then((res) => {
           const fresh = res.data?.data;
           if (fresh) {
-            setTickets((prev) => prev.map((t) => (t.id === ticketId ? fresh : t)));
-            setSelectedTicket((prev) => (prev?.id === ticketId ? fresh : prev));
+            setRawTickets((prev) => prev.map((t) => (t.id === ticketId ? fresh : t)));
+            setSelectedTicket((prev) => {
+              if (prev?.id === ticketId) {
+                const assigned = getAssignmentsForTicket(ticketId);
+                return { ...fresh, assignedMembers: assigned };
+              }
+              return prev;
+            });
           }
         }).catch(() => {});
       } catch (err) {
@@ -124,12 +188,31 @@ export default function DaftarTiket() {
   }, []);
 
   // Distinct filter options extracted from tickets
-  const { components, clients, locations } = useMemo(() => {
+  const { components, clients, locations, teamMembersList } = useMemo(() => {
     const comps = [...new Set(tickets.map((t) => t.component).filter(Boolean))].sort();
     const cls = [...new Set(tickets.map((t) => t.client).filter(Boolean))].sort();
     const locs = [...new Set(tickets.map((t) => t.location).filter(Boolean))].sort();
-    return { components: comps, clients: cls, locations: locs };
-  }, [tickets]);
+
+    // Extract all assigned team members across tickets plus available users
+    const memberMap = new Map();
+    availableUsers.forEach((u) => {
+      memberMap.set(u.name, { id: u.id, name: u.name, role: u.role });
+    });
+    tickets.forEach((t) => {
+      (t.assignedMembers || []).forEach((m) => {
+        if (!memberMap.has(m.name)) {
+          memberMap.set(m.name, { id: m.id, name: m.name, role: m.role });
+        }
+      });
+    });
+
+    return {
+      components: comps,
+      clients: cls,
+      locations: locs,
+      teamMembersList: Array.from(memberMap.values()),
+    };
+  }, [tickets, availableUsers]);
 
   // Filtered tickets
   const filteredTickets = useMemo(() => {
@@ -142,7 +225,11 @@ export default function DaftarTiket() {
         const matchComponent = t.component?.toLowerCase().includes(query);
         const matchClient = t.client?.toLowerCase().includes(query);
         const matchFailure = t.failureCode?.toLowerCase().includes(query);
-        if (!matchId && !matchUnit && !matchComponent && !matchClient && !matchFailure) {
+        const matchAssignee = (t.assignedMembers || []).some((m) =>
+          m.name.toLowerCase().includes(query)
+        );
+
+        if (!matchId && !matchUnit && !matchComponent && !matchClient && !matchFailure && !matchAssignee) {
           return false;
         }
       }
@@ -157,9 +244,21 @@ export default function DaftarTiket() {
         if (itemStatus !== queryStatus) return false;
       }
 
+      // Assignee Filter
+      if (selectedAssignee) {
+        if (selectedAssignee === "unassigned") {
+          if (t.assignedMembers && t.assignedMembers.length > 0) return false;
+        } else {
+          const hasMember = (t.assignedMembers || []).some(
+            (m) => m.name.toLowerCase() === selectedAssignee.toLowerCase()
+          );
+          if (!hasMember) return false;
+        }
+      }
+
       return true;
     });
-  }, [tickets, searchTerm, selectedComponent, selectedClient, selectedLocation, selectedStatus]);
+  }, [tickets, searchTerm, selectedComponent, selectedClient, selectedLocation, selectedStatus, selectedAssignee]);
 
   // Pagination calculation
   const totalPages = Math.ceil(filteredTickets.length / itemsPerPage) || 1;
@@ -170,11 +269,17 @@ export default function DaftarTiket() {
 
   // Handle select ticket: fetch fresh detail with history
   const handleSelectTicket = async (t) => {
-    setSelectedTicket(t);
+    const currentAssigned = getAssignmentsForTicket(t.id);
+    setSelectedTicket({ ...t, assignedMembers: currentAssigned });
+
     try {
       const res = await api.get(`/tickets/${t.id}`);
       if (res.data?.data) {
-        setSelectedTicket(res.data.data);
+        const fresh = res.data.data;
+        setSelectedTicket({
+          ...fresh,
+          assignedMembers: getAssignmentsForTicket(fresh.id),
+        });
       }
     } catch {
       // fallback to selected item
@@ -187,15 +292,138 @@ export default function DaftarTiket() {
       const res = await api.patch(`/tickets/${ticketId}`, payload);
       const updated = res.data?.data;
       if (updated) {
-        setTickets((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
-        setSelectedTicket(updated);
+        const assigned = getAssignmentsForTicket(ticketId);
+        const fullUpdated = { ...updated, assignedMembers: assigned };
+
+        setRawTickets((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
+        setSelectedTicket(fullUpdated);
         showToast(`Status tiket ${updated.id} berhasil diperbarui.`);
-        return updated;
+        return fullUpdated;
       }
     } catch (err) {
       console.error("Error updating ticket:", err);
       const msg = err.response?.data?.message || "Gagal memperbarui tiket.";
       showToast(msg);
+      throw err;
+    }
+  };
+
+  // Handle assign member to ticket
+  const handleAssignMember = async (ticketId, member, isLead) => {
+    const updatedAssignments = assignMemberToTicket(ticketId, member, isLead);
+    setAssignmentVersion((v) => v + 1);
+
+    const roleName = member.role || "Teknisi";
+    const leadLabel = isLead ? "PIC Utama" : "Anggota Tim";
+    const historyNote = `Menugaskan ${member.name} (${roleName}) sebagai ${leadLabel} penanganan tiket.`;
+
+    // Local synthetic history item for instantaneous feedback
+    const newHistoryEntry = {
+      id: `hist-assign-${Date.now()}`,
+      action: historyNote,
+      notes: historyNote,
+      timestamp: "Baru saja",
+      author: currentUser?.name || currentUser?.email || "Koordinator",
+      type: "update",
+    };
+
+    setSelectedTicket((prev) => {
+      if (!prev || prev.id !== ticketId) return prev;
+      return {
+        ...prev,
+        assignedMembers: updatedAssignments,
+        history: [newHistoryEntry, ...(prev.history || [])],
+      };
+    });
+
+    // Sync to backend history & audit log
+    try {
+      await api.patch(`/tickets/${ticketId}`, {
+        handlingNote: historyNote,
+      });
+    } catch (err) {
+      console.error("Sync assignment note to backend:", err);
+    }
+
+    showToast(`Berhasil menugaskan ${member.name} ke tiket ${ticketId}`);
+  };
+
+  // Handle remove member from ticket
+  const handleRemoveMember = async (ticketId, memberId, memberName) => {
+    const updatedAssignments = removeMemberFromTicket(ticketId, memberId);
+    setAssignmentVersion((v) => v + 1);
+
+    const historyNote = `Menghapus penugasan ${memberName || "anggota tim"} dari tiket.`;
+
+    const newHistoryEntry = {
+      id: `hist-remove-${Date.now()}`,
+      action: historyNote,
+      notes: historyNote,
+      timestamp: "Baru saja",
+      author: currentUser?.name || currentUser?.email || "Koordinator",
+      type: "update",
+    };
+
+    setSelectedTicket((prev) => {
+      if (!prev || prev.id !== ticketId) return prev;
+      return {
+        ...prev,
+        assignedMembers: updatedAssignments,
+        history: [newHistoryEntry, ...(prev.history || [])],
+      };
+    });
+
+    // Sync note to backend
+    try {
+      await api.patch(`/tickets/${ticketId}`, {
+        handlingNote: historyNote,
+      });
+    } catch (err) {
+      console.error("Sync unassignment note to backend:", err);
+    }
+
+    showToast(`Penugasan ${memberName || "anggota"} dihapus dari tiket.`);
+  };
+
+  // Handle adding quick history note directly
+  const handleAddHistoryNote = async (ticketId, noteText) => {
+    try {
+      // Try POST /tickets/:id/comments first
+      let updated = null;
+      try {
+        const res = await api.post(`/tickets/${ticketId}/comments`, { notes: noteText });
+        updated = res.data?.data;
+      } catch {
+        // Fallback to PATCH /tickets/:id
+        const res = await api.patch(`/tickets/${ticketId}`, { handlingNote: noteText });
+        updated = res.data?.data;
+      }
+
+      if (updated) {
+        const assigned = getAssignmentsForTicket(ticketId);
+        const full = { ...updated, assignedMembers: assigned };
+        setRawTickets((prev) => prev.map((t) => (t.id === ticketId ? updated : t)));
+        setSelectedTicket(full);
+      } else {
+        // Manual append to history if response wasn't full ticket
+        const entry = {
+          id: `hist-${Date.now()}`,
+          action: noteText,
+          notes: noteText,
+          timestamp: "Baru saja",
+          author: currentUser?.name || currentUser?.email || "Teknisi",
+          type: "update",
+        };
+        setSelectedTicket((prev) => {
+          if (!prev) return prev;
+          return { ...prev, history: [entry, ...(prev.history || [])] };
+        });
+      }
+
+      showToast("Catatan riwayat berhasil ditambahkan.");
+    } catch (err) {
+      console.error("Failed to add history note:", err);
+      showToast("Gagal menambahkan catatan riwayat.");
       throw err;
     }
   };
@@ -250,7 +478,7 @@ export default function DaftarTiket() {
             alignItems: "center",
             gap: "10px",
             fontSize: "13px",
-            fontWeight: 600,
+            fontWeight: 650,
             animation: "fadeIn 0.2s ease",
           }}
         >
@@ -274,6 +502,9 @@ export default function DaftarTiket() {
         setSelectedLocation={setSelectedLocation}
         selectedStatus={selectedStatus}
         setSelectedStatus={setSelectedStatus}
+        selectedAssignee={selectedAssignee}
+        setSelectedAssignee={setSelectedAssignee}
+        teamMembers={teamMembersList}
         components={components}
         clients={clients}
         locations={locations}
@@ -301,6 +532,10 @@ export default function DaftarTiket() {
         ticket={selectedTicket}
         onClose={() => setSelectedTicket(null)}
         onUpdateTicket={handleUpdateTicket}
+        availableUsers={availableUsers}
+        onAssignMember={handleAssignMember}
+        onRemoveMember={handleRemoveMember}
+        onAddHistoryNote={handleAddHistoryNote}
       />
 
       {/* Export Report Modal */}

@@ -9,6 +9,9 @@ export default function TicketFilterBar({
   setSelectedLocation,
   selectedStatus,
   setSelectedStatus,
+  selectedAssignee = "",
+  setSelectedAssignee,
+  teamMembers = [],
   components = [],
   clients = [],
   locations = [],
@@ -39,7 +42,8 @@ export default function TicketFilterBar({
     Boolean(selectedComponent) ||
     Boolean(selectedClient) ||
     Boolean(selectedLocation) ||
-    Boolean(selectedStatus);
+    Boolean(selectedStatus) ||
+    Boolean(selectedAssignee);
 
   return (
     <div
@@ -183,6 +187,21 @@ export default function TicketFilterBar({
           ))}
         </select>
 
+        {/* PIC / Tim Filter */}
+        <select
+          value={selectedAssignee}
+          onChange={(e) => setSelectedAssignee && setSelectedAssignee(e.target.value)}
+          style={{ ...selectStyle, minWidth: "150px" }}
+        >
+          <option value="">Semua PIC / Tim</option>
+          <option value="unassigned">Belum Ditugaskan (Unassigned)</option>
+          {teamMembers.map((member) => (
+            <option key={member.id || member.name} value={member.name}>
+              {member.name}
+            </option>
+          ))}
+        </select>
+
         {/* Reset Filter Button if active */}
         {isFilterActive && (
           <button
@@ -192,6 +211,7 @@ export default function TicketFilterBar({
               setSelectedClient("");
               setSelectedLocation("");
               setSelectedStatus("");
+              if (setSelectedAssignee) setSelectedAssignee("");
             }}
             style={{
               padding: "7px 12px",

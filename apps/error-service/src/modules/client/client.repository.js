@@ -1,7 +1,7 @@
 import prisma from "../../config/prisma.js";
 
 export const findMany = async ({ skip = 0, take = 10, where = {}, orderBy = { name: "asc" } }) => {
-  return prisma.client.findMany({
+  return prisma.clients.findMany({
     skip,
     take,
     where,
@@ -15,11 +15,11 @@ export const findMany = async ({ skip = 0, take = 10, where = {}, orderBy = { na
 };
 
 export const count = async (where = {}) => {
-  return prisma.client.count({ where });
+  return prisma.clients.count({ where });
 };
 
 export const findById = async (id) => {
-  return prisma.client.findUnique({
+  return prisma.clients.findUnique({
     where: { id },
     include: {
       _count: {
@@ -28,10 +28,10 @@ export const findById = async (id) => {
       assets: {
         select: {
           id: true,
-          unitCode: true,
-          type: true,
+          unit_code: true,
+          asset_type: true,
           status: true,
-          isActive: true,
+          is_active: true,
         },
       },
     },
@@ -39,30 +39,40 @@ export const findById = async (id) => {
 };
 
 export const create = async (data) => {
-  return prisma.client.create({ data });
+  return prisma.clients.create({
+    data: {
+      name: data.name,
+      is_active: data.is_active ?? data.isActive ?? true,
+    },
+  });
 };
 
 export const update = async (id, data) => {
-  return prisma.client.update({
+  const updateData = {};
+  if (data.name !== undefined) updateData.name = data.name;
+  if (data.is_active !== undefined) updateData.is_active = data.is_active;
+  if (data.isActive !== undefined) updateData.is_active = data.isActive;
+
+  return prisma.clients.update({
     where: { id },
-    data,
+    data: updateData,
   });
 };
 
 export const deleteById = async (id) => {
-  return prisma.client.delete({
+  return prisma.clients.delete({
     where: { id },
   });
 };
 
 export const countAssetsByClientId = async (clientId) => {
-  return prisma.asset.count({
-    where: { clientId },
+  return prisma.assets.count({
+    where: { client_id: clientId },
   });
 };
 
 export const countTelegramGroupsByClientId = async (clientId) => {
-  return prisma.telegramGroup.count({
-    where: { clientId },
+  return prisma.telegram_groups.count({
+    where: { client_id: clientId },
   });
 };

@@ -2,6 +2,31 @@ import createError from "http-errors";
 import * as locationRepo from "./location.repository.js";
 import { recordLog } from "../audit-log/audit-log.service.js";
 
+const formatLocation = (loc) => {
+  if (!loc) return null;
+  return {
+    id: loc.id,
+    name: loc.name,
+    isActive: loc.is_active,
+    is_active: loc.is_active,
+    createdAt: loc.created_at,
+    created_at: loc.created_at,
+    updatedAt: loc.updated_at,
+    updated_at: loc.updated_at,
+    _count: loc._count,
+    assets: loc.assets ? loc.assets.map(a => ({
+      id: a.id,
+      unitCode: a.unit_code,
+      unit_code: a.unit_code,
+      type: a.asset_type,
+      asset_type: a.asset_type,
+      status: a.status,
+      isActive: a.is_active,
+      is_active: a.is_active,
+    })) : undefined,
+  };
+};
+
 export const getLocations = async (query = {}) => {
   const pageNum = parseInt(query.page, 10) || 1;
   const limitNum = parseInt(query.limit, 10) || 10;
@@ -14,9 +39,9 @@ export const getLocations = async (query = {}) => {
   }
 
   if (query.isActive === "true" || query.isActive === true) {
-    where.isActive = true;
+    where.is_active = true;
   } else if (query.isActive === "false" || query.isActive === false) {
-    where.isActive = false;
+    where.is_active = false;
   }
 
   const [locations, total] = await Promise.all([
@@ -25,7 +50,7 @@ export const getLocations = async (query = {}) => {
   ]);
 
   return {
-    locations,
+    locations: locations.map(formatLocation),
     meta: {
       total,
       page: pageNum,
@@ -40,7 +65,7 @@ export const getLocationById = async (id) => {
   if (!location) {
     throw createError(404, "Lokasi tidak ditemukan");
   }
-  return location;
+  return formatLocation(location);
 };
 
 export const createLocation = async (data, actorUser = null) => {
@@ -56,24 +81,30 @@ export const createLocation = async (data, actorUser = null) => {
     details: {
       identifier: created.name,
       name: created.name,
-      isActive: created.isActive,
+      isActive: created.is_active,
       changeSummary: `tambah lokasi '${created.name}'`,
     },
   });
 
-  return created;
+  return formatLocation(created);
 };
 
 export const updateLocation = async (id, data, actorUser = null) => {
-  const current = await getLocationById(id);
+  const current = await locationRepo.findById(id);
+  if (!current) {
+    throw createError(404, "Lokasi tidak ditemukan");
+  }
   const updated = await locationRepo.update(id, data);
 
   const changes = [];
   if (data.name !== undefined && data.name !== current.name) {
     changes.push(`nama: ${current.name} → ${data.name}`);
   }
-  if (data.isActive !== undefined && data.isActive !== current.isActive) {
-    changes.push(`is_active: ${current.isActive} → ${data.isActive}`);
+  if (data.is_active !== undefined && data.is_active !== current.is_active) {
+    changes.push(`is_active: ${current.is_active} → ${data.is_active}`);
+  }
+  if (data.isActive !== undefined && data.isActive !== current.is_active) {
+    changes.push(`is_active: ${current.is_active} → ${data.isActive}`);
   }
   const changeSummary = changes.length > 0 ? changes.join(", ") : "perubahan data lokasi";
 
@@ -87,16 +118,19 @@ export const updateLocation = async (id, data, actorUser = null) => {
     details: {
       identifier: updated.name,
       changeSummary,
-      before: { name: current.name, isActive: current.isActive },
+      before: { name: current.name, isActive: current.is_active },
       after: data,
     },
   });
 
-  return updated;
+  return formatLocation(updated);
 };
 
 export const deleteLocation = async (id, actorUser = null) => {
-  const location = await getLocationById(id);
+  const location = await locationRepo.findById(id);
+  if (!location) {
+    throw createError(404, "Lokasi tidak ditemukan");
+  }
 
   // Constraint check: apakah ada yang nyangkut (Asset atau TelegramGroup)?
   const [assetCount, groupCount] = await Promise.all([
@@ -107,8 +141,8 @@ export const deleteLocation = async (id, actorUser = null) => {
   const hasDependents = assetCount > 0 || groupCount > 0;
 
   if (hasDependents) {
-    // Masih ada yang nyangkut -> JANGAN DI-HARD DELETE! Lakukan SOFT DELETE
-    const softDeleted = await locationRepo.update(id, { isActive: false });
+    // Masih ada yang nyangkut -> SOFT DELETE
+    const softDeleted = await locationRepo.update(id, { is_active: false });
 
     await recordLog({
       actor: actorUser?.email || actorUser?.name || "Sistem",
@@ -127,13 +161,13 @@ export const deleteLocation = async (id, actorUser = null) => {
     });
 
     return {
-      location: softDeleted,
+      location: formatLocation(softDeleted),
       deleteAction: "SOFT",
       message: `Lokasi memiliki ${assetCount} asset dan ${groupCount} grup terhubung, sehingga dinonaktifkan (Soft Delete).`,
     };
   }
 
-  // Tidak ada yang nyangkut -> Boleh HARD DELETE
+  // Tidak ada yang nyangkut -> HARD DELETE
   await locationRepo.deleteById(id);
 
   await recordLog({
@@ -157,4 +191,3 @@ export const deleteLocation = async (id, actorUser = null) => {
     message: "Lokasi berhasil dihapus secara permanen (Hard Delete)",
   };
 };
-

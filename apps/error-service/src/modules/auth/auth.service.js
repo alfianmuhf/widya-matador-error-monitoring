@@ -14,7 +14,7 @@ const LOCKOUT_DURATION_MINUTES = 15;
 /**
  * Register a new user
  */
-export const register = async ({ email, password, name, role }) => {
+export const register = async ({ email, password, name, role, division }) => {
   const existingUser = await authRepository.findUserByEmail(email);
   if (existingUser) {
     throw createError(409, "Email sudah terdaftar. Silakan gunakan email lain.");
@@ -24,11 +24,12 @@ export const register = async ({ email, password, name, role }) => {
 
   const newUser = await authRepository.createUser({
     email,
-    passwordHash: hashedPassword,
+    password_hash: hashedPassword,
     name,
-    role: role || "VIEWER",
-    status: "ACTIVE",
-    mustChangePassword: false,
+    role: role ? role.toLowerCase() : "viewer",
+    division: division || null,
+    status: "active",
+    must_change_password: false,
   });
 
   return newUser;
@@ -46,8 +47,9 @@ export const login = async ({ email, password }, { userAgent, ipAddress } = {}) 
   }
 
   // 1. Check if account is currently locked
-  if (user.lockedUntil && new Date() < new Date(user.lockedUntil)) {
-    const remainingMinutes = Math.ceil((new Date(user.lockedUntil) - new Date()) / (60 * 1000));
+  const lockedUntil = user.locked_until || user.lockedUntil;
+  if (lockedUntil && new Date() < new Date(lockedUntil)) {
+    const remainingMinutes = Math.ceil((new Date(lockedUntil) - new Date()) / (60 * 1000));
     throw createError(
       423,
       `Akun terkunci sementara karena 5x percobaan login gagal. Silakan coba lagi dalam ${remainingMinutes} menit.`
@@ -55,11 +57,13 @@ export const login = async ({ email, password }, { userAgent, ipAddress } = {}) 
   }
 
   // 2. Check user status
-  if (user.status === "SUSPENDED") {
+  const status = (user.status || "").toLowerCase();
+  if (status === "suspended") {
     throw createError(403, "Akun Anda telah dinonaktifkan. Silakan hubungi administrator.");
   }
 
-  if (user.status === "INVITED" || !user.passwordHash) {
+  const passwordHash = user.password_hash || user.passwordHash;
+  if (status === "invited" || !passwordHash) {
     throw createError(
       401,
       "Akun belum diaktifkan. Silakan setel password melalui link undangan terlebih dahulu."
@@ -67,13 +71,13 @@ export const login = async ({ email, password }, { userAgent, ipAddress } = {}) 
   }
 
   // 3. Verify password
-  const isPasswordValid = await comparePassword(password, user.passwordHash);
+  const isPasswordValid = await comparePassword(password, passwordHash);
   if (!isPasswordValid) {
-    const currentAttempts = (user.failedLoginAttempts || 0) + 1;
+    const currentAttempts = (user.failed_login_attempts ?? user.failedLoginAttempts ?? 0) + 1;
 
     if (currentAttempts >= MAX_FAILED_ATTEMPTS) {
-      const lockedUntil = new Date(Date.now() + LOCKOUT_DURATION_MINUTES * 60 * 1000);
-      await authRepository.recordFailedLoginAttempt(user.id, currentAttempts, lockedUntil);
+      const lockDate = new Date(Date.now() + LOCKOUT_DURATION_MINUTES * 60 * 1000);
+      await authRepository.recordFailedLoginAttempt(user.id, currentAttempts, lockDate);
       throw createError(
         423,
         `Akun Anda terkunci selama ${LOCKOUT_DURATION_MINUTES} menit karena 5 kali percobaan login gagal.`
@@ -88,7 +92,7 @@ export const login = async ({ email, password }, { userAgent, ipAddress } = {}) 
     }
   }
 
-  // 4. Successful login: reset lockout attempts & update lastLoginAt
+  // 4. Successful login: reset lockout attempts & update last_login_at
   await authRepository.updateLoginSuccess(user.id);
 
   // 5. Issue Token Pair
@@ -96,6 +100,7 @@ export const login = async ({ email, password }, { userAgent, ipAddress } = {}) 
     id: user.id,
     email: user.email,
     role: user.role,
+    division: user.division,
   };
 
   const accessToken = generateAccessToken(accessTokenPayload);
@@ -104,11 +109,11 @@ export const login = async ({ email, password }, { userAgent, ipAddress } = {}) 
 
   // Store refresh token in database
   await authRepository.createRefreshToken({
-    token: refreshToken,
-    userId: user.id,
-    expiresAt,
-    userAgent: userAgent || null,
-    ipAddress: ipAddress || null,
+    token_hash: refreshToken,
+    user_id: user.id,
+    expires_at: expiresAt,
+    user_agent: userAgent || null,
+    ip_address: ipAddress || null,
   });
 
   return {
@@ -117,8 +122,9 @@ export const login = async ({ email, password }, { userAgent, ipAddress } = {}) 
       email: user.email,
       name: user.name,
       role: user.role,
+      division: user.division,
       status: user.status,
-      mustChangePassword: user.mustChangePassword,
+      mustChangePassword: user.must_change_password ?? user.mustChangePassword,
     },
     accessToken,
     refreshToken,
@@ -151,9 +157,11 @@ export const refreshToken = async (oldToken, { userAgent, ipAddress } = {}) => {
     throw createError(401, "Refresh token tidak dikenali dalam sistem");
   }
 
+  const userId = storedToken.user_id || storedToken.userId;
+
   // 3. Security: Check if token has been revoked (Token Reuse Detection)
-  if (storedToken.revoked) {
-    await authRepository.revokeAllUserTokens(storedToken.userId);
+  if (storedToken.revoked_at || storedToken.revoked) {
+    await authRepository.revokeAllUserTokens(userId);
     throw createError(
       401,
       "Aktivitas mencurigakan terdeteksi (token reuse). Semua sesi aktif telah dicabut demi keamanan."
@@ -161,13 +169,15 @@ export const refreshToken = async (oldToken, { userAgent, ipAddress } = {}) => {
   }
 
   // 4. Check database expiration
-  if (new Date() > new Date(storedToken.expiresAt)) {
+  const expiresAtDate = storedToken.expires_at || storedToken.expiresAt;
+  if (new Date() > new Date(expiresAtDate)) {
     throw createError(401, "Refresh token telah kedaluwarsa. Silakan login kembali.");
   }
 
   // 5. Ensure user exists and is active
   const user = storedToken.user;
-  if (!user || user.status !== "ACTIVE") {
+  const status = (user?.status || "").toLowerCase();
+  if (!user || status !== "active") {
     throw createError(403, "User tidak aktif atau tidak ditemukan");
   }
 
@@ -179,6 +189,7 @@ export const refreshToken = async (oldToken, { userAgent, ipAddress } = {}) => {
     id: user.id,
     email: user.email,
     role: user.role,
+    division: user.division,
   };
 
   const newAccessToken = generateAccessToken(accessTokenPayload);
@@ -187,11 +198,11 @@ export const refreshToken = async (oldToken, { userAgent, ipAddress } = {}) => {
 
   // 8. Store the new refresh token
   await authRepository.createRefreshToken({
-    token: newRefreshToken,
-    userId: user.id,
-    expiresAt,
-    userAgent: userAgent || storedToken.userAgent || null,
-    ipAddress: ipAddress || storedToken.ipAddress || null,
+    token_hash: newRefreshToken,
+    user_id: user.id,
+    expires_at: expiresAt,
+    user_agent: userAgent || storedToken.user_agent || storedToken.userAgent || null,
+    ip_address: ipAddress || storedToken.ip_address || storedToken.ipAddress || null,
   });
 
   return {
@@ -200,8 +211,9 @@ export const refreshToken = async (oldToken, { userAgent, ipAddress } = {}) => {
       email: user.email,
       name: user.name,
       role: user.role,
+      division: user.division,
       status: user.status,
-      mustChangePassword: user.mustChangePassword,
+      mustChangePassword: user.must_change_password ?? user.mustChangePassword,
     },
     accessToken: newAccessToken,
     refreshToken: newRefreshToken,
@@ -247,22 +259,24 @@ export const changePassword = async (userId, { currentPassword, newPassword }, m
     throw createError(404, "Data pengguna tidak ditemukan");
   }
 
-  if (user.status === "SUSPENDED") {
+  const status = (user.status || "").toLowerCase();
+  if (status === "suspended") {
     throw createError(403, "Akun Anda telah dinonaktifkan");
   }
 
   // 2. Verify current password
-  if (!user.passwordHash) {
+  const passwordHash = user.password_hash || user.passwordHash;
+  if (!passwordHash) {
     throw createError(400, "Akun ini belum memiliki password terdaftar");
   }
 
-  const isCurrentPasswordValid = await comparePassword(currentPassword, user.passwordHash);
+  const isCurrentPasswordValid = await comparePassword(currentPassword, passwordHash);
   if (!isCurrentPasswordValid) {
     throw createError(400, "Password saat ini tidak sesuai");
   }
 
   // 3. Ensure new password is not identical to current password
-  const isSamePassword = await comparePassword(newPassword, user.passwordHash);
+  const isSamePassword = await comparePassword(newPassword, passwordHash);
   if (isSamePassword) {
     throw createError(400, "Password baru tidak boleh sama dengan password saat ini");
   }
@@ -279,6 +293,7 @@ export const changePassword = async (userId, { currentPassword, newPassword }, m
     id: updatedUser.id,
     email: updatedUser.email,
     role: updatedUser.role,
+    division: updatedUser.division,
   };
 
   const accessToken = generateAccessToken(accessTokenPayload);
@@ -286,11 +301,11 @@ export const changePassword = async (userId, { currentPassword, newPassword }, m
   const expiresAt = getTokenExpiryDate(refreshToken);
 
   await authRepository.createRefreshToken({
-    token: refreshToken,
-    userId: updatedUser.id,
-    expiresAt,
-    userAgent: meta.userAgent || null,
-    ipAddress: meta.ipAddress || null,
+    token_hash: refreshToken,
+    user_id: updatedUser.id,
+    expires_at: expiresAt,
+    user_agent: meta.userAgent || null,
+    ip_address: meta.ipAddress || null,
   });
 
   return {

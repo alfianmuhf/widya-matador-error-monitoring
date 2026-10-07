@@ -14,11 +14,19 @@ export const createUserSchema = z.object({
     .trim()
     .min(2, "Nama minimal 2 karakter"),
   role: z
-    .enum(["ADMIN", "COORDINATOR", "VIEWER"], {
+    .enum(["ADMIN", "COORDINATOR", "VIEWER", "admin", "coordinator", "viewer"], {
       errorMap: () => ({ message: "Role harus berupa ADMIN, COORDINATOR, atau VIEWER" }),
     })
     .optional()
-    .default("VIEWER"),
+    .default("viewer")
+    .transform((val) => val.toLowerCase()),
+  division: z
+    .enum(["none", "after_sales", "software", "NONE", "AFTER_SALES", "SOFTWARE"], {
+      errorMap: () => ({ message: "Divisi harus berupa none, after_sales, atau software" }),
+    })
+    .optional()
+    .nullable()
+    .transform((val) => (val ? val.toLowerCase() : null)),
 });
 
 /**
@@ -42,17 +50,25 @@ export const updateUserSchema = z
       .min(6, "Password minimal 6 karakter")
       .optional(),
     role: z
-      .enum(["ADMIN", "COORDINATOR", "VIEWER"], {
+      .enum(["ADMIN", "COORDINATOR", "VIEWER", "admin", "coordinator", "viewer"], {
         errorMap: () => ({ message: "Role harus berupa ADMIN, COORDINATOR, atau VIEWER" }),
       })
-      .optional(),
+      .optional()
+      .transform((val) => (val ? val.toLowerCase() : undefined)),
+    division: z
+      .enum(["none", "after_sales", "software", "NONE", "AFTER_SALES", "SOFTWARE"], {
+        errorMap: () => ({ message: "Divisi harus berupa none, after_sales, atau software" }),
+      })
+      .optional()
+      .nullable()
+      .transform((val) => (val ? val.toLowerCase() : null)),
     status: z
-      .enum(["INVITED", "ACTIVE", "SUSPENDED"], {
+      .enum(["INVITED", "ACTIVE", "SUSPENDED", "invited", "active", "suspended"], {
         errorMap: () => ({ message: "Status harus berupa INVITED, ACTIVE, atau SUSPENDED" }),
       })
-      .optional(),
+      .optional()
+      .transform((val) => (val ? val.toLowerCase() : undefined)),
   })
   .refine((data) => Object.keys(data).length > 0, {
     message: "Minimal satu field harus disertakan untuk pembaruan data",
   });
-

@@ -5,7 +5,7 @@ import { prisma } from "../../config/prisma.js";
  * @param {string} email
  */
 export const findUserByEmail = async (email) => {
-  return prisma.user.findUnique({
+  return prisma.users.findUnique({
     where: { email },
   });
 };
@@ -15,55 +15,65 @@ export const findUserByEmail = async (email) => {
  * @param {string} id
  */
 export const findUserById = async (id) => {
-  return prisma.user.findUnique({
+  return prisma.users.findUnique({
     where: { id },
     select: {
       id: true,
       email: true,
       name: true,
       role: true,
+      division: true,
       status: true,
-      mustChangePassword: true,
-      failedLoginAttempts: true,
-      lockedUntil: true,
-      lastLoginAt: true,
-      passwordChangedAt: true,
-      createdAt: true,
-      updatedAt: true,
+      must_change_password: true,
+      failed_login_attempts: true,
+      locked_until: true,
+      last_login_at: true,
+      password_changed_at: true,
+      created_at: true,
+      updated_at: true,
     },
   });
 };
 
 /**
  * Create a new user record
- * @param {object} data - { email, passwordHash, name, role, status, mustChangePassword }
+ * @param {object} data
  */
 export const createUser = async (data) => {
-  return prisma.user.create({
-    data,
+  return prisma.users.create({
+    data: {
+      email: data.email,
+      name: data.name,
+      password_hash: data.password_hash || data.passwordHash,
+      role: data.role || "viewer",
+      division: data.division || null,
+      status: data.status || "invited",
+      must_change_password: data.must_change_password ?? data.mustChangePassword ?? true,
+    },
     select: {
       id: true,
       email: true,
       name: true,
       role: true,
+      division: true,
       status: true,
-      mustChangePassword: true,
-      createdAt: true,
+      must_change_password: true,
+      created_at: true,
     },
   });
 };
 
 /**
- * Update user on successful login: reset failed attempts, clear lock, update lastLoginAt
+ * Update user on successful login: reset failed attempts, clear lock, update last_login_at
  * @param {string} id
  */
 export const updateLoginSuccess = async (id) => {
-  return prisma.user.update({
+  return prisma.users.update({
     where: { id },
     data: {
-      failedLoginAttempts: 0,
-      lockedUntil: null,
-      lastLoginAt: new Date(),
+      failed_login_attempts: 0,
+      locked_until: null,
+      last_login_at: new Date(),
     },
   });
 };
@@ -75,22 +85,28 @@ export const updateLoginSuccess = async (id) => {
  * @param {Date|null} lockedUntil
  */
 export const recordFailedLoginAttempt = async (id, attempts, lockedUntil = null) => {
-  return prisma.user.update({
+  return prisma.users.update({
     where: { id },
     data: {
-      failedLoginAttempts: attempts,
-      ...(lockedUntil ? { lockedUntil } : {}),
+      failed_login_attempts: attempts,
+      ...(lockedUntil ? { locked_until: lockedUntil } : {}),
     },
   });
 };
 
 /**
  * Store a new refresh token in the database
- * @param {object} data - { token, userId, expiresAt, userAgent, ipAddress }
+ * @param {object} data
  */
 export const createRefreshToken = async (data) => {
-  return prisma.refreshToken.create({
-    data,
+  return prisma.refresh_tokens.create({
+    data: {
+      token_hash: data.token_hash || data.token,
+      user_id: data.user_id || data.userId,
+      expires_at: data.expires_at || data.expiresAt,
+      user_agent: data.user_agent || data.userAgent || null,
+      ip_address: data.ip_address || data.ipAddress || null,
+    },
   });
 };
 
@@ -99,8 +115,8 @@ export const createRefreshToken = async (data) => {
  * @param {string} token
  */
 export const findRefreshToken = async (token) => {
-  return prisma.refreshToken.findUnique({
-    where: { token },
+  return prisma.refresh_tokens.findUnique({
+    where: { token_hash: token },
     include: {
       user: true,
     },
@@ -112,65 +128,63 @@ export const findRefreshToken = async (token) => {
  * @param {string} token
  */
 export const revokeRefreshToken = async (token) => {
-  return prisma.refreshToken.update({
-    where: { token },
+  return prisma.refresh_tokens.update({
+    where: { token_hash: token },
     data: {
-      revoked: true,
-      revokedAt: new Date(),
+      revoked_at: new Date(),
     },
   });
 };
 
 /**
- * Revoke all active refresh tokens for a user (useful for security breach / force logout all devices)
+ * Revoke all active refresh tokens for a user (force logout all devices)
  * @param {string} userId
  */
 export const revokeAllUserTokens = async (userId) => {
-  return prisma.refreshToken.updateMany({
+  return prisma.refresh_tokens.updateMany({
     where: {
-      userId,
-      revoked: false,
+      user_id: userId,
+      revoked_at: null,
     },
     data: {
-      revoked: true,
-      revokedAt: new Date(),
+      revoked_at: new Date(),
     },
   });
 };
 
 /**
- * Find user by ID including passwordHash for password verification
+ * Find user by ID including password_hash for verification
  * @param {string} id
  */
 export const findUserWithPasswordById = async (id) => {
-  return prisma.user.findUnique({
+  return prisma.users.findUnique({
     where: { id },
   });
 };
 
 /**
- * Update user password and mark mustChangePassword as false
+ * Update user password and mark must_change_password as false
  * @param {string} id
  * @param {string} passwordHash
  */
 export const updateUserPassword = async (id, passwordHash) => {
-  return prisma.user.update({
+  return prisma.users.update({
     where: { id },
     data: {
-      passwordHash,
-      mustChangePassword: false,
-      passwordChangedAt: new Date(),
+      password_hash: passwordHash,
+      must_change_password: false,
+      password_changed_at: new Date(),
     },
     select: {
       id: true,
       email: true,
       name: true,
       role: true,
+      division: true,
       status: true,
-      mustChangePassword: true,
-      passwordChangedAt: true,
-      updatedAt: true,
+      must_change_password: true,
+      password_changed_at: true,
+      updated_at: true,
     },
   });
 };
-

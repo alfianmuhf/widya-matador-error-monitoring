@@ -2,6 +2,31 @@ import createError from "http-errors";
 import * as clientRepo from "./client.repository.js";
 import { recordLog } from "../audit-log/audit-log.service.js";
 
+const formatClient = (client) => {
+  if (!client) return null;
+  return {
+    id: client.id,
+    name: client.name,
+    isActive: client.is_active,
+    is_active: client.is_active,
+    createdAt: client.created_at,
+    created_at: client.created_at,
+    updatedAt: client.updated_at,
+    updated_at: client.updated_at,
+    _count: client._count,
+    assets: client.assets ? client.assets.map(a => ({
+      id: a.id,
+      unitCode: a.unit_code,
+      unit_code: a.unit_code,
+      type: a.asset_type,
+      asset_type: a.asset_type,
+      status: a.status,
+      isActive: a.is_active,
+      is_active: a.is_active,
+    })) : undefined,
+  };
+};
+
 export const getClients = async (query = {}) => {
   const pageNum = parseInt(query.page, 10) || 1;
   const limitNum = parseInt(query.limit, 10) || 10;
@@ -14,9 +39,9 @@ export const getClients = async (query = {}) => {
   }
 
   if (query.isActive === "true" || query.isActive === true) {
-    where.isActive = true;
+    where.is_active = true;
   } else if (query.isActive === "false" || query.isActive === false) {
-    where.isActive = false;
+    where.is_active = false;
   }
 
   const [clients, total] = await Promise.all([
@@ -25,7 +50,7 @@ export const getClients = async (query = {}) => {
   ]);
 
   return {
-    clients,
+    clients: clients.map(formatClient),
     meta: {
       total,
       page: pageNum,
@@ -40,7 +65,7 @@ export const getClientById = async (id) => {
   if (!client) {
     throw createError(404, "Client tidak ditemukan");
   }
-  return client;
+  return formatClient(client);
 };
 
 export const createClient = async (data, actorUser = null) => {
@@ -57,15 +82,18 @@ export const createClient = async (data, actorUser = null) => {
       identifier: created.name,
       changeSummary: `tambah client baru`,
       name: created.name,
-      isActive: created.isActive,
+      isActive: created.is_active,
     },
   });
 
-  return created;
+  return formatClient(created);
 };
 
 export const updateClient = async (id, data, actorUser = null) => {
-  const current = await getClientById(id);
+  const current = await clientRepo.findById(id);
+  if (!current) {
+    throw createError(404, "Client tidak ditemukan");
+  }
   const updated = await clientRepo.update(id, data);
 
   const changesStr = Object.keys(data)
@@ -82,16 +110,19 @@ export const updateClient = async (id, data, actorUser = null) => {
     details: {
       identifier: updated.name,
       changeSummary: changesStr || "pembaruan data client",
-      before: { name: current.name, isActive: current.isActive },
+      before: { name: current.name, isActive: current.is_active },
       after: data,
     },
   });
 
-  return updated;
+  return formatClient(updated);
 };
 
 export const deleteClient = async (id, actorUser = null) => {
-  const client = await getClientById(id);
+  const client = await clientRepo.findById(id);
+  if (!client) {
+    throw createError(404, "Client tidak ditemukan");
+  }
 
   // Constraint check: apakah ada yang nyangkut (Asset atau TelegramGroup)?
   const [assetCount, groupCount] = await Promise.all([
@@ -102,8 +133,8 @@ export const deleteClient = async (id, actorUser = null) => {
   const hasDependents = assetCount > 0 || groupCount > 0;
 
   if (hasDependents) {
-    // Masih ada yang nyangkut -> JANGAN DI-HARD DELETE! Lakukan SOFT DELETE
-    const softDeleted = await clientRepo.update(id, { isActive: false });
+    // Masih ada yang nyangkut -> SOFT DELETE
+    const softDeleted = await clientRepo.update(id, { is_active: false });
 
     await recordLog({
       actor: actorUser?.email || actorUser?.name || "Sistem",
@@ -122,13 +153,13 @@ export const deleteClient = async (id, actorUser = null) => {
     });
 
     return {
-      client: softDeleted,
+      client: formatClient(softDeleted),
       deleteAction: "SOFT",
       message: `Client memiliki ${assetCount} asset dan ${groupCount} grup terhubung, sehingga dinonaktifkan (Soft Delete).`,
     };
   }
 
-  // Tidak ada yang nyangkut -> Boleh HARD DELETE
+  // Tidak ada yang nyangkut -> HARD DELETE
   await clientRepo.deleteById(id);
 
   await recordLog({
@@ -152,5 +183,3 @@ export const deleteClient = async (id, actorUser = null) => {
     message: "Client berhasil dihapus secara permanen (Hard Delete)",
   };
 };
-
-

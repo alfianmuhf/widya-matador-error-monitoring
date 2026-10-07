@@ -3,6 +3,31 @@ import * as failureCodeRepo from "./failure-code.repository.js";
 import prisma from "../../config/prisma.js";
 import { recordLog } from "../audit-log/audit-log.service.js";
 
+const formatFailureCode = (f) => {
+  if (!f) return null;
+  return {
+    id: f.id,
+    componentId: f.component_id,
+    component_id: f.component_id,
+    code: f.code,
+    name: f.name,
+    description: f.description,
+    isActive: f.is_active,
+    is_active: f.is_active,
+    createdAt: f.created_at,
+    created_at: f.created_at,
+    updatedAt: f.updated_at,
+    updated_at: f.updated_at,
+    component: f.component ? {
+      id: f.component.id,
+      prefix: f.component.prefix,
+      name: f.component.name,
+      sortOrder: f.component.sort_order,
+      sort_order: f.component.sort_order,
+    } : undefined,
+  };
+};
+
 export const getFailureCodes = async (query = {}) => {
   const pageNum = parseInt(query.page, 10) || 1;
   const limitNum = parseInt(query.limit, 10) || 10;
@@ -10,21 +35,22 @@ export const getFailureCodes = async (query = {}) => {
 
   const where = {};
 
-  if (query.componentId) {
-    where.componentId = query.componentId;
+  if (query.componentId || query.component_id) {
+    where.component_id = query.componentId || query.component_id;
   }
 
   if (query.search) {
     where.OR = [
       { code: { contains: query.search, mode: "insensitive" } },
+      { name: { contains: query.search, mode: "insensitive" } },
       { description: { contains: query.search, mode: "insensitive" } },
     ];
   }
 
   if (query.isActive === "true" || query.isActive === true) {
-    where.isActive = true;
+    where.is_active = true;
   } else if (query.isActive === "false" || query.isActive === false) {
-    where.isActive = false;
+    where.is_active = false;
   }
 
   const [failureCodes, total] = await Promise.all([
@@ -33,7 +59,7 @@ export const getFailureCodes = async (query = {}) => {
   ]);
 
   return {
-    failureCodes,
+    failureCodes: failureCodes.map(formatFailureCode),
     meta: {
       total,
       page: pageNum,
@@ -48,25 +74,32 @@ export const getFailureCodeById = async (id) => {
   if (!failureCode) {
     throw createError(404, "Failure code tidak ditemukan");
   }
-  return failureCode;
+  return formatFailureCode(failureCode);
 };
 
 export const createFailureCode = async (data, actorUser = null) => {
+  const componentId = data.componentId || data.component_id;
   // Verifikasi component ada
-  const component = await prisma.component.findUnique({
-    where: { id: data.componentId },
+  const component = await prisma.components.findUnique({
+    where: { id: componentId },
   });
   if (!component) {
     throw createError(404, "Komponen tidak ditemukan");
   }
 
-  // Verifikasi keunikan code (global unique)
-  const existing = await failureCodeRepo.findByCode(data.code);
+  // Verifikasi keunikan code untuk component ini
+  const existing = await failureCodeRepo.findByComponentAndCode(componentId, data.code);
   if (existing) {
-    throw createError(409, `Failure code '${data.code}' sudah terdaftar`);
+    throw createError(409, `Failure code '${data.code}' sudah terdaftar pada komponen ini`);
   }
 
-  const created = await failureCodeRepo.create(data);
+  const created = await failureCodeRepo.create({
+    component_id: componentId,
+    code: data.code,
+    name: data.name || null,
+    description: data.description || null,
+    is_active: data.isActive ?? data.is_active ?? true,
+  });
 
   await recordLog({
     actor: actorUser?.email || actorUser?.name || "Sistem",
@@ -79,30 +112,35 @@ export const createFailureCode = async (data, actorUser = null) => {
       identifier: created.code,
       changeSummary: `tambah '${created.description || created.code}' pada ${component.name}`,
       code: created.code,
-      componentId: created.componentId,
-      isActive: created.isActive,
+      name: created.name,
+      componentId: created.component_id,
+      isActive: created.is_active,
     },
   });
 
-  return created;
+  return formatFailureCode(created);
 };
 
 export const updateFailureCode = async (id, data, actorUser = null) => {
-  const current = await getFailureCodeById(id);
+  const current = await failureCodeRepo.findById(id);
+  if (!current) {
+    throw createError(404, "Failure code tidak ditemukan");
+  }
 
-  if (data.componentId && data.componentId !== current.componentId) {
-    const component = await prisma.component.findUnique({
-      where: { id: data.componentId },
+  const newComponentId = data.componentId || data.component_id || current.component_id;
+  if (newComponentId !== current.component_id) {
+    const component = await prisma.components.findUnique({
+      where: { id: newComponentId },
     });
     if (!component) {
       throw createError(404, "Komponen tidak ditemukan");
     }
   }
 
-  if (data.code && data.code !== current.code) {
-    const existing = await failureCodeRepo.findByCode(data.code);
+  if (data.code && (data.code !== current.code || newComponentId !== current.component_id)) {
+    const existing = await failureCodeRepo.findByComponentAndCode(newComponentId, data.code);
     if (existing && existing.id !== id) {
-      throw createError(409, `Failure code '${data.code}' sudah terdaftar`);
+      throw createError(409, `Failure code '${data.code}' sudah terdaftar pada komponen ini`);
     }
   }
 
@@ -122,23 +160,26 @@ export const updateFailureCode = async (id, data, actorUser = null) => {
     details: {
       identifier: updated.code,
       changeSummary: changesStr || "pembaruan failure code",
-      before: { code: current.code, isActive: current.isActive },
+      before: { code: current.code, isActive: current.is_active },
       after: data,
     },
   });
 
-  return updated;
+  return formatFailureCode(updated);
 };
 
 export const deleteFailureCode = async (id, actorUser = null) => {
-  const failureCode = await getFailureCodeById(id);
+  const failureCode = await failureCodeRepo.findById(id);
+  if (!failureCode) {
+    throw createError(404, "Failure code tidak ditemukan");
+  }
 
-  // Constraint check: apakah ada yang nyangkut (Ticket yang memakai failureCodeId)?
+  // Constraint check: apakah ada tiket yang memakai failureCodeId?
   const ticketCount = await failureCodeRepo.countTicketsByFailureCodeId(id);
 
   if (ticketCount > 0) {
-    // Masih ada tiket yang nyangkut -> JANGAN DI-HARD DELETE! Lakukan SOFT DELETE
-    const softDeleted = await failureCodeRepo.update(id, { isActive: false });
+    // Masih ada tiket yang nyangkut -> SOFT DELETE
+    const softDeleted = await failureCodeRepo.update(id, { is_active: false });
 
     await recordLog({
       actor: actorUser?.email || actorUser?.name || "Sistem",
@@ -156,13 +197,13 @@ export const deleteFailureCode = async (id, actorUser = null) => {
     });
 
     return {
-      failureCode: softDeleted,
+      failureCode: formatFailureCode(softDeleted),
       deleteAction: "SOFT",
       message: `Failure code memiliki ${ticketCount} tiket terhubung, sehingga dinonaktifkan (Soft Delete).`,
     };
   }
 
-  // Tidak ada yang nyangkut -> Boleh HARD DELETE
+  // Tidak ada yang nyangkut -> HARD DELETE
   await failureCodeRepo.deleteById(id);
 
   await recordLog({
@@ -186,5 +227,3 @@ export const deleteFailureCode = async (id, actorUser = null) => {
     message: "Failure code berhasil dihapus secara permanen (Hard Delete)",
   };
 };
-
-

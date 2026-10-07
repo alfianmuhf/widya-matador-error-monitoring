@@ -44,7 +44,10 @@ export const authorize = (...roles) => {
       return next(createError(401, "Autentikasi diperlukan"));
     }
 
-    if (!roles.includes(req.user.role)) {
+    const userRole = (req.user.role || "").toLowerCase();
+    const allowedRoles = roles.map((r) => r.toLowerCase());
+
+    if (!allowedRoles.includes(userRole)) {
       return next(createError(403, "Akses dilarang: Peran tidak memiliki izin yang cukup"));
     }
 

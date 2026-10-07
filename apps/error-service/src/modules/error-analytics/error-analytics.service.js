@@ -1,4 +1,5 @@
 import prisma from "../../config/prisma.js";
+import { findTicketIdsByCurrentHistory } from "../ticket/ticket.repository.js";
 
 /**
  * Service to aggregate and calculate Error Analytics metrics
@@ -23,53 +24,56 @@ export async function getErrorAnalyticsData(query = {}) {
   } else if (timeRange === "6m") {
     startDate = new Date(now.getTime() - 180 * 24 * 60 * 60 * 1000);
   } else {
-    // "all"
     startDate = null;
   }
 
   // 1. Build Where Clause
   const where = {};
   if (startDate) {
-    where.createdAt = { gte: startDate };
+    where.created_at = { gte: startDate };
   }
   if (status && status !== "all") {
-    const st = status.toLowerCase();
-    where.status = st === "monitor" ? "escalated" : st;
+    const st = status.toLowerCase() === "monitor" ? "escalated" : status.toLowerCase();
+    const matchingIds = await findTicketIdsByCurrentHistory({ status: st });
+    if (matchingIds) {
+      where.id = { in: matchingIds };
+    }
   }
   if (componentId && componentId !== "all") {
-    where.componentId = componentId;
+    where.failure_code = { component_id: componentId };
   }
   if ((clientId && clientId !== "all") || (locationId && locationId !== "all")) {
     where.asset = {};
     if (clientId && clientId !== "all") {
-      where.asset.clientId = clientId;
+      where.asset.client_id = clientId;
     }
     if (locationId && locationId !== "all") {
-      where.asset.locationId = locationId;
+      where.asset.location_id = locationId;
     }
   }
 
   // 2. Fetch Tickets with relevant relations
-  const tickets = await prisma.ticket.findMany({
+  const tickets = await prisma.tickets.findMany({
     where,
     include: {
-      component: {
-        select: {
-          id: true,
-          name: true,
-          prefix: true,
-        },
-      },
-      failureCode: {
+      failure_code: {
         select: {
           id: true,
           code: true,
+          name: true,
           description: true,
+          component: {
+            select: {
+              id: true,
+              name: true,
+              prefix: true,
+            },
+          },
         },
       },
       asset: {
         select: {
-          unitCode: true,
+          unit_code: true,
           client: {
             select: {
               id: true,
@@ -84,9 +88,16 @@ export async function getErrorAnalyticsData(query = {}) {
           },
         },
       },
+      ticket_history: {
+        orderBy: { version: "desc" },
+        select: {
+          version: true,
+          status: true,
+        },
+      },
     },
     orderBy: {
-      createdAt: "asc",
+      created_at: "asc",
     },
   });
 
@@ -95,24 +106,23 @@ export async function getErrorAnalyticsData(query = {}) {
   // 3. Dataset 1: Tiket per component
   const componentMap = new Map();
   for (const t of tickets) {
-    const compName = t.component?.name || "Lain-Lain";
-    const compId = t.component?.id || null;
+    const compName = t.failure_code?.component?.name || "Lain-Lain";
+    const compId = t.failure_code?.component?.id || null;
     if (!componentMap.has(compName)) {
       componentMap.set(compName, { componentId: compId, name: compName, count: 0 });
     }
     componentMap.get(compName).count++;
   }
 
-  // Sort ascending by count (so lowest at top/bottom as in reference)
   const ticketsPerComponent = Array.from(componentMap.values()).sort(
     (a, b) => a.count - b.count
   );
 
-  // 4. Dataset 2: Pareto failure code (bar = jumlah, line = kumulatif %)
+  // 4. Dataset 2: Pareto failure code
   const failureCodeMap = new Map();
   for (const t of tickets) {
-    const code = t.failureCode?.code || "UNKNOWN";
-    const description = t.failureCode?.description || "Kerusakan tidak terdefinisi";
+    const code = t.failure_code?.code || "UNKNOWN";
+    const description = t.failure_code?.description || t.failure_code?.name || "Kerusakan tidak terdefinisi";
     if (!failureCodeMap.has(code)) {
       failureCodeMap.set(code, { code, description, count: 0 });
     }
@@ -154,10 +164,9 @@ export async function getErrorAnalyticsData(query = {}) {
     .slice(0, 8);
 
   // 6. Dataset 4: Peta panas unit × component (Heatmap)
-  // Determine top busy units (top 8)
   const unitCountMap = new Map();
   for (const t of tickets) {
-    const u = t.unitCode;
+    const u = t.asset?.unit_code;
     if (u) {
       unitCountMap.set(u, (unitCountMap.get(u) || 0) + 1);
     }
@@ -168,10 +177,9 @@ export async function getErrorAnalyticsData(query = {}) {
     .slice(0, 8)
     .map(([unitCode]) => unitCode);
 
-  // Determine top components (top 6)
   const compCountMap = new Map();
   for (const t of tickets) {
-    const cName = t.component?.name;
+    const cName = t.failure_code?.component?.name;
     if (cName) {
       compCountMap.set(cName, (compCountMap.get(cName) || 0) + 1);
     }
@@ -182,25 +190,22 @@ export async function getErrorAnalyticsData(query = {}) {
     .slice(0, 6)
     .map(([name]) => name);
 
-  // Fallback defaults if dataset is small
   const heatmapUnits = topUnits.length > 0 ? topUnits : ["STATIC005", "LSP-033", "LSP-020", "STATIC001"];
   const heatmapComponents =
     topHeatmapComponents.length > 0
       ? topHeatmapComponents
       : ["Mini PC", "Lidar & Controller", "CCTV", "Network", "Accu & Power System", "Cable & Connector"];
 
-  // Compute cell counts for unit x component
   const matrixCounts = {};
   for (const t of tickets) {
-    const u = t.unitCode;
-    const c = t.component?.name;
+    const u = t.asset?.unit_code;
+    const c = t.failure_code?.component?.name;
     if (u && c && heatmapUnits.includes(u) && heatmapComponents.includes(c)) {
       const key = `${u}:::${c}`;
       matrixCounts[key] = (matrixCounts[key] || 0) + 1;
     }
   }
 
-  // Generate ECharts heatmap data array: [colIndex (component), rowIndex (unit), value]
   const heatmapData = [];
   heatmapUnits.forEach((unit, unitIdx) => {
     heatmapComponents.forEach((comp, compIdx) => {
@@ -211,18 +216,18 @@ export async function getErrorAnalyticsData(query = {}) {
 
   // 7. Filter Options
   const [components, clients, locations] = await Promise.all([
-    prisma.component.findMany({
-      where: { isActive: true },
+    prisma.components.findMany({
+      where: { is_active: true },
       select: { id: true, name: true, prefix: true },
       orderBy: { name: "asc" },
     }),
-    prisma.client.findMany({
-      where: { isActive: true },
+    prisma.clients.findMany({
+      where: { is_active: true },
       select: { id: true, name: true },
       orderBy: { name: "asc" },
     }),
-    prisma.location.findMany({
-      where: { isActive: true },
+    prisma.locations.findMany({
+      where: { is_active: true },
       select: { id: true, name: true },
       orderBy: { name: "asc" },
     }),
@@ -251,7 +256,6 @@ export async function getErrorAnalyticsData(query = {}) {
         { value: "open", label: "Open" },
         { value: "escalated", label: "Escalated" },
         { value: "solved", label: "Solved" },
-        { value: "closed", label: "Closed" },
       ],
     },
   };

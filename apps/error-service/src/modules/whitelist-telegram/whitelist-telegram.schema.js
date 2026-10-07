@@ -8,6 +8,13 @@ export const createTelegramUserSchema = z.object({
     .max(50, "Telegram ID maksimal 50 karakter"),
   username: z.string().trim().max(100).nullable().optional(),
   fullName: z.string().trim().max(100).nullable().optional(),
+  division: z
+    .enum(["none", "after_sales", "software", "NONE", "AFTER_SALES", "SOFTWARE"], {
+      errorMap: () => ({ message: "Divisi harus berupa none, after_sales, atau software" }),
+    })
+    .optional()
+    .nullable()
+    .transform((val) => (val ? val.toLowerCase() : null)),
   isActive: z.boolean().optional().default(true),
 });
 
@@ -15,6 +22,13 @@ export const updateTelegramUserSchema = z
   .object({
     username: z.string().trim().max(100).nullable().optional(),
     fullName: z.string().trim().max(100).nullable().optional(),
+    division: z
+      .enum(["none", "after_sales", "software", "NONE", "AFTER_SALES", "SOFTWARE"], {
+        errorMap: () => ({ message: "Divisi harus berupa none, after_sales, atau software" }),
+      })
+      .optional()
+      .nullable()
+      .transform((val) => (val ? val.toLowerCase() : null)),
     isActive: z.boolean().optional(),
   })
   .refine((data) => Object.keys(data).length > 0, {
@@ -25,5 +39,6 @@ export const queryTelegramUserSchema = z.object({
   page: z.coerce.number().int().positive().optional().default(1),
   limit: z.coerce.number().int().positive().max(100).optional().default(10),
   search: z.string().trim().optional(),
+  division: z.string().trim().optional(),
   isActive: z.enum(["true", "false", "all"]).optional(),
 });

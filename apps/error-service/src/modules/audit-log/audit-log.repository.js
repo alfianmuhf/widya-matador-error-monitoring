@@ -1,7 +1,7 @@
 import prisma from "../../config/prisma.js";
 
 const auditLogIncludes = {
-  actorUser: {
+  user: {
     select: {
       id: true,
       name: true,
@@ -9,12 +9,12 @@ const auditLogIncludes = {
       role: true,
     },
   },
-  actorTelegram: {
+  telegram_user: {
     select: {
       id: true,
-      telegramId: true,
+      telegram_id: true,
       username: true,
-      fullName: true,
+      full_name: true,
     },
   },
 };
@@ -23,7 +23,7 @@ const auditLogIncludes = {
  * Insert a new audit log record
  */
 export const create = async (data) => {
-  return prisma.auditLog.create({
+  return prisma.audit_logs.create({
     data,
     include: auditLogIncludes,
   });
@@ -32,8 +32,8 @@ export const create = async (data) => {
 /**
  * Get paginated list of audit logs
  */
-export const findMany = async ({ skip = 0, take = 20, where = {}, orderBy = { createdAt: "desc" } }) => {
-  return prisma.auditLog.findMany({
+export const findMany = async ({ skip = 0, take = 20, where = {}, orderBy = { created_at: "desc" } }) => {
+  return prisma.audit_logs.findMany({
     skip,
     take,
     where,
@@ -46,14 +46,14 @@ export const findMany = async ({ skip = 0, take = 20, where = {}, orderBy = { cr
  * Count total audit logs matching condition
  */
 export const count = async (where = {}) => {
-  return prisma.auditLog.count({ where });
+  return prisma.audit_logs.count({ where });
 };
 
 /**
  * Find single audit log by ID
  */
 export const findById = async (id) => {
-  return prisma.auditLog.findUnique({
+  return prisma.audit_logs.findUnique({
     where: { id },
     include: auditLogIncludes,
   });

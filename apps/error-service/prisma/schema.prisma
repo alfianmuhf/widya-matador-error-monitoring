@@ -1,9 +1,5 @@
 // ERAD — Error Report Automation Dashboard
-// Prisma schema, hasil translasi 1:1 dari erad_schema_v2.dbml
-//
-// Catatan: default uuid pakai gen_random_uuid() (fungsi bawaan extension
-// pgcrypto di Postgres). Pastikan extension-nya aktif, misal lewat migration:
-//   CREATE EXTENSION IF NOT EXISTS pgcrypto;
+// Prisma schema, disesuaikan 1:1 dengan perubahan_DB.dbml (tabel & kolom snake_case)
 
 generator client {
   provider = "prisma-client-js"
@@ -13,362 +9,343 @@ datasource db {
   provider = "postgresql"
 }
 
-// ==================
-// Master Data
-// ==================
+// ==================================================
+// 1. ENUM
+// ==================================================
 
-model Client {
-  id       String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  name     String  @db.VarChar(100)
-  isActive Boolean @default(true) @map("is_active")
-
-  assets         Asset[]
-  telegramGroups TelegramGroup[]
-
-  @@map("clients")
+enum user_role {
+  admin
+  coordinator
+  viewer
 }
 
-model Location {
-  id       String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  name     String  @db.VarChar(100)
-  isActive Boolean @default(true) @map("is_active")
-
-  assets         Asset[]
-  telegramGroups TelegramGroup[]
-
-  @@map("locations")
+enum user_status {
+  invited
+  active
+  suspended
 }
 
-enum TypeAsset {
-  PORTABLE
-  STATIC
-
-  @@map("type_asset")
+enum division {
+  none
+  after_sales
+  software
 }
 
-enum AssetStatus {
-  ACTIVE
-  MAINTENANCE
-  RETIRED
-
-  @@map("asset_status")
+enum bot_state {
+  idle
+  await_asset
+  await_component
+  await_failure_code
+  await_detail
+  await_update
+  committed
 }
 
-model Asset {
-  id                String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  unitCode          String      @unique @map("unit_code") @db.VarChar(50)
-  type              TypeAsset   @default(PORTABLE)
-  clientId          String      @map("client_id") @db.Uuid
-  locationId        String      @map("location_id") @db.Uuid
-  status            AssetStatus @default(ACTIVE)
-  commissioningDate DateTime?   @map("commissioning_date") @db.Date
-  isActive          Boolean     @default(true) @map("is_active")
-
-  client   Client   @relation(fields: [clientId], references: [id])
-  location Location @relation(fields: [locationId], references: [id])
-  tickets  Ticket[]
-
-  @@map("asset")
+enum delete_type {
+  none
+  soft
+  hard
 }
 
-model Component {
-  id        String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  prefix    String  @unique @db.VarChar(10)
-  name      String  @db.VarChar(100)
-  sortOrder Int     @default(0) @map("sort_order")
-  isActive  Boolean @default(true) @map("is_active")
-
-  failureCodes FailureCode[]
-  tickets      Ticket[]
-
-  @@map("components")
+enum export_status {
+  queued
+  processing
+  ready
+  failed
 }
 
-model FailureCode {
-  id          String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  componentId String  @map("component_id") @db.Uuid
-  code        String  @unique @db.VarChar(20)
-  description String?
-  isActive    Boolean @default(true) @map("is_active")
-
-  component Component @relation(fields: [componentId], references: [id])
-  tickets   Ticket[]
-
-  @@map("failure_codes")
+enum asset_type {
+  portable
+  static
 }
 
-// ==================
-// Tiket
-// ==================
+enum asset_status {
+  active
+  maintenance
+  retired
+}
 
-enum TicketStatus {
+enum telegram_group_type {
+  client
+  location
+  internal
+}
+
+enum ticket_status {
   open
   escalated
   solved
-  closed
-
-  @@map("ticket_status")
 }
 
-enum TicketSource {
-  telegram
-  dashboard
-
-  @@map("ticket_source")
+enum severity {
+  rendah
+  sedang
+  tinggi
 }
 
-model Ticket {
-  ticketId           String       @id @map("ticket_id") @db.VarChar(50)
-  unitCode           String       @map("unit_code") @db.VarChar(50)
-  componentId        String       @map("component_id") @db.Uuid
-  failureCodeId      String       @map("failure_code_id") @db.Uuid
-  damageDescription  String?      @map("damage_description")
-  actionTaken        String?      @map("action_taken")
-  rootCause          String?      @map("root_cause")
-  severity           String?      @db.VarChar(20)
-  status             TicketStatus @default(open)
-  source             TicketSource?
-  reporterUserId     String?      @map("reporter_user_id") @db.Uuid
-  reporterTelegramId String?      @map("reporter_telegram_id") @db.VarChar(50)
-  createdAt          DateTime     @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt          DateTime?    @map("updated_at") @db.Timestamptz
-  resolvedAt         DateTime?    @map("resolved_at") @db.Timestamptz
-  closedAt           DateTime?    @map("closed_at") @db.Timestamptz
+// ==================================================
+// 2. USER & TELEGRAM USER (+ tabel pendukungnya)
+// ==================================================
 
-  asset            Asset          @relation(fields: [unitCode], references: [unitCode])
-  component        Component      @relation(fields: [componentId], references: [id])
-  failureCode      FailureCode    @relation(fields: [failureCodeId], references: [id])
-  reporterUser     User?          @relation("TicketReporterUser", fields: [reporterUserId], references: [id])
-  reporterTelegram TelegramUser?  @relation("TicketReporterTelegram", fields: [reporterTelegramId], references: [telegramId])
+model users {
+  id                    String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email                 String      @unique @db.VarChar(100)
+  name                  String      @db.VarChar(100)
+  password_hash         String
+  role                  user_role   @default(viewer)
+  division              division?
+  status                user_status @default(invited)
+  must_change_password  Boolean     @default(true)
+  failed_login_attempts Int         @default(0)
+  locked_until          DateTime?   @db.Timestamptz
+  last_login_at         DateTime?   @db.Timestamptz
+  password_changed_at   DateTime?   @db.Timestamptz
+  created_at            DateTime    @default(now()) @db.Timestamptz
+  updated_at            DateTime    @default(now()) @updatedAt @db.Timestamptz
 
-  history     TicketHistory[]
-  attachments TicketAttachment[]
-
-  @@map("tickets")
+  refresh_tokens   refresh_tokens[]
+  export_jobs      export_jobs[]
+  audit_logs       audit_logs[]
+  ticket_history   ticket_history[]
+  ticket_assignees ticket_assignees[]
 }
 
-model TicketHistory {
-  id                  String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  ticketId            String   @map("ticket_id") @db.VarChar(50)
-  changedByUserId     String?  @map("changed_by_user_id") @db.Uuid
-  changedByTelegramId String?  @map("changed_by_telegram_id") @db.VarChar(50)
-  oldValue            Json?    @map("old_value")
-  newValue            Json?    @map("new_value")
-  notes               String?
-  changedAt           DateTime @default(now()) @map("changed_at") @db.Timestamptz
+model telegram_users {
+  id          String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  telegram_id String     @unique @db.VarChar(50)
+  username    String?    @db.VarChar(100)
+  full_name   String?    @db.VarChar(100)
+  is_active   Boolean    @default(true)
+  division    division?
+  created_at  DateTime   @default(now()) @db.Timestamptz
+  updated_at  DateTime   @default(now()) @updatedAt @db.Timestamptz
 
-  ticket            Ticket        @relation(fields: [ticketId], references: [ticketId], onDelete: Cascade)
-  changedByUser     User?         @relation(fields: [changedByUserId], references: [id])
-  changedByTelegram TelegramUser? @relation(fields: [changedByTelegramId], references: [telegramId])
-
-  @@map("ticket_history")
+  bot_sessions     bot_sessions?
+  audit_logs       audit_logs[]
+  ticket_history   ticket_history[]
+  ticket_assignees ticket_assignees[]
 }
 
-model TicketAttachment {
-  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  ticketId   String   @map("ticket_id") @db.VarChar(50)
-  fileUrl    String   @map("file_url")
-  fileName   String?  @map("file_name") @db.VarChar(255)
-  mimeType   String?  @map("mime_type") @db.VarChar(100)
-  fileSize   Int?     @map("file_size")
-  uploadedAt DateTime @default(now()) @map("uploaded_at") @db.Timestamptz
+model bot_sessions {
+  telegram_id  String     @id @db.VarChar(50)
+  state        bot_state?
+  session_data Json?
+  created_at   DateTime   @default(now()) @db.Timestamptz
+  updated_at   DateTime   @default(now()) @updatedAt @db.Timestamptz
+  expires_at   DateTime?  @db.Timestamptz
 
-  ticket Ticket @relation(fields: [ticketId], references: [ticketId], onDelete: Cascade)
-
-  @@map("ticket_attachments")
+  telegram_user telegram_users @relation(fields: [telegram_id], references: [telegram_id], onDelete: Cascade)
 }
 
-// ==================
-// Bot Telegram
-// ==================
-
-model TelegramEvent {
-  updateId    BigInt   @id @map("update_id")
-  processedAt DateTime @default(now()) @map("processed_at") @db.Timestamptz
-
-  @@map("telegram_events")
+model telegram_events {
+  update_id    BigInt   @id
+  processed_at DateTime @default(now()) @db.Timestamptz
 }
 
-enum BotState {
-  IDLE
-  AWAIT_ASSET
-  AWAIT_COMPONENT
-  AWAIT_FAILURE_CODE
-  AWAIT_DETAIL
-  AWAIT_UPDATE
-  COMMITTED
-
-  @@map("bot_state")
-}
-
-model BotSession {
-  telegramId  String    @id @map("telegram_id") @db.VarChar(50)
-  state       BotState?
-  sessionData Json?     @map("session_data")
-  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
-  expiredAt   DateTime? @map("expired_at") @db.Timestamptz
-
-  telegramUser TelegramUser @relation(fields: [telegramId], references: [telegramId], onDelete: Cascade)
-
-  @@map("bot_sessions")
-}
-
-// ==================
-// User / Web
-// ==================
-
-enum UserRole {
-  ADMIN
-  COORDINATOR
-  VIEWER
-
-  @@map("user_role")
-}
-
-enum UserStatus {
-  INVITED
-  ACTIVE
-  SUSPENDED
-
-  @@map("user_status")
-}
-
-model User {
-  id                  String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  email               String     @unique @db.VarChar(100)
-  name                String     @db.VarChar(100)
-  passwordHash        String     @map("password_hash")
-  role                UserRole   @default(VIEWER)
-  status              UserStatus @default(INVITED)
-  mustChangePassword  Boolean    @default(true) @map("must_change_password")
-  failedLoginAttempts Int        @default(0) @map("failed_login_attempts")
-  lockedUntil         DateTime?  @map("locked_until") @db.Timestamptz
-  lastLoginAt         DateTime?  @map("last_login_at") @db.Timestamptz
-  passwordChangedAt   DateTime?  @map("password_changed_at") @db.Timestamptz
-  createdById         String?    @map("created_by_id") @db.Uuid
-  createdAt           DateTime   @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt           DateTime?  @map("updated_at") @db.Timestamptz
-
-  createdBy    User?  @relation("UserCreatedBy", fields: [createdById], references: [id])
-  createdUsers User[] @relation("UserCreatedBy")
-
-  refreshTokens            RefreshToken[]
-  whitelistedTelegramUsers TelegramUser[]  @relation("TelegramWhitelistedBy")
-  exportJobs               ExportJob[]
-  ticketsReported          Ticket[]        @relation("TicketReporterUser")
-  ticketHistoryChanges     TicketHistory[]
-  auditLogs                AuditLog[]
-
-  @@map("users")
-}
-
-model RefreshToken {
-  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  token     String    @unique
-  userId    String    @map("user_id") @db.Uuid
-  expiresAt DateTime  @map("expires_at") @db.Timestamptz
-  revoked   Boolean   @default(false)
-  revokedAt DateTime? @map("revoked_at") @db.Timestamptz
-  userAgent String?   @map("user_agent")
-  ipAddress String?   @map("ip_address")
-  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@map("refresh_tokens")
-}
-
-model TelegramUser {
-  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  telegramId      String    @unique @map("telegram_id") @db.VarChar(50)
-  username        String?   @db.VarChar(100)
-  fullName        String?   @map("full_name") @db.VarChar(100)
-  isActive        Boolean   @default(true) @map("is_active")
-  whitelistedById String?   @map("whitelisted_by_id") @db.Uuid
-  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt       DateTime? @map("updated_at") @db.Timestamptz
-
-  whitelistedBy User? @relation("TelegramWhitelistedBy", fields: [whitelistedById], references: [id])
-
-  botSession           BotSession?
-  ticketsReported      Ticket[]        @relation("TicketReporterTelegram")
-  ticketHistoryChanges TicketHistory[]
-  auditLogs            AuditLog[]
-
-  @@map("telegram_users")
-}
-
-// ==================
-// Audit Log
-// ==================
-
-enum DeleteStatus {
-  NONE
-  SOFT
-  HARD
-
-  @@map("delete_status")
-}
-
-model AuditLog {
-  id              String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  actor           String?      @db.VarChar(100)
-  actorUserId     String?      @map("actor_user_id") @db.Uuid
-  actorTelegramId String?      @map("actor_telegram_id") @db.Uuid
-  deleteAction    DeleteStatus @default(NONE) @map("delete_action")
-  action          String?      @db.VarChar(20)
-  entityType      String?      @map("entity_type") @db.VarChar(50)
-  entityId        String?      @map("entity_id") @db.VarChar(50)
-  details         Json?
-  createdAt       DateTime     @default(now()) @map("created_at") @db.Timestamptz
-
-  actorUser     User?         @relation(fields: [actorUserId], references: [id])
-  actorTelegram TelegramUser? @relation(fields: [actorTelegramId], references: [id])
-
-  @@map("audit_logs")
-}
-
-// ==================
-// Laporan & Ekspor
-// ==================
-
-enum ExportStatus {
-  QUEUED
-  PROCESSING
-  READY
-  FAILED
-
-  @@map("export_status")
-}
-
-model ExportJob {
-  id                String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  requestedByUserId String       @map("requested_by_user_id") @db.Uuid
-  status            ExportStatus @default(QUEUED)
-  filterParams      Json?        @map("filter_params")
-  fileUrl           String?      @map("file_url")
-  createdAt         DateTime     @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt         DateTime?    @map("updated_at") @db.Timestamptz
-
-  requestedBy User @relation(fields: [requestedByUserId], references: [id], onDelete: Cascade)
-
-  @@map("exports_jobs")
-}
-
-model TelegramGroup {
+model refresh_tokens {
   id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  groupId    String    @unique @map("group_id") @db.VarChar(50)
-  chatId     String    @unique @map("chat_id") @db.VarChar(50)
-  name       String?   @db.VarChar(100)
-  groupType  String?   @map("group_type") @db.VarChar(30)
-  clientId   String?   @map("client_id") @db.Uuid
-  locationId String?   @map("location_id") @db.Uuid
-  isActive   Boolean   @default(true) @map("is_active")
-  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt  DateTime? @map("updated_at") @db.Timestamptz
+  token_hash String    @unique
+  user_id    String    @db.Uuid
+  expires_at DateTime  @db.Timestamptz
+  revoked_at DateTime? @db.Timestamptz
+  user_agent String?
+  ip_address String?
+  created_at DateTime  @default(now()) @db.Timestamptz
 
-  client   Client?   @relation(fields: [clientId], references: [id])
-  location Location? @relation(fields: [locationId], references: [id])
+  user users @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
-  @@map("telegram_groups")
+  @@index([user_id])
+  @@index([expires_at])
+}
+
+model audit_logs {
+  id                     String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  actor_name             String?     @db.VarChar(100)
+  actor_user_id          String?     @db.Uuid
+  actor_telegram_user_id String?     @db.Uuid
+  delete_type            delete_type @default(none)
+  action                 String?     @db.VarChar(20)
+  entity_type            String?     @db.VarChar(50)
+  entity_id              String?     @db.VarChar(50)
+  details                Json?
+  ip_address             String?
+  created_at             DateTime    @default(now()) @db.Timestamptz
+
+  user          users?          @relation(fields: [actor_user_id], references: [id], onDelete: SetNull)
+  telegram_user telegram_users? @relation(fields: [actor_telegram_user_id], references: [id], onDelete: SetNull)
+
+  @@index([entity_type, entity_id])
+  @@index([created_at])
+}
+
+model export_jobs {
+  id                   String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  requested_by_user_id String        @db.Uuid
+  status               export_status @default(queued)
+  filters              Json?
+  file_url             String?
+  error_message        String?
+  completed_at         DateTime?     @db.Timestamptz
+  expires_at           DateTime?     @db.Timestamptz
+  created_at           DateTime      @default(now()) @db.Timestamptz
+  updated_at           DateTime      @default(now()) @updatedAt @db.Timestamptz
+
+  user users @relation(fields: [requested_by_user_id], references: [id], onDelete: Cascade)
+}
+
+// ==================================================
+// 3. MASTER DATA
+// ==================================================
+
+model clients {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name       String   @unique @db.VarChar(100)
+  is_active  Boolean  @default(true)
+  created_at DateTime @default(now()) @db.Timestamptz
+  updated_at DateTime @default(now()) @updatedAt @db.Timestamptz
+
+  assets          assets[]
+  telegram_groups telegram_groups[]
+}
+
+model locations {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name       String   @unique @db.VarChar(100)
+  is_active  Boolean  @default(true)
+  created_at DateTime @default(now()) @db.Timestamptz
+  updated_at DateTime @default(now()) @updatedAt @db.Timestamptz
+
+  assets          assets[]
+  telegram_groups telegram_groups[]
+}
+
+model assets {
+  id                 String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  unit_code          String       @unique @db.VarChar(50)
+  asset_type         asset_type   @default(portable)
+  client_id          String       @db.Uuid
+  location_id        String       @db.Uuid
+  status             asset_status @default(active)
+  commissioning_date DateTime?    @db.Date
+  is_active          Boolean      @default(true)
+  created_at         DateTime     @default(now()) @db.Timestamptz
+  updated_at         DateTime     @default(now()) @updatedAt @db.Timestamptz
+
+  client   clients   @relation(fields: [client_id], references: [id], onDelete: Restrict)
+  location locations @relation(fields: [location_id], references: [id], onDelete: Restrict)
+  tickets  tickets[]
+
+  @@index([client_id])
+  @@index([location_id])
+}
+
+model components {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  prefix     String   @unique @db.VarChar(10)
+  name       String   @unique @db.VarChar(100)
+  sort_order Int      @default(0)
+  is_active  Boolean  @default(true)
+  created_at DateTime @default(now()) @db.Timestamptz
+  updated_at DateTime @default(now()) @updatedAt @db.Timestamptz
+
+  failure_codes failure_codes[]
+}
+
+model failure_codes {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  component_id String   @db.Uuid
+  code         String   @db.VarChar(20)
+  name         String?  @db.VarChar(100)
+  description  String?
+  is_active    Boolean  @default(true)
+  created_at   DateTime @default(now()) @db.Timestamptz
+  updated_at   DateTime @default(now()) @updatedAt @db.Timestamptz
+
+  component components @relation(fields: [component_id], references: [id], onDelete: Restrict)
+  tickets   tickets[]
+
+  @@unique([component_id, code])
+}
+
+model telegram_groups {
+  id          String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  chat_id     String               @unique @db.VarChar(50)
+  name        String?              @db.VarChar(100)
+  group_type  telegram_group_type?
+  client_id   String?              @db.Uuid
+  location_id String?              @db.Uuid
+  is_active   Boolean              @default(true)
+  created_at  DateTime             @default(now()) @db.Timestamptz
+  updated_at  DateTime             @default(now()) @updatedAt @db.Timestamptz
+
+  client   clients?   @relation(fields: [client_id], references: [id], onDelete: SetNull)
+  location locations? @relation(fields: [location_id], references: [id], onDelete: SetNull)
+}
+
+// ==================================================
+// 4. TIKET
+// ==================================================
+
+model tickets {
+  id                 String   @id @db.VarChar(50)
+  asset_id           String   @db.Uuid
+  failure_code_id    String   @db.Uuid
+  current_version    Int      @default(0)
+  created_at         DateTime @default(now()) @db.Timestamptz
+  leader_assignee_id String?  @unique @db.Uuid
+
+  asset           assets            @relation(fields: [asset_id], references: [id], onDelete: Restrict)
+  failure_code    failure_codes     @relation(fields: [failure_code_id], references: [id], onDelete: Restrict)
+  leader_assignee ticket_assignees? @relation("ticket_leader_assignee", fields: [leader_assignee_id], references: [id], onDelete: SetNull)
+
+  ticket_history   ticket_history[]
+  ticket_assignees ticket_assignees[] @relation("ticket_assignee_list")
+
+  @@index([asset_id])
+  @@index([failure_code_id])
+  @@index([created_at])
+}
+
+model ticket_history {
+  id                          String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  ticket_id                   String        @db.VarChar(50)
+  version                     Int
+  status                      ticket_status @default(open)
+  damage_description          String?
+  action_taken                String?
+  root_cause                  String?
+  severity                    severity      @default(rendah)
+  notes                       String?
+  changed_by_user_id          String?       @db.Uuid
+  changed_by_telegram_user_id String?       @db.Uuid
+  changed_at                  DateTime      @default(now()) @db.Timestamptz
+
+  ticket              tickets         @relation(fields: [ticket_id], references: [id], onDelete: Cascade)
+  changed_by_user     users?          @relation(fields: [changed_by_user_id], references: [id], onDelete: Restrict)
+  changed_by_telegram telegram_users? @relation(fields: [changed_by_telegram_user_id], references: [id], onDelete: Restrict)
+
+  @@unique([ticket_id, version])
+  @@index([status, changed_at])
+}
+
+// ==================================================
+// 5. GROUP SOFTWARE (claim tiket)
+// ==================================================
+
+model ticket_assignees {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  ticket_id        String   @db.VarChar(50)
+  telegram_user_id String?  @db.Uuid
+  user_id          String?  @db.Uuid
+  created_at       DateTime @default(now()) @db.Timestamptz
+
+  ticket        tickets         @relation("ticket_assignee_list", fields: [ticket_id], references: [id], onDelete: Cascade)
+  telegram_user telegram_users? @relation(fields: [telegram_user_id], references: [id], onDelete: Cascade)
+  user          users?          @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  lead_ticket   tickets?        @relation("ticket_leader_assignee")
+
+  @@unique([ticket_id, telegram_user_id])
+  @@unique([ticket_id, user_id])
+  @@index([telegram_user_id])
+  @@index([user_id])
 }

@@ -8,7 +8,7 @@ import { recordLog } from "../audit-log/audit-log.service.js";
  * Format: [email_prefix]12345 (nama email sebelum tanda @ diikuti '12345')
  * Example: joko@gmail.com -> joko12345
  */
-export const createUser = async ({ email, name, role }, adminUser = null) => {
+export const createUser = async ({ email, name, role, division }, adminUser = null) => {
   const adminId = adminUser?.id || null;
 
   // 1. Check if email already registered
@@ -24,17 +24,21 @@ export const createUser = async ({ email, name, role }, adminUser = null) => {
   // 3. Hash the generated password
   const hashedPassword = await hashPassword(initialPassword);
 
-  // 4. Save new user to database
+  const normalizedRole = role ? role.toLowerCase() : "viewer";
+  const normalizedDivision = division ? division.toLowerCase() : null;
+
+  // 4. Save new user to database (no createdById column; tracked via audit log)
   const newUser = await userRepository.createUser({
     email,
     name,
-    role: role || "VIEWER",
-    passwordHash: hashedPassword,
-    status: "ACTIVE",
-    mustChangePassword: true,
-    createdById: adminId || null,
+    role: normalizedRole,
+    division: normalizedDivision,
+    password_hash: hashedPassword,
+    status: "active",
+    must_change_password: true,
   });
 
+  // 5. Track who created the account in audit log
   await recordLog({
     actor: adminUser?.email || adminUser?.name || "Sistem",
     actorUserId: adminId,
@@ -44,10 +48,12 @@ export const createUser = async ({ email, name, role }, adminUser = null) => {
     entityId: newUser.id,
     details: {
       identifier: newUser.email,
-      changeSummary: `tambah user baru '${newUser.name}' (${newUser.role.toLowerCase()})`,
+      changeSummary: `tambah user baru '${newUser.name}' (${newUser.role}) dibuat oleh ${adminUser?.email || adminUser?.name || "admin"}`,
+      createdBy: adminUser?.email || adminUser?.name || adminId || "Sistem",
       email: newUser.email,
       name: newUser.name,
       role: newUser.role,
+      division: newUser.division,
       status: newUser.status,
     },
   });
@@ -57,7 +63,6 @@ export const createUser = async ({ email, name, role }, adminUser = null) => {
     initialPassword, // Dikembalikan agar Admin dapat memberikan kredensial awal ke user
   };
 };
-
 
 /**
  * Get users list with pagination and filtering
@@ -69,6 +74,7 @@ export const getUsers = async (query = {}) => {
 
   const search = typeof query.search === "string" ? query.search.trim() : undefined;
   const role = query.role || undefined;
+  const division = query.division || undefined;
   const status = query.status || undefined;
 
   const { users, total } = await userRepository.findUsers({
@@ -76,6 +82,7 @@ export const getUsers = async (query = {}) => {
     take: limit,
     search,
     role,
+    division,
     status,
   });
 
@@ -108,7 +115,7 @@ export const getUserById = async (id) => {
 /**
  * Admin updates an existing user
  * @param {string} id - Target user ID
- * @param {object} data - { email, name, password, role, status }
+ * @param {object} data - { email, name, password, role, division, status }
  * @param {object|string} adminUser - Current admin user object or ID
  */
 export const updateUser = async (id, data, adminUser) => {
@@ -123,10 +130,10 @@ export const updateUser = async (id, data, adminUser) => {
 
   // 2. Prevent self-lockout or self-demotion
   if (adminId === id) {
-    if (data.status === "SUSPENDED") {
+    if (data.status && data.status.toLowerCase() === "suspended") {
       throw createError(400, "Tidak dapat menonaktifkan (SUSPENDED) akun Anda sendiri");
     }
-    if (data.role && data.role !== "ADMIN") {
+    if (data.role && data.role.toLowerCase() !== "admin") {
       throw createError(400, "Tidak dapat mengubah role akun Anda sendiri");
     }
   }
@@ -143,14 +150,15 @@ export const updateUser = async (id, data, adminUser) => {
   const updatePayload = {};
   if (data.email !== undefined) updatePayload.email = data.email;
   if (data.name !== undefined) updatePayload.name = data.name;
-  if (data.role !== undefined) updatePayload.role = data.role;
-  if (data.status !== undefined) updatePayload.status = data.status;
+  if (data.role !== undefined) updatePayload.role = data.role.toLowerCase();
+  if (data.division !== undefined) updatePayload.division = data.division ? data.division.toLowerCase() : null;
+  if (data.status !== undefined) updatePayload.status = data.status.toLowerCase();
 
   let passwordChanged = false;
   if (data.password) {
-    updatePayload.passwordHash = await hashPassword(data.password);
-    updatePayload.passwordChangedAt = new Date();
-    updatePayload.mustChangePassword = false;
+    updatePayload.password_hash = await hashPassword(data.password);
+    updatePayload.password_changed_at = new Date();
+    updatePayload.must_change_password = false;
     passwordChanged = true;
   }
 
@@ -158,16 +166,29 @@ export const updateUser = async (id, data, adminUser) => {
   const updatedUser = await userRepository.updateUser(id, updatePayload);
 
   // 6. If password changed or user suspended, revoke active refresh tokens
-  if (passwordChanged || data.status === "SUSPENDED") {
+  if (passwordChanged || updatePayload.status === "suspended") {
     await userRepository.revokeUserRefreshTokens(id);
   }
 
   const changes = [];
-  if (data.role && data.role !== existingUser.role) changes.push(`role: ${existingUser.role} → ${data.role}`);
-  if (data.status && data.status !== existingUser.status) changes.push(`status: ${existingUser.status} → ${data.status}`);
-  if (data.name && data.name !== existingUser.name) changes.push(`nama: ${existingUser.name} → ${data.name}`);
-  if (data.email && data.email !== existingUser.email) changes.push(`email: ${existingUser.email} → ${data.email}`);
-  if (passwordChanged) changes.push("reset kata sandi");
+  if (data.role && data.role.toLowerCase() !== existingUser.role) {
+    changes.push(`role: ${existingUser.role} → ${data.role.toLowerCase()}`);
+  }
+  if (data.division !== undefined && data.division !== existingUser.division) {
+    changes.push(`divisi: ${existingUser.division} → ${data.division}`);
+  }
+  if (data.status && data.status.toLowerCase() !== existingUser.status) {
+    changes.push(`status: ${existingUser.status} → ${data.status.toLowerCase()}`);
+  }
+  if (data.name && data.name !== existingUser.name) {
+    changes.push(`nama: ${existingUser.name} → ${data.name}`);
+  }
+  if (data.email && data.email !== existingUser.email) {
+    changes.push(`email: ${existingUser.email} → ${data.email}`);
+  }
+  if (passwordChanged) {
+    changes.push("reset kata sandi");
+  }
   const changeSummary = changes.length > 0 ? changes.join(", ") : "perubahan profil pengguna";
 
   await recordLog({
@@ -208,12 +229,12 @@ export const deleteUser = async (id, adminUser) => {
     throw createError(400, "Tidak dapat menghapus akun Anda sendiri");
   }
 
-  // 3. Constraint check: apakah ada yang nyangkut (Ticket, TicketHistory, ExportJob, AuditLog)?
+  // 3. Constraint check: apakah ada yang nyangkut (TicketHistory, ExportJob, AuditLog, TicketAssignees)?
   const dep = await userRepository.countUserDependencies(id);
 
   if (dep.total > 0) {
-    // Masih ada data yang nyangkut -> JANGAN DI-HARD DELETE! Lakukan SOFT DELETE (SUSPENDED & revoke tokens)
-    const softDeleted = await userRepository.updateUser(id, { status: "SUSPENDED" });
+    // Masih ada data yang nyangkut -> Lakukan SOFT DELETE (suspended & revoke tokens)
+    const softDeleted = await userRepository.updateUser(id, { status: "suspended" });
     await userRepository.revokeUserRefreshTokens(id);
 
     await recordLog({
@@ -226,7 +247,7 @@ export const deleteUser = async (id, adminUser) => {
       details: {
         identifier: existingUser.email,
         changeSummary: `soft delete: akun dinonaktifkan (${dep.total} data terkait)`,
-        reason: `Pengguna memiliki data riwayat terikat (${dep.tickets} tiket, ${dep.ticketHistories} riwayat tiket, ${dep.exportJobs} ekspor, ${dep.auditLogs} audit log). Dilakukan soft delete (SUSPENDED).`,
+        reason: `Pengguna memiliki data riwayat terikat (${dep.ticketHistories} riwayat tiket, ${dep.exportJobs} ekspor, ${dep.auditLogs} audit log, ${dep.ticketAssignees} claim tiket). Dilakukan soft delete (suspended).`,
         dependencies: dep,
       },
     });
@@ -234,7 +255,7 @@ export const deleteUser = async (id, adminUser) => {
     return {
       user: softDeleted,
       deleteAction: "SOFT",
-      message: `Pengguna memiliki riwayat aktif (${dep.total} data terkait) sehingga dinonaktifkan (Soft Delete / SUSPENDED).`,
+      message: `Pengguna memiliki riwayat aktif (${dep.total} data terkait) sehingga dinonaktifkan (Soft Delete / suspended).`,
     };
   }
 
@@ -263,5 +284,3 @@ export const deleteUser = async (id, adminUser) => {
     message: "Pengguna berhasil dihapus secara permanen (Hard Delete)",
   };
 };
-
-

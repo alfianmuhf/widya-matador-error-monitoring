@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-const validStatuses = ["open", "escalated", "solved", "closed"];
+const validStatuses = ["open", "escalated", "solved"];
 
 /**
  * Zod schema for querying tickets with filtering and pagination
@@ -18,19 +18,20 @@ export const queryTicketsSchema = z.object({
       return val.toLowerCase();
     })
     .refine((val) => !val || validStatuses.includes(val), {
-      message: "Status harus berupa open, escalated, solved, atau closed",
+      message: "Status harus berupa open, escalated, atau solved",
     }),
   severity: z
     .string()
     .trim()
-    .optional(),
+    .optional()
+    .transform((val) => (val ? val.toLowerCase() : undefined)),
   componentId: z.string().uuid("Format Component ID tidak valid").optional(),
   clientId: z.string().uuid("Format Client ID tidak valid").optional(),
   locationId: z.string().uuid("Format Location ID tidak valid").optional(),
   unitCode: z.string().trim().optional(),
   startDate: z.string().datetime({ offset: true }).or(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).optional(),
   endDate: z.string().datetime({ offset: true }).or(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).optional(),
-  sortBy: z.enum(["createdAt", "updatedAt", "ticketId"]).optional().default("createdAt"),
+  sortBy: z.enum(["createdAt", "created_at", "id", "ticketId"]).optional().default("createdAt"),
   sortOrder: z.enum(["asc", "desc"]).optional().default("desc"),
 });
 
@@ -48,7 +49,7 @@ export const updateTicketSchema = z
         return val.toLowerCase();
       })
       .refine((val) => !val || validStatuses.includes(val), {
-        message: "Status harus berupa open, escalated, solved, atau closed",
+        message: "Status harus berupa open, escalated, atau solved",
       }),
     handlingNote: z.string().trim().optional(),
     comment: z.string().trim().optional(),
@@ -56,7 +57,11 @@ export const updateTicketSchema = z
     damageDescription: z.string().trim().optional(),
     actionTaken: z.string().trim().optional(),
     rootCause: z.string().trim().optional(),
-    severity: z.string().trim().optional(),
+    severity: z
+      .string()
+      .trim()
+      .optional()
+      .transform((val) => (val ? val.toLowerCase() : undefined)),
   })
   .refine(
     (data) =>
@@ -92,15 +97,20 @@ export const createTicketSchema = z.object({
     .trim()
     .min(1, "Unit code wajib diisi"),
   componentId: z
-    .string({ required_error: "Component ID wajib diisi" })
-    .uuid("Format Component ID tidak valid"),
+    .string()
+    .uuid("Format Component ID tidak valid")
+    .optional(),
   failureCodeId: z
     .string({ required_error: "Failure Code ID wajib diisi" })
     .uuid("Format Failure Code ID tidak valid"),
   damageDescription: z.string().trim().optional(),
   actionTaken: z.string().trim().optional(),
   rootCause: z.string().trim().optional(),
-  severity: z.enum(["Rendah", "Sedang", "Tinggi"]).optional().default("Rendah"),
+  severity: z
+    .enum(["rendah", "sedang", "tinggi", "Rendah", "Sedang", "Tinggi"])
+    .optional()
+    .default("rendah")
+    .transform((val) => val.toLowerCase()),
   status: z
     .string()
     .trim()
@@ -108,6 +118,62 @@ export const createTicketSchema = z.object({
     .default("open")
     .transform((val) => val.toLowerCase())
     .refine((val) => validStatuses.includes(val), {
-      message: "Status harus berupa open, escalated, solved, atau closed",
+      message: "Status harus berupa open, escalated, atau solved",
     }),
+});
+
+/**
+ * Zod schema for adding a team member to ticket_assignees
+ */
+export const addAssigneeSchema = z
+  .object({
+    userId: z.string().uuid("Format User ID tidak valid").optional(),
+    telegramUserId: z.string().uuid("Format Telegram User ID tidak valid").optional(),
+    email: z.string().trim().email("Format email tidak valid").optional(),
+    telegramId: z.string().trim().optional(),
+  })
+  .refine((data) => data.userId || data.telegramUserId || data.email || data.telegramId, {
+    message: "Harus menyertakan salah satu: userId, telegramUserId, email, atau telegramId",
+  });
+
+/**
+ * Zod schema for editing a team member in ticket_assignees
+ */
+export const updateAssigneeSchema = z
+  .object({
+    userId: z.string().uuid("Format User ID tidak valid").nullable().optional(),
+    telegramUserId: z.string().uuid("Format Telegram User ID tidak valid").nullable().optional(),
+    email: z.string().trim().email("Format email tidak valid").optional(),
+    telegramId: z.string().trim().optional(),
+  })
+  .refine(
+    (data) =>
+      data.userId !== undefined ||
+      data.telegramUserId !== undefined ||
+      Boolean(data.email) ||
+      Boolean(data.telegramId),
+    {
+      message: "Harus menyertakan data anggota baru (userId, telegramUserId, email, atau telegramId)",
+    }
+  );
+
+
+/**
+ * Zod schema for transferring leader to another assignee
+ */
+export const changeLeaderSchema = z
+  .object({
+    assigneeId: z.string().uuid("Format Assignee ID tidak valid").optional(),
+    userId: z.string().uuid("Format User ID tidak valid").optional(),
+    telegramUserId: z.string().uuid("Format Telegram User ID tidak valid").optional(),
+  })
+  .refine((data) => data.assigneeId || data.userId || data.telegramUserId, {
+    message: "Harus menyertakan assigneeId, userId, atau telegramUserId baru",
+  });
+
+/**
+ * Zod schema for querying ticket history
+ */
+export const queryHistorySchema = z.object({
+  order: z.enum(["asc", "desc"]).optional().default("desc"),
 });

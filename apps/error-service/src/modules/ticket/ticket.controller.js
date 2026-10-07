@@ -1,6 +1,6 @@
 import * as ticketService from "./ticket.service.js";
+import * as ticketRepo from "./ticket.repository.js";
 import { ticketEvents } from "./ticket.events.js";
-import prisma from "../../config/prisma.js";
 
 /**
  * GET /tickets
@@ -89,6 +89,151 @@ export const createTicket = async (req, res, next) => {
 };
 
 /**
+ * GET /tickets/:id/history
+ * Get ticket history records by ticketId
+ */
+export const getTicketHistory = async (req, res, next) => {
+  try {
+    const history = await ticketService.getTicketHistory(req.params.id, req.query);
+    res.status(200).json({
+      success: true,
+      message: "Riwayat tiket berhasil diambil",
+      data: history,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * GET /tickets/:id/history/:version
+ * Get specific version detail of ticket history
+ */
+export const getTicketHistoryDetail = async (req, res, next) => {
+  try {
+    const detail = await ticketService.getTicketHistoryDetail(req.params.id, req.params.version);
+    res.status(200).json({
+      success: true,
+      message: `Detail riwayat tiket versi ${req.params.version} berhasil diambil`,
+      data: detail,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * GET /tickets/:id/assignees
+ * Get list of software team members assigned to this ticket
+ */
+export const getTicketAssignees = async (req, res, next) => {
+  try {
+    const assignees = await ticketService.getTicketAssignees(req.params.id);
+    res.status(200).json({
+      success: true,
+      message: "Daftar assignees tiket berhasil diambil",
+      data: assignees,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * POST /tickets/:id/claim
+ * Software team member claims ticket (first claim becomes Leader)
+ */
+export const claimTicket = async (req, res, next) => {
+  try {
+    const actor = {
+      ...(req.user || {}),
+      ...(req.body || {}),
+    };
+    const ticket = await ticketService.claimTicket(req.params.id, actor);
+    res.status(200).json({
+      success: true,
+      message: "Tiket berhasil diklaim sebagai Leader tim Software",
+      data: ticket,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * POST /tickets/:id/assignees
+ * Add member to ticket_assignees (only leader can do this)
+ */
+export const addAssignee = async (req, res, next) => {
+  try {
+    const result = await ticketService.addAssignee(req.params.id, req.body, req.user);
+    res.status(201).json({
+      success: true,
+      message: result.message,
+      data: result,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * PATCH /tickets/:id/assignees/:assigneeId
+ * Update / edit member in ticket_assignees (only leader can do this)
+ */
+export const updateAssignee = async (req, res, next) => {
+  try {
+    const result = await ticketService.updateAssignee(
+      req.params.id,
+      req.params.assigneeId,
+      req.body,
+      req.user
+    );
+    res.status(200).json({
+      success: true,
+      message: result.message,
+      data: result,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * PATCH /tickets/:id/leader
+ * Transfer leader to another assignee
+ */
+export const changeLeader = async (req, res, next) => {
+  try {
+    const ticket = await ticketService.changeLeader(req.params.id, req.body, req.user);
+    res.status(200).json({
+      success: true,
+      message: "Leader tim tiket berhasil dialihkan",
+      data: ticket,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * DELETE /tickets/:id/assignees/:assigneeId
+ * Remove an assignee from ticket
+ */
+export const removeAssignee = async (req, res, next) => {
+  try {
+    const result = await ticketService.removeAssignee(req.params.id, req.params.assigneeId, req.user);
+    res.status(200).json({
+      success: true,
+      message: result.message,
+      data: result,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
  * GET /tickets/stream
  * Server-Sent Events (SSE) endpoint for real-time ticket updates and live open count
  */
@@ -106,7 +251,7 @@ export const streamTickets = async (req, res) => {
 
   let openTicketsCount = 0;
   try {
-    openTicketsCount = await prisma.ticket.count({ where: { status: "open" } });
+    openTicketsCount = await ticketRepo.countOpenTickets();
   } catch (err) {
     console.error("Error counting open tickets for SSE init:", err);
   }
@@ -124,7 +269,7 @@ export const streamTickets = async (req, res) => {
   const onTicketEvent = async ({ event, data, timestamp }) => {
     let freshOpenCount = undefined;
     try {
-      freshOpenCount = await prisma.ticket.count({ where: { status: "open" } });
+      freshOpenCount = await ticketRepo.countOpenTickets();
     } catch {}
 
     res.write(

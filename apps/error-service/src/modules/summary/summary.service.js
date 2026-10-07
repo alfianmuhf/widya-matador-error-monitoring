@@ -1,4 +1,5 @@
 import prisma from "../../config/prisma.js";
+import { findTicketIdsByCurrentHistory } from "../ticket/ticket.repository.js";
 
 const MONTH_NAMES_ID = [
   "Jan", "Feb", "Mar", "Apr", "Mei", "Jun",
@@ -59,53 +60,65 @@ export async function getSummaryData(query = {}) {
   // 1. Build Where Clause
   const where = {};
   if (startDate) {
-    where.createdAt = { gte: startDate };
+    where.created_at = { gte: startDate };
   }
   if (status && status !== "all") {
-    const st = status.toLowerCase();
-    where.status = st === "monitor" ? "escalated" : st;
+    const st = status.toLowerCase() === "monitor" ? "escalated" : status.toLowerCase();
+    const matchingIds = await findTicketIdsByCurrentHistory({ status: st });
+    if (matchingIds) {
+      where.id = { in: matchingIds };
+    }
   }
   if (componentId && componentId !== "all") {
-    where.componentId = componentId;
+    where.failure_code = { component_id: componentId };
   }
   if ((clientId && clientId !== "all") || (locationId && locationId !== "all")) {
     where.asset = {};
     if (clientId && clientId !== "all") {
-      where.asset.clientId = clientId;
+      where.asset.client_id = clientId;
     }
     if (locationId && locationId !== "all") {
-      where.asset.locationId = locationId;
+      where.asset.location_id = locationId;
     }
   }
 
   // 2. Fetch Tickets for Current Period
-  const tickets = await prisma.ticket.findMany({
+  const tickets = await prisma.tickets.findMany({
     where,
     include: {
-      failureCode: {
+      failure_code: {
         select: {
           id: true,
           code: true,
-          description: true,
-        },
-      },
-      component: {
-        select: {
-          id: true,
           name: true,
-          prefix: true,
+          description: true,
+          component: {
+            select: {
+              id: true,
+              name: true,
+              prefix: true,
+            },
+          },
         },
       },
       asset: {
         select: {
-          unitCode: true,
-          clientId: true,
-          locationId: true,
+          unit_code: true,
+          client_id: true,
+          location_id: true,
+        },
+      },
+      ticket_history: {
+        orderBy: { version: "desc" },
+        select: {
+          version: true,
+          status: true,
+          changed_at: true,
         },
       },
     },
     orderBy: {
-      createdAt: "asc",
+      created_at: "asc",
     },
   });
 
@@ -114,12 +127,12 @@ export async function getSummaryData(query = {}) {
   if (prevStartDate && prevEndDate) {
     const prevWhere = {
       ...where,
-      createdAt: {
+      created_at: {
         gte: prevStartDate,
         lt: prevEndDate,
       },
     };
-    prevTotalTickets = await prisma.ticket.count({ where: prevWhere });
+    prevTotalTickets = await prisma.tickets.count({ where: prevWhere });
   }
 
   const totalTickets = tickets.length;
@@ -129,26 +142,35 @@ export async function getSummaryData(query = {}) {
     vsPrevText = `${diffPct >= 0 ? "+" : ""}${diffPct}% vs periode lalu`;
   }
 
-  // 4. Status Counts
-  const openTickets = tickets.filter((t) => t.status === "open").length;
-  const monitorTickets = tickets.filter((t) => t.status === "escalated").length;
-  const solvedTickets = tickets.filter((t) => t.status === "solved").length;
-  const closedTickets = tickets.filter((t) => t.status === "closed").length;
-  const completedTickets = solvedTickets + closedTickets;
+  // 4. Status Counts (derived from current_version)
+  let openTickets = 0;
+  let monitorTickets = 0;
+  let solvedTickets = 0;
+
+  for (const t of tickets) {
+    const currentHistory =
+      (t.ticket_history || []).find((h) => h.version === t.current_version) ||
+      t.ticket_history?.[0] ||
+      {};
+    const st = (currentHistory.status || "open").toLowerCase();
+    if (st === "open") openTickets++;
+    else if (st === "escalated") monitorTickets++;
+    else if (st === "solved") solvedTickets++;
+  }
+
+  const completedTickets = solvedTickets;
   const completionRate = totalTickets > 0 ? Math.round((completedTickets / totalTickets) * 100) : 0;
 
   // 5. MTTR (Mean Time to Resolution)
   let totalResolutionHours = 0;
   let resolvedCount = 0;
   for (const t of tickets) {
-    if (t.status === "solved" || t.status === "closed") {
-      const end = t.resolvedAt || t.closedAt || t.updatedAt;
-      if (end && t.createdAt) {
-        const diffHours = (new Date(end).getTime() - new Date(t.createdAt).getTime()) / (1000 * 60 * 60);
-        if (diffHours >= 0) {
-          totalResolutionHours += diffHours;
-          resolvedCount++;
-        }
+    const solvedRow = (t.ticket_history || []).find((h) => h.status === "solved");
+    if (solvedRow && t.created_at) {
+      const diffHours = (new Date(solvedRow.changed_at).getTime() - new Date(t.created_at).getTime()) / (1000 * 60 * 60);
+      if (diffHours >= 0) {
+        totalResolutionHours += diffHours;
+        resolvedCount++;
       }
     }
   }
@@ -161,13 +183,12 @@ export async function getSummaryData(query = {}) {
   }
 
   // 6. Unit Terdampak
-  const distinctUnitsInTickets = new Set(tickets.map((t) => t.unitCode).filter(Boolean));
-  const totalAssetsCount = await prisma.asset.count({ where: { isActive: true } });
+  const distinctUnitsInTickets = new Set(tickets.map((t) => t.asset?.unit_code).filter(Boolean));
+  const totalAssetsCount = await prisma.assets.count({ where: { is_active: true } });
   const totalOperationalUnits = Math.max(totalAssetsCount, distinctUnitsInTickets.size, 1);
   const affectedUnits = distinctUnitsInTickets.size;
 
   // 7. Monthly Trend Series
-  // Generate month slots ending at current month
   const monthlyMap = new Map();
   for (let i = monthCount - 1; i >= 0; i--) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
@@ -176,7 +197,7 @@ export async function getSummaryData(query = {}) {
   }
 
   for (const t of tickets) {
-    const key = formatMonthYear(t.createdAt);
+    const key = formatMonthYear(t.created_at);
     if (monthlyMap.has(key)) {
       monthlyMap.set(key, monthlyMap.get(key) + 1);
     } else if (timeRange === "all") {
@@ -192,7 +213,6 @@ export async function getSummaryData(query = {}) {
   // 8. Status Distribution Data
   const statusDistribution = [
     { status: "Solved", count: solvedTickets, color: "#10b981", percent: totalTickets ? Math.round((solvedTickets / totalTickets) * 100) : 0 },
-    { status: "Closed", count: closedTickets, color: "#64748b", percent: totalTickets ? Math.round((closedTickets / totalTickets) * 100) : 0 },
     { status: "Open", count: openTickets, color: "#ef4444", percent: totalTickets ? Math.round((openTickets / totalTickets) * 100) : 0 },
     { status: "Escalated", count: monitorTickets, color: "#f59e0b", percent: totalTickets ? Math.round((monitorTickets / totalTickets) * 100) : 0 },
   ];
@@ -200,8 +220,8 @@ export async function getSummaryData(query = {}) {
   // 9. Top 5 Failure Codes
   const failureCodeMap = new Map();
   for (const t of tickets) {
-    const code = t.failureCode?.code || "UNKNOWN";
-    const description = t.failureCode?.description || "Kerusakan tidak terdefinisi";
+    const code = t.failure_code?.code || "UNKNOWN";
+    const description = t.failure_code?.description || t.failure_code?.name || "Kerusakan tidak terdefinisi";
     if (!failureCodeMap.has(code)) {
       failureCodeMap.set(code, { code, description, count: 0 });
     }
@@ -215,7 +235,7 @@ export async function getSummaryData(query = {}) {
   // 10. Top 5 Problematic Units
   const unitMap = new Map();
   for (const t of tickets) {
-    const u = t.unitCode;
+    const u = t.asset?.unit_code;
     if (u) {
       unitMap.set(u, (unitMap.get(u) || 0) + 1);
     }
@@ -234,18 +254,18 @@ export async function getSummaryData(query = {}) {
 
   // 11. Dropdown Filter Options
   const [components, clients, locations] = await Promise.all([
-    prisma.component.findMany({
-      where: { isActive: true },
+    prisma.components.findMany({
+      where: { is_active: true },
       select: { id: true, name: true, prefix: true },
       orderBy: { name: "asc" },
     }),
-    prisma.client.findMany({
-      where: { isActive: true },
+    prisma.clients.findMany({
+      where: { is_active: true },
       select: { id: true, name: true },
       orderBy: { name: "asc" },
     }),
-    prisma.location.findMany({
-      where: { isActive: true },
+    prisma.locations.findMany({
+      where: { is_active: true },
       select: { id: true, name: true },
       orderBy: { name: "asc" },
     }),
@@ -280,7 +300,6 @@ export async function getSummaryData(query = {}) {
         { value: "open", label: "Open" },
         { value: "escalated", label: "Escalated" },
         { value: "solved", label: "Solved" },
-        { value: "closed", label: "Closed" },
       ],
     },
   };

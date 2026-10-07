@@ -14,8 +14,10 @@ import prisma from "../../config/prisma.js";
 export const formatAuditLog = (log) => {
   if (!log) return null;
 
+  const createdAt = log.created_at || log.createdAt;
+
   // 1. Format Waktu: YYYY-MM-DD HH:mm (WIB UTC+7)
-  const d = new Date(log.createdAt);
+  const d = new Date(createdAt);
   const utc = d.getTime() + d.getTimezoneOffset() * 60000;
   const wib = new Date(utc + 7 * 3600000);
   const yyyy = wib.getFullYear();
@@ -25,38 +27,47 @@ export const formatAuditLog = (log) => {
   const min = String(wib.getMinutes()).padStart(2, "0");
   const waktu = `${yyyy}-${mm}-${dd} ${hh}:${min}`;
 
+  const user = log.user || log.actorUser;
+  const telegramUser = log.telegram_user || log.actorTelegram;
+  const actorName = log.actor_name || log.actor;
+  const actorUserId = log.actor_user_id || log.actorUserId;
+  const actorTelegramId = log.actor_telegram_user_id || log.actorTelegramId;
+  const entityType = log.entity_type || log.entityType;
+  const entityId = log.entity_id || log.entityId;
+  const deleteType = (log.delete_type || log.deleteAction || "none").toLowerCase();
+
   // 2. Format Pelaku (Web User: email, Telegram User: @username)
   let pelaku = "Sistem";
-  if (log.actorUser?.email) {
-    pelaku = log.actorUser.email;
-  } else if (log.actorTelegram) {
-    if (log.actorTelegram.username) {
-      const u = log.actorTelegram.username.trim();
+  if (user?.email) {
+    pelaku = user.email;
+  } else if (telegramUser) {
+    if (telegramUser.username) {
+      const u = telegramUser.username.trim();
       pelaku = u.startsWith("@") ? u : `@${u}`;
-    } else if (log.actorTelegram.fullName) {
-      pelaku = `@${log.actorTelegram.fullName}`;
-    } else if (log.actorTelegram.telegramId) {
-      pelaku = `@${log.actorTelegram.telegramId}`;
+    } else if (telegramUser.full_name || telegramUser.fullName) {
+      pelaku = `@${telegramUser.full_name || telegramUser.fullName}`;
+    } else if (telegramUser.telegram_id || telegramUser.telegramId) {
+      pelaku = `@${telegramUser.telegram_id || telegramUser.telegramId}`;
     } else {
-      pelaku = log.actor || "Telegram User";
+      pelaku = actorName || "Telegram User";
     }
-  } else if (log.actorUserId) {
-    pelaku = log.actorUser?.email || (log.actor?.includes("@") ? log.actor : null) || log.actor || "Sistem";
-  } else if (log.actorTelegramId) {
-    if (log.actorTelegram?.username) {
-      const u = log.actorTelegram.username.trim();
+  } else if (actorUserId) {
+    pelaku = user?.email || (actorName?.includes("@") ? actorName : null) || actorName || "Sistem";
+  } else if (actorTelegramId) {
+    if (telegramUser?.username) {
+      const u = telegramUser.username.trim();
       pelaku = u.startsWith("@") ? u : `@${u}`;
-    } else if (log.actor?.startsWith("@")) {
-      pelaku = log.actor;
+    } else if (actorName?.startsWith("@")) {
+      pelaku = actorName;
     } else {
-      pelaku = log.actor || "Telegram User";
+      pelaku = actorName || "Telegram User";
     }
-  } else if (log.actor) {
-    pelaku = log.actor;
+  } else if (actorName) {
+    pelaku = actorName;
   }
 
   // 3. Format Objek: ${entity_type}:${identifier}
-  let entityTypeLower = String(log.entityType || "data")
+  let entityTypeLower = String(entityType || "data")
     .replace(/([A-Z])/g, "_$1")
     .toLowerCase()
     .replace(/^_/, "");
@@ -64,11 +75,12 @@ export const formatAuditLog = (log) => {
   let iden =
     log.details?.identifier ||
     log.details?.unitCode ||
+    log.details?.unit_code ||
     log.details?.ticketId ||
     log.details?.code ||
     log.details?.name ||
     (log.details?.username ? (log.details.username.startsWith("@") ? log.details.username : `@${log.details.username}`) : null) ||
-    log.entityId ||
+    entityId ||
     "-";
 
   if (entityTypeLower === "telegram_user" && typeof iden === "string" && !iden.startsWith("@") && isNaN(iden)) {
@@ -94,7 +106,7 @@ export const formatAuditLog = (log) => {
   } else if (aksi === "create") {
     detailPerubahan = `tambah ${entityTypeLower.replace(/_/g, " ")} baru`;
   } else if (aksi === "delete") {
-    detailPerubahan = log.deleteAction === "SOFT" ? "nonaktifkan (soft delete)" : "hapus permanen";
+    detailPerubahan = deleteType === "soft" ? "nonaktifkan (soft delete)" : "hapus permanen";
   } else if (log.details?.changes) {
     detailPerubahan = Object.entries(log.details.changes)
       .map(([k, v]) => `${k}: ${v}`)
@@ -108,19 +120,21 @@ export const formatAuditLog = (log) => {
     objek,
     aksi,
     detailPerubahan,
-    // Raw fields for background operations
-    deleteAction: log.deleteAction,
-    entityType: log.entityType,
-    entityId: log.entityId,
-    createdAt: log.createdAt,
+    // Raw fields for FE compatibility
+    deleteAction: deleteType.toUpperCase(),
+    delete_type: deleteType,
+    entityType,
+    entity_type: entityType,
+    entityId,
+    entity_id: entityId,
+    createdAt,
+    created_at: createdAt,
     details: log.details,
   };
 };
 
 /**
  * Record an audit log entry in the database.
- * Rule: deleteAction is strictly for action === "DELETE" ("SOFT" or "HARD").
- * For any other action, deleteAction is always "NONE".
  */
 export const recordLog = async ({
   actor = null,
@@ -128,21 +142,24 @@ export const recordLog = async ({
   actorTelegramId = null,
   action,
   deleteAction = "NONE",
+  deleteType = null,
   entityType,
   entityId = null,
   details = null,
+  ipAddress = null,
 }) => {
   try {
     const rawAction = String(action || "").trim();
     const isStatusChange = rawAction.toLowerCase() === "status_change";
     const normAction = isStatusChange ? "STATUS_CHANGE" : rawAction.toUpperCase();
 
-    // deleteAction is strictly for DELETE
-    let finalDeleteAction = "NONE";
+    // delete_type is enum: none, soft, hard
+    const rawDelete = deleteType || deleteAction || "none";
+    let finalDeleteType = "none";
     if (normAction === "DELETE") {
-      finalDeleteAction = ["SOFT", "HARD"].includes(String(deleteAction).toUpperCase())
-        ? String(deleteAction).toUpperCase()
-        : "HARD";
+      finalDeleteType = ["soft", "hard"].includes(String(rawDelete).toLowerCase())
+        ? String(rawDelete).toLowerCase()
+        : "hard";
     }
 
     const payloadDetails = details ? { ...details } : {};
@@ -156,10 +173,10 @@ export const recordLog = async ({
 
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-    // Jika actorUserId ada tetapi actor belum berupa email
+    // Jika finalActorUserId ada tetapi resolvedActor belum berupa email
     if (finalActorUserId && (!resolvedActor || !resolvedActor.includes("@"))) {
       try {
-        const u = await prisma.user.findUnique({
+        const u = await prisma.users.findUnique({
           where: { id: finalActorUserId },
           select: { email: true, name: true },
         });
@@ -173,19 +190,19 @@ export const recordLog = async ({
     if (actorTelegramId) {
       try {
         if (uuidRegex.test(actorTelegramId)) {
-          const tg = await prisma.telegramUser.findUnique({
+          const tg = await prisma.telegram_users.findUnique({
             where: { id: actorTelegramId },
-            select: { username: true, fullName: true, telegramId: true },
+            select: { username: true, full_name: true, telegram_id: true },
           });
           if (tg && !resolvedActor) {
-            resolvedActor = tg.username ? `@${tg.username}` : (tg.fullName || tg.telegramId);
+            resolvedActor = tg.username ? `@${tg.username}` : (tg.full_name || tg.telegram_id);
           }
         } else {
           // ID telegram mentah (angka atau username)
-          const tg = await prisma.telegramUser.findFirst({
+          const tg = await prisma.telegram_users.findFirst({
             where: {
               OR: [
-                { telegramId: String(actorTelegramId) },
+                { telegram_id: String(actorTelegramId) },
                 { username: String(actorTelegramId).replace(/^@/, "") },
               ],
             },
@@ -193,7 +210,7 @@ export const recordLog = async ({
           if (tg) {
             finalActorTelegramId = tg.id;
             if (!resolvedActor) {
-              resolvedActor = tg.username ? `@${tg.username}` : (tg.fullName || tg.telegramId);
+              resolvedActor = tg.username ? `@${tg.username}` : (tg.full_name || tg.telegram_id);
             }
           } else {
             finalActorTelegramId = null;
@@ -208,14 +225,15 @@ export const recordLog = async ({
     }
 
     const created = await auditLogRepo.create({
-      actor: resolvedActor || (finalActorUserId ? `User:${finalActorUserId}` : "Sistem"),
-      actorUserId: finalActorUserId,
-      actorTelegramId: finalActorTelegramId,
+      actor_name: resolvedActor || (finalActorUserId ? `User:${finalActorUserId}` : "Sistem"),
+      actor_user_id: finalActorUserId,
+      actor_telegram_user_id: finalActorTelegramId,
       action: normAction,
-      deleteAction: finalDeleteAction,
-      entityType,
-      entityId: entityId ? String(entityId) : null,
+      delete_type: finalDeleteType,
+      entity_type: entityType,
+      entity_id: entityId ? String(entityId) : null,
       details: payloadDetails,
+      ip_address: ipAddress || null,
     });
 
     // Format log and broadcast through SSE
@@ -239,31 +257,32 @@ export const getAuditLogs = async (query = {}) => {
 
   const where = {};
 
-  if (query.entityType) {
-    where.entityType = { equals: query.entityType, mode: "insensitive" };
+  if (query.entityType || query.entity_type) {
+    where.entity_type = { equals: query.entityType || query.entity_type, mode: "insensitive" };
   }
 
   if (query.action) {
     where.action = { equals: query.action.toUpperCase() };
   }
 
-  if (query.deleteAction && query.deleteAction !== "ALL") {
-    where.deleteAction = query.deleteAction.toUpperCase();
+  const deleteFilter = query.delete_type || query.deleteAction;
+  if (deleteFilter && deleteFilter.toUpperCase() !== "ALL") {
+    where.delete_type = deleteFilter.toLowerCase();
   }
 
-  if (query.actorUserId) {
-    where.actorUserId = query.actorUserId;
+  if (query.actorUserId || query.actor_user_id) {
+    where.actor_user_id = query.actorUserId || query.actor_user_id;
   }
 
   if (query.search) {
     const s = query.search.trim();
     where.OR = [
-      { actor: { contains: s, mode: "insensitive" } },
-      { entityType: { contains: s, mode: "insensitive" } },
-      { entityId: { contains: s, mode: "insensitive" } },
+      { actor_name: { contains: s, mode: "insensitive" } },
+      { entity_type: { contains: s, mode: "insensitive" } },
+      { entity_id: { contains: s, mode: "insensitive" } },
       { action: { contains: s, mode: "insensitive" } },
-      { actorUser: { email: { contains: s, mode: "insensitive" } } },
-      { actorUser: { name: { contains: s, mode: "insensitive" } } },
+      { user: { email: { contains: s, mode: "insensitive" } } },
+      { user: { name: { contains: s, mode: "insensitive" } } },
     ];
   }
 

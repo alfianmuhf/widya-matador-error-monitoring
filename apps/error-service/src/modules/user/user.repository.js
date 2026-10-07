@@ -5,38 +5,32 @@ import { prisma } from "../../config/prisma.js";
  * @param {string} email
  */
 export const findUserByEmail = async (email) => {
-  return prisma.user.findUnique({
+  return prisma.users.findUnique({
     where: { email },
   });
 };
 
 /**
- * Find single user by ID (excluding passwordHash)
+ * Find single user by ID (excluding password_hash)
  * @param {string} id
  */
 export const findUserById = async (id) => {
-  return prisma.user.findUnique({
+  return prisma.users.findUnique({
     where: { id },
     select: {
       id: true,
       email: true,
       name: true,
       role: true,
+      division: true,
       status: true,
-      mustChangePassword: true,
-      failedLoginAttempts: true,
-      lockedUntil: true,
-      lastLoginAt: true,
-      passwordChangedAt: true,
-      createdAt: true,
-      updatedAt: true,
-      createdBy: {
-        select: {
-          id: true,
-          name: true,
-          email: true,
-        },
-      },
+      must_change_password: true,
+      failed_login_attempts: true,
+      locked_until: true,
+      last_login_at: true,
+      password_changed_at: true,
+      created_at: true,
+      updated_at: true,
     },
   });
 };
@@ -46,17 +40,25 @@ export const findUserById = async (id) => {
  * @param {object} data
  */
 export const createUser = async (data) => {
-  return prisma.user.create({
-    data,
+  return prisma.users.create({
+    data: {
+      email: data.email,
+      name: data.name,
+      role: data.role || "viewer",
+      division: data.division || null,
+      password_hash: data.password_hash || data.passwordHash,
+      status: data.status || "active",
+      must_change_password: data.must_change_password ?? data.mustChangePassword ?? true,
+    },
     select: {
       id: true,
       email: true,
       name: true,
       role: true,
+      division: true,
       status: true,
-      mustChangePassword: true,
-      createdById: true,
-      createdAt: true,
+      must_change_password: true,
+      created_at: true,
     },
   });
 };
@@ -65,7 +67,7 @@ export const createUser = async (data) => {
  * Get users list with filtering and pagination
  * @param {object} params
  */
-export const findUsers = async ({ skip = 0, take = 10, search, role, status }) => {
+export const findUsers = async ({ skip = 0, take = 10, search, role, division, status }) => {
   const where = {
     ...(search
       ? {
@@ -75,38 +77,33 @@ export const findUsers = async ({ skip = 0, take = 10, search, role, status }) =
           ],
         }
       : {}),
-    ...(role ? { role } : {}),
-    ...(status ? { status } : {}),
+    ...(role ? { role: role.toLowerCase() } : {}),
+    ...(division ? { division: division.toLowerCase() } : {}),
+    ...(status ? { status: status.toLowerCase() } : {}),
   };
 
   const [users, total] = await Promise.all([
-    prisma.user.findMany({
+    prisma.users.findMany({
       where,
       skip,
       take,
-      orderBy: { createdAt: "desc" },
+      orderBy: { created_at: "desc" },
       select: {
         id: true,
         email: true,
         name: true,
         role: true,
+        division: true,
         status: true,
-        mustChangePassword: true,
-        failedLoginAttempts: true,
-        lockedUntil: true,
-        lastLoginAt: true,
-        createdAt: true,
-        updatedAt: true,
-        createdBy: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-          },
-        },
+        must_change_password: true,
+        failed_login_attempts: true,
+        locked_until: true,
+        last_login_at: true,
+        created_at: true,
+        updated_at: true,
       },
     }),
-    prisma.user.count({ where }),
+    prisma.users.count({ where }),
   ]);
 
   return { users, total };
@@ -118,7 +115,7 @@ export const findUsers = async ({ skip = 0, take = 10, search, role, status }) =
  * @param {object} data
  */
 export const updateUser = async (id, data) => {
-  return prisma.user.update({
+  return prisma.users.update({
     where: { id },
     data,
     select: {
@@ -126,21 +123,15 @@ export const updateUser = async (id, data) => {
       email: true,
       name: true,
       role: true,
+      division: true,
       status: true,
-      mustChangePassword: true,
-      failedLoginAttempts: true,
-      lockedUntil: true,
-      lastLoginAt: true,
-      passwordChangedAt: true,
-      createdAt: true,
-      updatedAt: true,
-      createdBy: {
-        select: {
-          id: true,
-          name: true,
-          email: true,
-        },
-      },
+      must_change_password: true,
+      failed_login_attempts: true,
+      locked_until: true,
+      last_login_at: true,
+      password_changed_at: true,
+      created_at: true,
+      updated_at: true,
     },
   });
 };
@@ -150,14 +141,13 @@ export const updateUser = async (id, data) => {
  * @param {string} userId
  */
 export const revokeUserRefreshTokens = async (userId) => {
-  return prisma.refreshToken.updateMany({
+  return prisma.refresh_tokens.updateMany({
     where: {
-      userId,
-      revoked: false,
+      user_id: userId,
+      revoked_at: null,
     },
     data: {
-      revoked: true,
-      revokedAt: new Date(),
+      revoked_at: new Date(),
     },
   });
 };
@@ -168,23 +158,11 @@ export const revokeUserRefreshTokens = async (userId) => {
  */
 export const deleteUser = async (id) => {
   return prisma.$transaction(async (tx) => {
-    // 1. Unlink any users created by this user
-    await tx.user.updateMany({
-      where: { createdById: id },
-      data: { createdById: null },
-    });
+    // 1. Delete related refresh tokens
+    await tx.refresh_tokens.deleteMany({ where: { user_id: id } });
 
-    // 2. Unlink any whitelisted telegram users created by this user
-    await tx.telegramUser.updateMany({
-      where: { whitelistedById: id },
-      data: { whitelistedById: null },
-    });
-
-    // 3. Delete related refresh tokens
-    await tx.refreshToken.deleteMany({ where: { userId: id } });
-
-    // 4. Delete the user
-    return tx.user.delete({
+    // 2. Delete the user
+    return tx.users.delete({
       where: { id },
     });
   });
@@ -195,20 +173,18 @@ export const deleteUser = async (id) => {
  * @param {string} userId
  */
 export const countUserDependencies = async (userId) => {
-  const [tickets, ticketHistories, exportJobs, auditLogs] = await Promise.all([
-    prisma.ticket.count({ where: { reporterUserId: userId } }),
-    prisma.ticketHistory.count({ where: { changedByUserId: userId } }),
-    prisma.exportJob.count({ where: { requestedByUserId: userId } }),
-    prisma.auditLog.count({ where: { actorUserId: userId } }),
+  const [ticketHistories, exportJobs, auditLogs, ticketAssignees] = await Promise.all([
+    prisma.ticket_history.count({ where: { changed_by_user_id: userId } }),
+    prisma.export_jobs.count({ where: { requested_by_user_id: userId } }),
+    prisma.audit_logs.count({ where: { actor_user_id: userId } }),
+    prisma.ticket_assignees.count({ where: { user_id: userId } }),
   ]);
 
   return {
-    tickets,
     ticketHistories,
     exportJobs,
     auditLogs,
-    total: tickets + ticketHistories + exportJobs + auditLogs,
+    ticketAssignees,
+    total: ticketHistories + exportJobs + auditLogs + ticketAssignees,
   };
 };
-
-

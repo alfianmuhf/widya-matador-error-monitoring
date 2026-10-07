@@ -2,6 +2,32 @@ import createError from "http-errors";
 import * as componentRepo from "./component.repository.js";
 import { recordLog } from "../audit-log/audit-log.service.js";
 
+const formatComponent = (c) => {
+  if (!c) return null;
+  return {
+    id: c.id,
+    prefix: c.prefix,
+    name: c.name,
+    sortOrder: c.sort_order,
+    sort_order: c.sort_order,
+    isActive: c.is_active,
+    is_active: c.is_active,
+    createdAt: c.created_at,
+    created_at: c.created_at,
+    updatedAt: c.updated_at,
+    updated_at: c.updated_at,
+    _count: c._count,
+    failureCodes: c.failure_codes ? c.failure_codes.map(f => ({
+      id: f.id,
+      code: f.code,
+      name: f.name,
+      description: f.description,
+      isActive: f.is_active,
+      is_active: f.is_active,
+    })) : undefined,
+  };
+};
+
 export const getComponents = async (query = {}) => {
   const pageNum = parseInt(query.page, 10) || 1;
   const limitNum = parseInt(query.limit, 10) || 10;
@@ -17,9 +43,9 @@ export const getComponents = async (query = {}) => {
   }
 
   if (query.isActive === "true" || query.isActive === true) {
-    where.isActive = true;
+    where.is_active = true;
   } else if (query.isActive === "false" || query.isActive === false) {
-    where.isActive = false;
+    where.is_active = false;
   }
 
   const [components, total] = await Promise.all([
@@ -28,7 +54,7 @@ export const getComponents = async (query = {}) => {
   ]);
 
   return {
-    components,
+    components: components.map(formatComponent),
     meta: {
       total,
       page: pageNum,
@@ -43,7 +69,7 @@ export const getComponentById = async (id) => {
   if (!component) {
     throw createError(404, "Komponen tidak ditemukan");
   }
-  return component;
+  return formatComponent(component);
 };
 
 export const createComponent = async (data, actorUser = null) => {
@@ -60,16 +86,19 @@ export const createComponent = async (data, actorUser = null) => {
       identifier: created.name,
       name: created.name,
       prefix: created.prefix,
-      isActive: created.isActive,
+      isActive: created.is_active,
       changeSummary: `tambah komponen '${created.name}' (${created.prefix})`,
     },
   });
 
-  return created;
+  return formatComponent(created);
 };
 
 export const updateComponent = async (id, data, actorUser = null) => {
-  const current = await getComponentById(id);
+  const current = await componentRepo.findById(id);
+  if (!current) {
+    throw createError(404, "Komponen tidak ditemukan");
+  }
   const updated = await componentRepo.update(id, data);
 
   const changes = [];
@@ -79,8 +108,11 @@ export const updateComponent = async (id, data, actorUser = null) => {
   if (data.prefix !== undefined && data.prefix !== current.prefix) {
     changes.push(`prefix: ${current.prefix} → ${data.prefix}`);
   }
-  if (data.isActive !== undefined && data.isActive !== current.isActive) {
-    changes.push(`is_active: ${current.isActive} → ${data.isActive}`);
+  if (data.sortOrder !== undefined && data.sortOrder !== current.sort_order) {
+    changes.push(`sort_order: ${current.sort_order} → ${data.sortOrder}`);
+  }
+  if (data.isActive !== undefined && data.isActive !== current.is_active) {
+    changes.push(`is_active: ${current.is_active} → ${data.isActive}`);
   }
   const changeSummary = changes.length > 0 ? changes.join(", ") : "perubahan data komponen";
 
@@ -94,16 +126,19 @@ export const updateComponent = async (id, data, actorUser = null) => {
     details: {
       identifier: updated.name,
       changeSummary,
-      before: { name: current.name, prefix: current.prefix, isActive: current.isActive },
+      before: { name: current.name, prefix: current.prefix, isActive: current.is_active },
       after: data,
     },
   });
 
-  return updated;
+  return formatComponent(updated);
 };
 
 export const deleteComponent = async (id, actorUser = null) => {
-  const component = await getComponentById(id);
+  const component = await componentRepo.findById(id);
+  if (!component) {
+    throw createError(404, "Komponen tidak ditemukan");
+  }
 
   // Constraint check: apakah ada yang nyangkut (FailureCode atau Ticket)?
   const [failureCodeCount, ticketCount] = await Promise.all([
@@ -114,8 +149,8 @@ export const deleteComponent = async (id, actorUser = null) => {
   const hasDependents = failureCodeCount > 0 || ticketCount > 0;
 
   if (hasDependents) {
-    // Masih ada yang nyangkut -> JANGAN DI-HARD DELETE! Lakukan SOFT DELETE
-    const softDeleted = await componentRepo.update(id, { isActive: false });
+    // Masih ada yang nyangkut -> SOFT DELETE
+    const softDeleted = await componentRepo.update(id, { is_active: false });
 
     await recordLog({
       actor: actorUser?.email || actorUser?.name || "Sistem",
@@ -134,13 +169,13 @@ export const deleteComponent = async (id, actorUser = null) => {
     });
 
     return {
-      component: softDeleted,
+      component: formatComponent(softDeleted),
       deleteAction: "SOFT",
       message: `Komponen memiliki ${failureCodeCount} failure code dan ${ticketCount} tiket terhubung, sehingga dinonaktifkan (Soft Delete).`,
     };
   }
 
-  // Tidak ada yang nyangkut -> Boleh HARD DELETE
+  // Tidak ada yang nyangkut -> HARD DELETE
   await componentRepo.deleteById(id);
 
   await recordLog({
@@ -165,4 +200,3 @@ export const deleteComponent = async (id, actorUser = null) => {
     message: "Komponen berhasil dihapus secara permanen (Hard Delete)",
   };
 };
-

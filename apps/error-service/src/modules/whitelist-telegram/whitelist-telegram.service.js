@@ -2,12 +2,31 @@ import createError from "http-errors";
 import * as telegramRepository from "./whitelist-telegram.repository.js";
 import { recordLog } from "../audit-log/audit-log.service.js";
 
+const formatTelegramUser = (user) => {
+  if (!user) return null;
+  return {
+    id: user.id,
+    telegramId: user.telegram_id,
+    telegram_id: user.telegram_id,
+    username: user.username,
+    fullName: user.full_name,
+    full_name: user.full_name,
+    division: user.division,
+    isActive: user.is_active,
+    is_active: user.is_active,
+    createdAt: user.created_at,
+    created_at: user.created_at,
+    updatedAt: user.updated_at,
+    updated_at: user.updated_at,
+  };
+};
+
 /**
  * Admin adds a Telegram user to whitelist
- * @param {object} data - { telegramId, username, fullName, isActive }
+ * @param {object} data - { telegramId, username, fullName, division, isActive }
  * @param {object|string} adminUser - Current admin user object or ID
  */
-export const createTelegramUser = async ({ telegramId, username, fullName, isActive }, adminUser = null) => {
+export const createTelegramUser = async ({ telegramId, username, fullName, division, isActive }, adminUser = null) => {
   const adminId = typeof adminUser === "object" ? adminUser?.id : adminUser;
   const adminActor = typeof adminUser === "object" ? (adminUser?.email || adminUser?.name) : (adminUser ? `User:${adminId}` : "Sistem");
 
@@ -17,17 +36,20 @@ export const createTelegramUser = async ({ telegramId, username, fullName, isAct
     throw createError(409, "Telegram ID sudah terdaftar di daftar whitelist.");
   }
 
-  // 2. Insert into database
+  // 2. Insert into database (whitelisted_by is tracked in audit log)
   const created = await telegramRepository.createTelegramUser({
-    telegramId,
+    telegram_id: telegramId,
     username: username || null,
-    fullName: fullName || null,
-    isActive: isActive !== undefined ? isActive : true,
-    whitelistedById: adminId || null,
+    full_name: fullName || null,
+    division: division ? division.toLowerCase() : null,
+    is_active: isActive !== undefined ? isActive : true,
   });
 
-  const displayHandle = created.username ? (created.username.startsWith("@") ? created.username : `@${created.username}`) : created.telegramId;
+  const displayHandle = created.username
+    ? (created.username.startsWith("@") ? created.username : `@${created.username}`)
+    : created.telegram_id;
 
+  // 3. Record in audit log
   await recordLog({
     actor: adminActor,
     actorUserId: adminId || null,
@@ -37,15 +59,17 @@ export const createTelegramUser = async ({ telegramId, username, fullName, isAct
     entityId: created.id,
     details: {
       identifier: displayHandle,
-      changeSummary: `tambah whitelist telegram '${displayHandle}'`,
-      telegramId: created.telegramId,
+      changeSummary: `tambah whitelist telegram '${displayHandle}' oleh ${adminUser?.email || adminUser?.name || "admin"}`,
+      whitelistedBy: adminUser?.email || adminUser?.name || adminId || "Sistem",
+      telegramId: created.telegram_id,
       username: created.username,
-      fullName: created.fullName,
-      isActive: created.isActive,
+      fullName: created.full_name,
+      division: created.division,
+      isActive: created.is_active,
     },
   });
 
-  return created;
+  return formatTelegramUser(created);
 };
 
 /**
@@ -58,6 +82,7 @@ export const getTelegramUsers = async (query = {}) => {
   const skip = (page - 1) * limit;
 
   const search = typeof query.search === "string" ? query.search.trim() : undefined;
+  const division = typeof query.division === "string" ? query.division.trim() : undefined;
 
   let isActive;
   if (query.isActive === "true" || query.isActive === true) {
@@ -70,13 +95,14 @@ export const getTelegramUsers = async (query = {}) => {
     skip,
     take: limit,
     search,
+    division,
     isActive,
   });
 
   const totalPages = Math.ceil(total / limit) || 1;
 
   return {
-    telegramUsers,
+    telegramUsers: telegramUsers.map(formatTelegramUser),
     pagination: {
       total,
       page,
@@ -95,11 +121,11 @@ export const getTelegramUserById = async (id) => {
   if (!user) {
     throw createError(404, "User Telegram tidak ditemukan");
   }
-  return user;
+  return formatTelegramUser(user);
 };
 
 /**
- * Admin updates Telegram user (status isActive, username, fullName)
+ * Admin updates Telegram user (status is_active, username, full_name, division)
  * @param {string} id
  * @param {object} data
  * @param {object|string} adminUser
@@ -116,23 +142,31 @@ export const updateTelegramUser = async (id, data, adminUser = null) => {
 
   // 2. Construct update payload
   const updatePayload = {};
-  if (data.isActive !== undefined) updatePayload.isActive = data.isActive;
+  if (data.isActive !== undefined) updatePayload.is_active = data.isActive;
+  if (data.is_active !== undefined) updatePayload.is_active = data.is_active;
   if (data.username !== undefined) updatePayload.username = data.username || null;
-  if (data.fullName !== undefined) updatePayload.fullName = data.fullName || null;
+  if (data.fullName !== undefined) updatePayload.full_name = data.fullName || null;
+  if (data.full_name !== undefined) updatePayload.full_name = data.full_name || null;
+  if (data.division !== undefined) updatePayload.division = data.division ? data.division.toLowerCase() : null;
 
   const updated = await telegramRepository.updateTelegramUser(id, updatePayload);
 
-  const displayHandle = updated.username ? (updated.username.startsWith("@") ? updated.username : `@${updated.username}`) : updated.telegramId;
+  const displayHandle = updated.username
+    ? (updated.username.startsWith("@") ? updated.username : `@${updated.username}`)
+    : updated.telegram_id;
 
   const changes = [];
-  if (data.isActive !== undefined && data.isActive !== existingUser.isActive) {
-    changes.push(`is_active: ${existingUser.isActive} → ${data.isActive}`);
+  if (updatePayload.is_active !== undefined && updatePayload.is_active !== existingUser.is_active) {
+    changes.push(`is_active: ${existingUser.is_active} → ${updatePayload.is_active}`);
   }
   if (data.username !== undefined && data.username !== existingUser.username) {
     changes.push(`username: ${existingUser.username || "-"} → ${data.username}`);
   }
-  if (data.fullName !== undefined && data.fullName !== existingUser.fullName) {
-    changes.push(`nama: ${existingUser.fullName || "-"} → ${data.fullName}`);
+  if (updatePayload.full_name !== undefined && updatePayload.full_name !== existingUser.full_name) {
+    changes.push(`nama: ${existingUser.full_name || "-"} → ${updatePayload.full_name}`);
+  }
+  if (updatePayload.division !== undefined && updatePayload.division !== existingUser.division) {
+    changes.push(`divisi: ${existingUser.division || "-"} → ${updatePayload.division}`);
   }
   const changeSummary = changes.length > 0 ? changes.join(", ") : "perubahan whitelist telegram";
 
@@ -146,12 +180,12 @@ export const updateTelegramUser = async (id, data, adminUser = null) => {
     details: {
       identifier: displayHandle,
       changeSummary,
-      before: { isActive: existingUser.isActive, username: existingUser.username },
+      before: { isActive: existingUser.is_active, username: existingUser.username, division: existingUser.division },
       after: updatePayload,
     },
   });
 
-  return updated;
+  return formatTelegramUser(updated);
 };
 
 /**
@@ -168,14 +202,16 @@ export const deleteTelegramUser = async (id, adminUser = null) => {
     throw createError(404, "User Telegram tidak ditemukan");
   }
 
-  const displayHandle = existingUser.username ? (existingUser.username.startsWith("@") ? existingUser.username : `@${existingUser.username}`) : existingUser.telegramId;
+  const displayHandle = existingUser.username
+    ? (existingUser.username.startsWith("@") ? existingUser.username : `@${existingUser.username}`)
+    : existingUser.telegram_id;
 
-  // Constraint check: apakah ada yang nyangkut (Ticket, TicketHistory, AuditLog)?
+  // Constraint check: apakah ada yang nyangkut?
   const dep = await telegramRepository.countTelegramUserDependencies(existingUser);
 
   if (dep.total > 0) {
-    // Masih ada yang nyangkut -> JANGAN DI-HARD DELETE! Lakukan SOFT DELETE (isActive = false)
-    const softDeleted = await telegramRepository.updateTelegramUser(id, { isActive: false });
+    // Masih ada yang nyangkut -> SOFT DELETE (is_active = false)
+    const softDeleted = await telegramRepository.updateTelegramUser(id, { is_active: false });
 
     await recordLog({
       actor: adminActor,
@@ -186,15 +222,15 @@ export const deleteTelegramUser = async (id, adminUser = null) => {
       entityId: id,
       details: {
         identifier: displayHandle,
-        changeSummary: `soft delete: dinonaktifkan (${dep.tickets} tiket terikat)`,
-        reason: `Pengguna Telegram memiliki riwayat aktif (${dep.tickets} tiket, ${dep.ticketHistories} riwayat tiket). Entitas dinonaktifkan (Soft Delete).`,
+        changeSummary: `soft delete: dinonaktifkan (${dep.total} data terikat)`,
+        reason: `Pengguna Telegram memiliki riwayat aktif (${dep.ticketHistories} riwayat tiket, ${dep.ticketAssignees} claim tiket). Entitas dinonaktifkan (Soft Delete).`,
         dependencies: dep,
-        telegramId: existingUser.telegramId,
+        telegramId: existingUser.telegram_id,
       },
     });
 
     return {
-      telegramUser: softDeleted,
+      telegramUser: formatTelegramUser(softDeleted),
       deleteAction: "SOFT",
       message: `User Telegram memiliki riwayat terkait (${dep.total} data) sehingga dinonaktifkan (Soft Delete).`,
     };
@@ -214,13 +250,13 @@ export const deleteTelegramUser = async (id, adminUser = null) => {
       identifier: displayHandle,
       changeSummary: `hapus permanen user telegram '${displayHandle}'`,
       reason: "Tidak ada riwayat aktif terhubung. User Telegram dihapus secara permanen dari basis data.",
-      telegramId: existingUser.telegramId,
-      fullName: existingUser.fullName,
+      telegramId: existingUser.telegram_id,
+      fullName: existingUser.full_name,
     },
   });
 
   return {
-    telegramUser: { id, telegramId: existingUser.telegramId },
+    telegramUser: { id, telegramId: existingUser.telegram_id },
     deleteAction: "HARD",
     message: "User Telegram berhasil dihapus secara permanen (Hard Delete)",
   };

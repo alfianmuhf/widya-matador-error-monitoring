@@ -870,6 +870,311 @@ Jika tidak menyertakan kode unit atau ID failure code:
 
 ---
 
+### `GET /tickets/:id`
+
+| Parameter | Spesifikasi |
+|:---|:---|
+| **Protokol** | **REST API** |
+| **HTTP Method** | `GET` |
+| **Endpoint Path** | `/tickets/:id` |
+| **Autentikasi** | `Authorization: Bearer <access_token>` |
+| **Role Izin** | **Semua Role** (`ADMIN`, `COORDINATOR`, `VIEWER`) |
+
+Mengambil data detail tiket berdasarkan ID tiket (termasuk unit, client, lokasi, riwayat terkini, leader assignee, dan daftar anggota tim software).
+
+#### ✅ Contoh Respons Sukses: `200 OK`
+```json
+{
+  "success": true,
+  "data": {
+    "id": "ERR-20261007-0001",
+    "ticketId": "ERR-20261007-0001",
+    "currentVersion": 2,
+    "unit": "UN-10023",
+    "unitCode": "UN-10023",
+    "unitType": "portable",
+    "client": "PT Tambang Makmur",
+    "location": "Site Batubara A",
+    "component": "Sensor LiDAR",
+    "failureCode": "LID-01",
+    "failureName": "No Point Cloud Stream",
+    "severity": "Sedang",
+    "status": "Escalated",
+    "reporter": "Budi Aftersales",
+    "damageDescription": "Sensor mati mendadak saat operasi",
+    "actionTaken": "Eskalasi ke tim software untuk debugging firmware",
+    "rootCause": null,
+    "leaderAssigneeId": "550e8400-e29b-41d4-a716-446655440001",
+    "assignees": [
+      {
+        "id": "550e8400-e29b-41d4-a716-446655440001",
+        "isLeader": true,
+        "name": "Siti Software Leader",
+        "identifier": "siti@erad.com"
+      }
+    ]
+  }
+}
+```
+
+---
+
+### `POST /tickets/:id/comments`
+
+| Parameter | Spesifikasi |
+|:---|:---|
+| **Protokol** | **REST API** |
+| **HTTP Method** | `POST` |
+| **Endpoint Path** | `/tickets/:id/comments` |
+| **Autentikasi** | `Authorization: Bearer <access_token>` |
+| **Role Izin** | **Semua Role** (mengikuti aturan izin update tiket) |
+
+Menambahkan catatan penanganan / komentar baru pada tiket. Aksi ini menaikkan versi tiket (`version + 1`) dan mencatat row baru di `ticket_history`.
+
+#### Request Body
+```json
+{
+  "notes": "Pengecekan log driver selesai, mempersiapkan patch v2"
+}
+```
+
+---
+
+### `GET /tickets/:id/history`
+
+| Parameter | Spesifikasi |
+|:---|:---|
+| **Protokol** | **REST API** |
+| **HTTP Method** | `GET` |
+| **Endpoint Path** | `/tickets/:id/history` |
+| **Query Params** | `?order=desc` (default) atau `?order=asc` |
+| **Autentikasi** | `Authorization: Bearer <access_token>` |
+| **Role Izin** | **Semua Role** (`ADMIN`, `COORDINATOR`, `VIEWER`) |
+
+Mengambil seluruh linimasa riwayat perubahan tiket (`ticket_history`) dari versi awal (v0) hingga versi terkini.
+
+#### ✅ Contoh Respons Sukses: `200 OK`
+```json
+{
+  "success": true,
+  "data": {
+    "ticketId": "ERR-20261007-0001",
+    "currentVersion": 2,
+    "totalRecords": 3,
+    "history": [
+      {
+        "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+        "ticketId": "ERR-20261007-0001",
+        "version": 2,
+        "status": "Escalated",
+        "action": "Tiket diklaim oleh Siti Software Leader sebagai Leader tim Software",
+        "notes": "Tiket diklaim oleh Siti Software Leader sebagai Leader tim Software",
+        "author": "Siti Software Leader",
+        "authorRole": "coordinator",
+        "authorDivision": "software",
+        "timestamp": "07 Okt 2026, 10:15",
+        "damageDescription": "Sensor mati mendadak saat operasi",
+        "actionTaken": "Eskalasi ke tim software",
+        "rootCause": null,
+        "severity": "Sedang"
+      },
+      {
+        "id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+        "ticketId": "ERR-20261007-0001",
+        "version": 1,
+        "status": "Escalated",
+        "action": "Eskalasi ke software karena butuh bugfix",
+        "notes": "Eskalasi ke software karena butuh bugfix",
+        "author": "Budi Aftersales",
+        "timestamp": "07 Okt 2026, 09:30"
+      },
+      {
+        "id": "c3d4e5f6-a7b8-9012-cdef-123456789012",
+        "ticketId": "ERR-20261007-0001",
+        "version": 0,
+        "status": "Open",
+        "action": "Tiket baru dibuat",
+        "author": "Budi Aftersales",
+        "timestamp": "07 Okt 2026, 09:00"
+      }
+    ]
+  }
+}
+```
+
+---
+
+### `GET /tickets/:id/history/:version`
+
+| Parameter | Spesifikasi |
+|:---|:---|
+| **Protokol** | **REST API** |
+| **HTTP Method** | `GET` |
+| **Endpoint Path** | `/tickets/:id/history/:version` |
+| **Autentikasi** | `Authorization: Bearer <access_token>` |
+| **Role Izin** | **Semua Role** (`ADMIN`, `COORDINATOR`, `VIEWER`) |
+
+Mengambil detail snapshot tiket pada nomor versi tertentu (misal versi `0` untuk kondisi saat tiket pertama kali dibuat).
+
+---
+
+### `GET /tickets/:id/assignees`
+
+| Parameter | Spesifikasi |
+|:---|:---|
+| **Protokol** | **REST API** |
+| **HTTP Method** | `GET` |
+| **Endpoint Path** | `/tickets/:id/assignees` |
+| **Autentikasi** | `Authorization: Bearer <access_token>` |
+| **Role Izin** | **Semua Role** (`ADMIN`, `COORDINATOR`, `VIEWER`) |
+
+Mengambil daftar seluruh anggota tim software yang ditugaskan pada tiket, beserta penanda siapa yang menjadi Leader.
+
+---
+
+### `POST /tickets/:id/assignees`
+
+| Parameter | Spesifikasi |
+|:---|:---|
+| **Protokol** | **REST API** |
+| **HTTP Method** | `POST` |
+| **Endpoint Path** | `/tickets/:id/assignees` |
+| **Autentikasi** | `Authorization: Bearer <access_token>` |
+| **Hak Akses** | **Leader Tiket** (atau Super Admin) |
+
+Menambahkan anggota tim software baru ke tiket.
+* **Aturan Bisnis**:
+  * Tiket harus berstatus `escalated`.
+  * Hanya dapat dieksekusi oleh **Leader tiket saat ini** (atau Super Admin).
+  * Anggota yang ditambahkan harus berasal dari divisi `software`.
+
+#### Request Body (Pilih salah satu identifier)
+```json
+{
+  "userId": "550e8400-e29b-41d4-a716-446655440002"
+}
+```
+Atau via email / Telegram:
+```json
+{
+  "email": "joko@erad.com"
+}
+```
+Atau:
+```json
+{
+  "telegramId": "987654321"
+}
+```
+
+#### ❌ Contoh Error: Bukan Leader (`403 Forbidden`)
+```json
+{
+  "success": false,
+  "statusCode": 403,
+  "message": "Akses ditolak: Hanya Leader tiket yang dapat menambahkan anggota tim software."
+}
+```
+
+#### ❌ Contoh Error: Tiket Bukan Status Escalated (`403 Forbidden`)
+```json
+{
+  "success": false,
+  "statusCode": 403,
+  "message": "Akses ditolak: Penambahan anggota tim software hanya dapat dilakukan ketika tiket berstatus 'escalated' (status saat ini: 'open')."
+}
+```
+
+---
+
+### `PATCH /tickets/:id/assignees/:assigneeId` & `PUT /tickets/:id/assignees/:assigneeId`
+
+| Parameter | Spesifikasi |
+|:---|:---|
+| **Protokol** | **REST API** |
+| **HTTP Method** | `PATCH` / `PUT` |
+| **Endpoint Path** | `/tickets/:id/assignees/:assigneeId` |
+| **Autentikasi** | `Authorization: Bearer <access_token>` |
+| **Hak Akses** | **Leader Tiket** (atau Super Admin) |
+
+Mengedit atau memperbarui data anggota tim software yang terdaftar di tiket (misal mengganti anggota dengan user software lain).
+
+---
+
+### `DELETE /tickets/:id/assignees/:assigneeId`
+
+| Parameter | Spesifikasi |
+|:---|:---|
+| **Protokol** | **REST API** |
+| **HTTP Method** | `DELETE` |
+| **Endpoint Path** | `/tickets/:id/assignees/:assigneeId` |
+| **Autentikasi** | `Authorization: Bearer <access_token>` |
+| **Hak Akses** | **Leader Tiket**, Admin, atau Anggota bersangkutan |
+
+Menghapus keikutsertaan anggota dari tiket.
+* **Keamanan Data**: Riwayat perubahan yang pernah dilakukan oleh anggota ini di `ticket_history` **tetap aman dan ter-record** lengkap dengan nama dan ID penulis aslinya.
+* **Aturan Leader**: Jika Leader ingin keluar/dihapus dan masih ada anggota lain di tiket, Leader wajib mengalihkan kepemimpinan terlebih dahulu via `PATCH /tickets/:id/leader`.
+
+---
+
+### `PATCH /tickets/:id/leader`
+
+| Parameter | Spesifikasi |
+|:---|:---|
+| **Protokol** | **REST API** |
+| **HTTP Method** | `PATCH` |
+| **Endpoint Path** | `/tickets/:id/leader` |
+| **Autentikasi** | `Authorization: Bearer <access_token>` |
+| **Hak Akses** | **Leader Tiket Saat Ini** (atau Super Admin) |
+
+Mengalihkan kepemimpinan tiket ke anggota tim software lain yang sudah terdaftar di `ticket_assignees`.
+
+#### Request Body
+```json
+{
+  "assigneeId": "550e8400-e29b-41d4-a716-446655440002"
+}
+```
+
+#### ❌ Contoh Error: Bukan Leader Saat Ini (`403 Forbidden`)
+```json
+{
+  "success": false,
+  "statusCode": 403,
+  "message": "Akses ditolak: Hanya Leader saat ini yang dapat mengalihkan kepemimpinan tiket."
+}
+```
+
+---
+
+### Aturan Hak Akses Pembaruan Tiket (`PATCH /tickets/:id`)
+
+| Divisi Pengguna | Persyaratan Izin Update |
+|:---|:---|
+| **Aftersales** (`after_sales`) | **Bebas mengupdate** di semua status (`open`, `escalated`, `solved`) tanpa harus terdaftar di `ticket_assignees`. |
+| **Software** (`software`) | **Hanya dapat mengupdate saat status tiket `escalated`** DAN **wajib terdaftar** di `ticket_assignees` tiket tersebut. |
+| **Admin** (`role: admin`) | Memiliki akses penuh. |
+
+#### ❌ Error Tim Software Saat Status Tiket Bukan 'escalated': `403 Forbidden`
+```json
+{
+  "success": false,
+  "statusCode": 403,
+  "message": "Akses ditolak: Tim software hanya dapat melakukan perubahan ketika tiket berstatus 'escalated' (status saat ini: 'open')."
+}
+```
+
+#### ❌ Error Tim Software Belum Terdaftar di Assignees: `403 Forbidden`
+```json
+{
+  "success": false,
+  "statusCode": 403,
+  "message": "Akses ditolak: Hanya anggota tim software yang terdaftar pada tiket ini yang dapat melakukan perubahan tiket. Silakan minta leader tim software untuk menambahkan Anda ke tiket."
+}
+```
+
+---
+
 ## 7. Export Module (`/exports` & `/tickets/export`)
 
 ### `GET /exports/excel` & `GET /exports/pdf`

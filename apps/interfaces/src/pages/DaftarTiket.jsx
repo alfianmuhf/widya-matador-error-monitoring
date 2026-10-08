@@ -63,8 +63,8 @@ export default function DaftarTiket() {
       api.get("/telegram-users?limit=50").catch(() => ({ data: { data: [] } })),
     ])
       .then(([usersRes, teleRes]) => {
-        const dbUsers = usersRes.data?.data?.users || usersRes.data?.data || [];
-        const teleUsers = teleRes.data?.data?.users || teleRes.data?.data || [];
+        const dbUsers = usersRes.data?.data?.users || (Array.isArray(usersRes.data?.data) ? usersRes.data?.data : []);
+        const teleUsers = teleRes.data?.data?.telegramUsers || (Array.isArray(teleRes.data?.data) ? teleRes.data?.data : []);
 
         const combined = [];
         dbUsers.forEach((u) => {
@@ -83,8 +83,8 @@ export default function DaftarTiket() {
           combined.push({
             id: tg.id,
             telegramUserId: tg.id,
-            name: tg.full_name || tg.username || `Telegram (${tg.telegram_id})`,
-            email: tg.username ? `@${tg.username}` : tg.telegram_id,
+            name: tg.fullName || tg.full_name || tg.username || `Telegram (${tg.telegramId || tg.telegram_id})`,
+            email: tg.username ? `@${tg.username}` : (tg.telegramId || tg.telegram_id),
             role: "TELEGRAM",
             division: tg.division,
             source: "telegram",
@@ -93,12 +93,10 @@ export default function DaftarTiket() {
 
         if (combined.length > 0) {
           setAvailableUsers(combined);
-        } else {
-          setAvailableUsers(DEFAULT_TEAM_MEMBERS);
         }
       })
-      .catch(() => {
-        setAvailableUsers(DEFAULT_TEAM_MEMBERS);
+      .catch((err) => {
+        console.error("Failed to load available users:", err);
       });
   }, []);
 
@@ -343,17 +341,22 @@ export default function DaftarTiket() {
   // Handle assign member to ticket via Backend API (POST /tickets/:id/assignees)
   const handleAssignMember = async (ticketId, member, isLead) => {
     try {
+      const isUUID = (str) =>
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(str || ""));
+
       const payload = {
         isLeader: Boolean(isLead),
       };
-      if (member.telegramUserId) {
+      if (member.telegramUserId && isUUID(member.telegramUserId)) {
         payload.telegramUserId = member.telegramUserId;
-      } else if (member.userId) {
+      } else if (member.userId && isUUID(member.userId)) {
         payload.userId = member.userId;
-      } else if (member.id && !String(member.id).startsWith("custom-")) {
+      } else if (member.id && isUUID(member.id)) {
         payload.userId = member.id;
       } else if (member.email) {
         payload.email = member.email;
+      } else if (member.telegramId) {
+        payload.telegramId = member.telegramId;
       }
 
       const res = await api.post(`/tickets/${ticketId}/assignees`, payload);
@@ -378,7 +381,8 @@ export default function DaftarTiket() {
       showToast(`Berhasil menugaskan ${member.name} ke tiket ${ticketId}`);
     } catch (err) {
       console.error("Gagal menugaskan anggota tim:", err);
-      const msg = err.response?.data?.message || "Gagal menugaskan anggota ke tiket.";
+      const detailMsg = err.response?.data?.details?.[0]?.message;
+      const msg = detailMsg ? `${detailMsg}` : (err.response?.data?.message || "Gagal menugaskan anggota ke tiket.");
       showToast(msg);
     }
   };

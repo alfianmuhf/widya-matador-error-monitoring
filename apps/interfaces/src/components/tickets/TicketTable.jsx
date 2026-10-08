@@ -299,23 +299,26 @@ export default function TicketTable({
         <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
           <thead>
             <tr style={{ borderBottom: "1px solid var(--border-light)", backgroundColor: "#fafbfc" }}>
-              <th style={{ padding: "14px 20px", fontSize: "13px", fontWeight: 650, color: "var(--text-muted)", width: "16%" }}>
+              <th style={{ padding: "14px 20px", fontSize: "13px", fontWeight: 650, color: "var(--text-muted)", width: "13%" }}>
                 Ticket ID
               </th>
-              <th style={{ padding: "14px 18px", fontSize: "13px", fontWeight: 650, color: "var(--text-muted)", width: "16%" }}>
+              <th style={{ padding: "14px 18px", fontSize: "13px", fontWeight: 650, color: "var(--text-muted)", width: "13%" }}>
                 Unit
               </th>
-              <th style={{ padding: "14px 18px", fontSize: "13px", fontWeight: 650, color: "var(--text-muted)", width: "16%" }}>
+              <th style={{ padding: "14px 18px", fontSize: "13px", fontWeight: 650, color: "var(--text-muted)", width: "13%" }}>
                 Component
               </th>
-              <th style={{ padding: "14px 18px", fontSize: "13px", fontWeight: 650, color: "var(--text-muted)", width: "11%" }}>
+              <th style={{ padding: "14px 18px", fontSize: "13px", fontWeight: 650, color: "var(--text-muted)", width: "9%" }}>
                 Failure
               </th>
-              <th style={{ padding: "14px 18px", fontSize: "13px", fontWeight: 650, color: "var(--text-muted)", width: "12%" }}>
+              <th style={{ padding: "14px 18px", fontSize: "13px", fontWeight: 650, color: "var(--text-muted)", width: "10%" }}>
                 Severity
               </th>
-              <th style={{ padding: "14px 18px", fontSize: "13px", fontWeight: 650, color: "var(--text-muted)", width: "12%" }}>
+              <th style={{ padding: "14px 18px", fontSize: "13px", fontWeight: 650, color: "var(--text-muted)", width: "11%" }}>
                 Status
+              </th>
+              <th style={{ padding: "14px 18px", fontSize: "13px", fontWeight: 650, color: "var(--text-muted)", width: "15%" }}>
+                PIC / Tim
               </th>
               <th
                 onClick={() => setSortAsc(!sortAsc)}
@@ -324,7 +327,7 @@ export default function TicketTable({
                   fontSize: "13px",
                   fontWeight: 650,
                   color: "var(--text-muted)",
-                  width: "13%",
+                  width: "12%",
                   cursor: "pointer",
                   userSelect: "none",
                 }}
@@ -342,19 +345,20 @@ export default function TicketTable({
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan="8" style={{ padding: "50px", textAlign: "center", color: "var(--text-muted)" }}>
+                <td colSpan="9" style={{ padding: "50px", textAlign: "center", color: "var(--text-muted)" }}>
                   Memuat data tiket dari server...
                 </td>
               </tr>
             ) : tickets.length === 0 ? (
               <tr>
-                <td colSpan="8" style={{ padding: "50px", textAlign: "center", color: "var(--text-muted)" }}>
+                <td colSpan="9" style={{ padding: "50px", textAlign: "center", color: "var(--text-muted)" }}>
                   Tidak ada tiket yang sesuai dengan filter pencarian.
                 </td>
               </tr>
             ) : (
               tickets.map((t) => {
                 const isSelected = selectedTicketId === t.id;
+                const members = t.assignedMembers || [];
                 return (
                   <tr
                     key={t.id}
@@ -415,6 +419,69 @@ export default function TicketTable({
                     {/* Status */}
                     <td style={{ padding: "16px 18px" }}>
                       {renderStatusBadge(t.status)}
+                    </td>
+
+                    {/* PIC / Tim Penanganan */}
+                    <td style={{ padding: "16px 18px" }}>
+                      {members.length > 0 ? (
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                          <div
+                            style={{
+                              width: "28px",
+                              height: "28px",
+                              borderRadius: "50%",
+                              backgroundColor: "#0e8587",
+                              color: "#ffffff",
+                              fontSize: "11px",
+                              fontWeight: 700,
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              flexShrink: 0,
+                              textTransform: "uppercase",
+                            }}
+                          >
+                            {(members[0].name || "U").slice(0, 2)}
+                          </div>
+                          <div style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
+                            <span
+                              style={{
+                                fontSize: "12.5px",
+                                fontWeight: 650,
+                                color: "var(--text-dark)",
+                                whiteSpace: "nowrap",
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                                maxWidth: "105px",
+                              }}
+                              title={members[0].name}
+                            >
+                              {members[0].name}
+                            </span>
+                            {members.length > 1 && (
+                              <span style={{ fontSize: "10.5px", color: "#0e8587", fontWeight: 600 }}>
+                                +{members.length - 1} lainnya
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      ) : (
+                        <span
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            padding: "2px 8px",
+                            borderRadius: "4px",
+                            backgroundColor: "#f1f5f9",
+                            color: "#94a3b8",
+                            fontSize: "11px",
+                            fontWeight: 500,
+                            fontStyle: "italic",
+                          }}
+                        >
+                          Unassigned
+                        </span>
+                      )}
                     </td>
 
                     {/* Dibuat */}

@@ -40,7 +40,7 @@ export default function TicketDetailDrawer({
 
   if (!ticket) return null;
 
-  const assignedMembers = ticket.assignedMembers || [];
+  const assignedMembers = ticket.assignees || ticket.assignedMembers || [];
 
   const handleSave = async () => {
     setSaving(true);
@@ -95,6 +95,9 @@ export default function TicketDetailDrawer({
       if (found) {
         memberToAssign = {
           id: found.id,
+          userId: found.userId || found.id,
+          telegramUserId: found.telegramUserId,
+          telegramId: found.telegramId,
           name: found.name,
           email: found.email,
           role: found.role || "TEKNISI",
@@ -542,7 +545,7 @@ export default function TicketDetailDrawer({
                             <span style={{ fontSize: "13px", fontWeight: 700, color: "var(--text-dark)" }}>
                               {member.name}
                             </span>
-                            {member.isLead && (
+                            {(member.isLead || member.isLeader) && (
                               <span
                                 style={{
                                   fontSize: "10px",

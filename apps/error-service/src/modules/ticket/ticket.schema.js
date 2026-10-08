@@ -131,6 +131,7 @@ export const addAssigneeSchema = z
     telegramUserId: z.string().uuid("Format Telegram User ID tidak valid").optional(),
     email: z.string().trim().email("Format email tidak valid").optional(),
     telegramId: z.string().trim().optional(),
+    isLeader: z.boolean().optional(),
   })
   .refine((data) => data.userId || data.telegramUserId || data.email || data.telegramId, {
     message: "Harus menyertakan salah satu: userId, telegramUserId, email, atau telegramId",

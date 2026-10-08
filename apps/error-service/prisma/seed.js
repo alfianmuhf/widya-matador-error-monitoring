@@ -2,45 +2,93 @@ import bcrypt from "bcrypt";
 import prisma from "../src/config/prisma.js";
 
 async function main() {
-  const email = process.env.ADMIN_EMAIL || "admin@widya.com";
-  const password = process.env.ADMIN_PASSWORD || "admin123";
-  const name = process.env.ADMIN_NAME || "Super Admin";
-
   const saltRounds = 10;
-  const passwordHash = await bcrypt.hash(password, saltRounds);
+  const defaultPassword = process.env.ADMIN_PASSWORD || "admin123";
+  const defaultPasswordHash = await bcrypt.hash(defaultPassword, saltRounds);
 
-  const admin = await prisma.user.upsert({
-    where: { email },
-    update: {
+  const seedUsers = [
+    {
+      email: process.env.ADMIN_EMAIL || "admin@widya.com",
+      name: process.env.ADMIN_NAME || "Super Admin",
       role: "admin",
+      division: "none",
       status: "active",
-      passwordHash,
-      mustChangePassword: false,
+      must_change_password: false,
+      password: defaultPassword,
     },
-    create: {
-      email,
-      name,
-      role: "admin",
+    {
+      email: "bruno@erad.id",
+      name: "Bruno Aftersales",
+      role: "coordinator",
+      division: "after_sales",
       status: "active",
-      passwordHash,
-      mustChangePassword: false,
+      must_change_password: false,
+      password: defaultPassword,
     },
-  });
+    {
+      email: "siti@erad.id",
+      name: "Siti Software Leader",
+      role: "coordinator",
+      division: "software",
+      status: "active",
+      must_change_password: false,
+      password: defaultPassword,
+    },
+    {
+      email: "dimas@erad.id",
+      name: "Dimas Software",
+      role: "viewer",
+      division: "software",
+      status: "active",
+      must_change_password: false,
+      password: defaultPassword,
+    },
+  ];
 
-  console.log("✅ User Admin berhasil dibuat / diupdate:");
-  console.log({
-    id: admin.id,
-    email: admin.email,
-    name: admin.name,
-    role: admin.role,
-    status: admin.status,
-    passwordDefault: password,
-  });
+  console.log("🌱 Memulai seeding user ke database...");
+
+  for (const u of seedUsers) {
+    const passwordHash = u.password === defaultPassword ? defaultPasswordHash : await bcrypt.hash(u.password, saltRounds);
+
+    const user = await prisma.users.upsert({
+      where: { email: u.email },
+      update: {
+        name: u.name,
+        role: u.role,
+        division: u.division,
+        status: u.status,
+        password_hash: passwordHash,
+        must_change_password: u.must_change_password,
+        failed_login_attempts: 0,
+        locked_until: null,
+      },
+      create: {
+        email: u.email,
+        name: u.name,
+        role: u.role,
+        division: u.division,
+        status: u.status,
+        password_hash: passwordHash,
+        must_change_password: u.must_change_password,
+        failed_login_attempts: 0,
+      },
+    });
+
+    console.log(`✅ User berhasil dibuat / diupdate: [${user.role.toUpperCase()}] ${user.name} (${user.email})`);
+  }
+
+  console.log("\n🔑 Kredensial Login:");
+  console.log("--------------------------------------------------");
+  console.log(`• Admin       : ${seedUsers[0].email} / ${defaultPassword}`);
+  console.log(`• Aftersales  : ${seedUsers[1].email} / ${defaultPassword}`);
+  console.log(`• Software (L): ${seedUsers[2].email} / ${defaultPassword}`);
+  console.log(`• Software (M): ${seedUsers[3].email} / ${defaultPassword}`);
+  console.log("--------------------------------------------------");
 }
 
 main()
   .catch((e) => {
-    console.error("❌ Gagal membuat user admin:", e);
+    console.error("❌ Gagal seeding user:", e);
     process.exit(1);
   })
   .finally(async () => {

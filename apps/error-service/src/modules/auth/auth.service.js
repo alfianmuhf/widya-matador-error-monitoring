@@ -159,8 +159,44 @@ export const refreshToken = async (oldToken, { userAgent, ipAddress } = {}) => {
 
   const userId = storedToken.user_id || storedToken.userId;
 
-  // 3. Security: Check if token has been revoked (Token Reuse Detection)
+  // 3. Security: Check if token has been revoked (Token Reuse Detection with Grace Period)
   if (storedToken.revoked_at || storedToken.revoked) {
+    const revokedAt = new Date(storedToken.revoked_at || storedToken.revoked);
+    const diffMs = Date.now() - revokedAt.getTime();
+    const GRACE_PERIOD_MS = 20 * 1000; // 20s grace period for concurrent network/tab requests
+
+    if (diffMs <= GRACE_PERIOD_MS) {
+      // Find the latest active token for this user (issued during the rotation)
+      const latestToken = await authRepository.findLatestActiveRefreshToken(userId);
+      const user = storedToken.user;
+      const status = (user?.status || "").toLowerCase();
+
+      if (latestToken && user && (status === "active" || status === "invited")) {
+        const accessTokenPayload = {
+          id: user.id,
+          email: user.email,
+          role: user.role,
+          division: user.division,
+        };
+        const newAccessToken = generateAccessToken(accessTokenPayload);
+
+        return {
+          user: {
+            id: user.id,
+            email: user.email,
+            name: user.name,
+            role: user.role,
+            division: user.division,
+            status: user.status,
+            mustChangePassword: user.must_change_password ?? user.mustChangePassword,
+          },
+          accessToken: newAccessToken,
+          refreshToken: latestToken.token_hash,
+        };
+      }
+    }
+
+    // Token reuse detected outside of grace period — revoke all sessions
     await authRepository.revokeAllUserTokens(userId);
     throw createError(
       401,

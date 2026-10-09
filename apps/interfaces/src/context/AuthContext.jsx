@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect } from "react";
-import api from "../lib/api.js";
+import api, { refreshSession } from "../lib/api.js";
 
 const AuthContext = createContext(null);
 
@@ -26,17 +26,11 @@ export function AuthProvider({ children }) {
     if (initialUser) {
       setUser(initialUser);
     }
-    setAccessToken(token);
-    api.defaults.headers.common.Authorization = `Bearer ${token}`;
-    try {
-      const me = await fetchMe(token);
-      return me;
-    } catch (error) {
-      setAccessToken(null);
-      setUser(null);
-      delete api.defaults.headers.common.Authorization;
-      throw error;
+    if (token) {
+      setAccessToken(token);
+      api.defaults.headers.common.Authorization = `Bearer ${token}`;
     }
+    return initialUser;
   };
 
   const logout = async () => {
@@ -51,25 +45,36 @@ export function AuthProvider({ children }) {
   };
 
   useEffect(() => {
+    let isMounted = true;
     (async () => {
       try {
-        const { data } = await api.post("/auth/refresh");
-        const token = data.data?.accessToken;
-        const initialUser = data.data?.user;
-        if (initialUser) {
-          setUser(initialUser);
-        }
-        if (token) {
-          setAccessToken(token);
-          api.defaults.headers.common.Authorization = `Bearer ${token}`;
-          await fetchMe(token);
+        const res = await refreshSession();
+        const token = res.data?.accessToken;
+        const initialUser = res.data?.user;
+        if (isMounted) {
+          if (initialUser) {
+            setUser(initialUser);
+          }
+          if (token) {
+            setAccessToken(token);
+            api.defaults.headers.common.Authorization = `Bearer ${token}`;
+          }
         }
       } catch {
-        // unauthenticated — fine
+        if (isMounted) {
+          setAccessToken(null);
+          setUser(null);
+        }
       } finally {
-        setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     })();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const updateAuthSession = (newToken, updatedUser) => {

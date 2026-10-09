@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import ReactECharts from "echarts-for-react";
 import { useAuth } from "../context/AuthContext.jsx";
-import api from "../lib/api.js";
+import api, { API_BASE_URL } from "../lib/api.js";
 import ExportReportModal from "../components/tickets/ExportReportModal.jsx";
 import { downloadTicketReport } from "../lib/exportReport.js";
 
@@ -85,8 +85,7 @@ export default function Ringkasan() {
   // Real-time updates via SSE when tickets change
   useEffect(() => {
     if (!accessToken) return;
-    const baseURL = import.meta.env.VITE_API_BASE_URL || "http://localhost:3000";
-    const sseUrl = `${baseURL}/tickets/stream?token=${encodeURIComponent(accessToken)}`;
+    const sseUrl = `${API_BASE_URL}/tickets/stream?token=${encodeURIComponent(accessToken)}`;
     const eventSource = new EventSource(sseUrl);
 
     const handleTicketChange = () => {

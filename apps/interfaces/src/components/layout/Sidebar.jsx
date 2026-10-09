@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext.jsx";
-import api from "../../lib/api.js";
+import api, { API_BASE_URL } from "../../lib/api.js";
 
 export default function Sidebar() {
   const location = useLocation();
@@ -45,8 +45,7 @@ export default function Sidebar() {
     }
 
     // Real-time live updates via Server-Sent Events (SSE)
-    const baseURL = import.meta.env.VITE_API_BASE_URL || "http://localhost:3000";
-    const sseUrl = `${baseURL}/tickets/stream?token=${encodeURIComponent(accessToken)}`;
+    const sseUrl = `${API_BASE_URL}/tickets/stream?token=${encodeURIComponent(accessToken)}`;
     const eventSource = new EventSource(sseUrl);
 
     eventSource.addEventListener("init", (event) => {

@@ -190,11 +190,8 @@ export async function getErrorAnalyticsData(query = {}) {
     .slice(0, 6)
     .map(([name]) => name);
 
-  const heatmapUnits = topUnits.length > 0 ? topUnits : ["STATIC005", "LSP-033", "LSP-020", "STATIC001"];
-  const heatmapComponents =
-    topHeatmapComponents.length > 0
-      ? topHeatmapComponents
-      : ["Mini PC", "Lidar & Controller", "CCTV", "Network", "Accu & Power System", "Cable & Connector"];
+  const heatmapUnits = topUnits;
+  const heatmapComponents = topHeatmapComponents;
 
   const matrixCounts = {};
   for (const t of tickets) {

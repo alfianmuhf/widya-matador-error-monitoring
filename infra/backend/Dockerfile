@@ -11,8 +11,9 @@ COPY .env.backend.example .env
 # Install library OS pendukung Prisma & Bcrypt di Alpine
 RUN apk add --no-cache openssl libc6-compat
 
-# Copy package dependencies dan install
+# Copy package dependencies dan Prisma config
 COPY apps/error-service/package*.json ./
+COPY apps/error-service/prisma.config.js ./
 RUN npm install
 
 # Copy Prisma schema dan generate Prisma Client

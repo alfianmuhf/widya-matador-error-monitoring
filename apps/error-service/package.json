@@ -10,6 +10,7 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "seed": "node prisma/seed.js",
+    "truncate": "node prisma/truncate.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "prisma": {

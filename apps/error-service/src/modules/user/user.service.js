@@ -34,7 +34,7 @@ export const createUser = async ({ email, name, role, division }, adminUser = nu
     role: normalizedRole,
     division: normalizedDivision,
     password_hash: hashedPassword,
-    status: "active",
+    status: "invited",
     must_change_password: true,
   });
 
@@ -138,6 +138,15 @@ export const updateUser = async (id, data, adminUser) => {
     }
   }
 
+  // 2b. Prevent setting status to invited (jika user saat ini memang invited dan statusnya tidak diubah, abaikan saja)
+  if (data.status && data.status.toLowerCase() === "invited") {
+    if (existingUser.status === "invited") {
+      delete data.status; // Tetap biarkan status invited di database
+    } else {
+      throw createError(400, "Status tidak dapat diubah ke 'invited'. Opsi status hanya 'active' atau 'suspended'.");
+    }
+  }
+
   // 3. If email changed, check for conflicts
   if (data.email && data.email !== existingUser.email) {
     const emailOwner = await userRepository.findUserByEmail(data.email);
@@ -229,11 +238,11 @@ export const deleteUser = async (id, adminUser) => {
     throw createError(400, "Tidak dapat menghapus akun Anda sendiri");
   }
 
-  // 3. Constraint check: apakah ada yang nyangkut (TicketHistory, ExportJob, AuditLog, TicketAssignees)?
+  // 3. Constraint check: apakah ada riwayat tiket terikat (Foreign Key Restrict)?
   const dep = await userRepository.countUserDependencies(id);
 
-  if (dep.total > 0) {
-    // Masih ada data yang nyangkut -> Lakukan SOFT DELETE (suspended & revoke tokens)
+  if (dep.ticketHistories > 0) {
+    // Masih ada data riwayat tiket -> Lakukan SOFT DELETE (suspended & revoke tokens)
     const softDeleted = await userRepository.updateUser(id, { status: "suspended" });
     await userRepository.revokeUserRefreshTokens(id);
 
@@ -246,8 +255,8 @@ export const deleteUser = async (id, adminUser) => {
       entityId: id,
       details: {
         identifier: existingUser.email,
-        changeSummary: `soft delete: akun dinonaktifkan (${dep.total} data terkait)`,
-        reason: `Pengguna memiliki data riwayat terikat (${dep.ticketHistories} riwayat tiket, ${dep.exportJobs} ekspor, ${dep.auditLogs} audit log, ${dep.ticketAssignees} claim tiket). Dilakukan soft delete (suspended).`,
+        changeSummary: `soft delete: akun dinonaktifkan (${dep.ticketHistories} riwayat tiket terikat)`,
+        reason: `Pengguna memiliki riwayat perubahan tiket (${dep.ticketHistories} riwayat tiket) sehingga akun dinonaktifkan (Soft Delete / suspended) untuk integritas audit.`,
         dependencies: dep,
       },
     });
@@ -255,7 +264,7 @@ export const deleteUser = async (id, adminUser) => {
     return {
       user: softDeleted,
       deleteAction: "SOFT",
-      message: `Pengguna memiliki riwayat aktif (${dep.total} data terkait) sehingga dinonaktifkan (Soft Delete / suspended).`,
+      message: `Pengguna memiliki ${dep.ticketHistories} riwayat tiket terikat sehingga akun dinonaktifkan (Soft Delete / suspended).`,
     };
   }
 

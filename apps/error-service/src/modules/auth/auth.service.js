@@ -63,10 +63,10 @@ export const login = async ({ email, password }, { userAgent, ipAddress } = {}) 
   }
 
   const passwordHash = user.password_hash || user.passwordHash;
-  if (status === "invited" || !passwordHash) {
+  if (!passwordHash) {
     throw createError(
       401,
-      "Akun belum diaktifkan. Silakan setel password melalui link undangan terlebih dahulu."
+      "Akun belum memiliki password terdaftar. Silakan hubungi administrator."
     );
   }
 
@@ -174,10 +174,10 @@ export const refreshToken = async (oldToken, { userAgent, ipAddress } = {}) => {
     throw createError(401, "Refresh token telah kedaluwarsa. Silakan login kembali.");
   }
 
-  // 5. Ensure user exists and is active
+  // 5. Ensure user exists and is active or invited
   const user = storedToken.user;
   const status = (user?.status || "").toLowerCase();
-  if (!user || status !== "active") {
+  if (!user || (status !== "active" && status !== "invited")) {
     throw createError(403, "User tidak aktif atau tidak ditemukan");
   }
 
@@ -270,9 +270,13 @@ export const changePassword = async (userId, { currentPassword, newPassword }, m
     throw createError(400, "Akun ini belum memiliki password terdaftar");
   }
 
-  const isCurrentPasswordValid = await comparePassword(currentPassword, passwordHash);
-  if (!isCurrentPasswordValid) {
-    throw createError(400, "Password saat ini tidak sesuai");
+  if (currentPassword) {
+    const isCurrentPasswordValid = await comparePassword(currentPassword, passwordHash);
+    if (!isCurrentPasswordValid) {
+      throw createError(400, "Password saat ini tidak sesuai");
+    }
+  } else if (!user.must_change_password && status !== "invited") {
+    throw createError(400, "Password saat ini wajib diisi");
   }
 
   // 3. Ensure new password is not identical to current password

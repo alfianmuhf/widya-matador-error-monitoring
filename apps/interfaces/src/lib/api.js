@@ -15,6 +15,13 @@ const processQueue = (error, token) => {
   failedQueue = [];
 };
 
+api.interceptors.request.use((config) => {
+  if (!config.headers.Authorization && api.defaults.headers.common.Authorization) {
+    config.headers.Authorization = api.defaults.headers.common.Authorization;
+  }
+  return config;
+});
+
 api.interceptors.response.use(
   (res) => res,
   async (err) => {

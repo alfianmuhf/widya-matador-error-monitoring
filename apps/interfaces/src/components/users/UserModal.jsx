@@ -6,11 +6,13 @@ import { createUserSchema, updateUserSchema } from "../../lib/validators.js";
 function UserModalContent({ onClose, user, onSuccess }) {
   const isEdit = !!user;
 
+  const originalStatus = (user?.status || "").toLowerCase();
   const [formData, setFormData] = useState(() => ({
     name: user?.name || "",
     email: user?.email || "",
-    role: user?.role || "ADMIN",
-    status: user?.status || "ACTIVE",
+    role: (user?.role || "viewer").toLowerCase(),
+    division: (user?.division || "none").toLowerCase(),
+    status: originalStatus || "active",
   }));
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
@@ -31,7 +33,20 @@ function UserModalContent({ onClose, user, onSuccess }) {
 
     try {
       if (isEdit) {
-        const parsed = updateUserSchema.safeParse(formData);
+        const payload = {
+          name: formData.name,
+          email: formData.email,
+          role: (formData.role || "viewer").toLowerCase(),
+          division: (formData.division || "none").toLowerCase(),
+        };
+
+        // HANYA kirim status jika status bukan 'invited' (misal dipilih active atau suspended)
+        // Jika status tetap 'invited', jangan sertakan status agar status di database tidak terubah
+        if (formData.status && formData.status.toLowerCase() !== "invited") {
+          payload.status = formData.status.toLowerCase();
+        }
+
+        const parsed = updateUserSchema.safeParse(payload);
         if (!parsed.success) {
           const fieldErrors = parsed.error.flatten().fieldErrors;
           const mapped = {};
@@ -43,17 +58,19 @@ function UserModalContent({ onClose, user, onSuccess }) {
           return;
         }
 
-        await api.patch(`/users/${user.id}`, {
-          name: formData.name,
-          email: formData.email,
-          role: formData.role,
-          status: formData.status,
-        });
+        await api.patch(`/users/${user.id}`, payload);
 
         onSuccess();
         onClose();
       } else {
-        const parsed = createUserSchema.safeParse(formData);
+        const payload = {
+          name: formData.name,
+          email: formData.email,
+          role: (formData.role || "viewer").toLowerCase(),
+          division: (formData.division || "none").toLowerCase(),
+        };
+
+        const parsed = createUserSchema.safeParse(payload);
         if (!parsed.success) {
           const fieldErrors = parsed.error.flatten().fieldErrors;
           const mapped = {};
@@ -65,11 +82,7 @@ function UserModalContent({ onClose, user, onSuccess }) {
           return;
         }
 
-        const res = await api.post("/users", {
-          name: formData.name,
-          email: formData.email,
-          role: formData.role,
-        });
+        const res = await api.post("/users", payload);
 
         const initialPassword = res.data?.data?.initialPassword;
         setCreatedInfo({
@@ -243,16 +256,43 @@ function UserModalContent({ onClose, user, onSuccess }) {
             width: "100%",
             padding: "9px 12px",
             borderRadius: "8px",
-            border: "1px solid var(--border-light)",
+            border: `1px solid ${errors.role ? "#ef4444" : "var(--border-light)"}`,
             backgroundColor: "#ffffff",
             fontSize: "var(--text-sm)",
             outline: "none",
           }}
         >
-          <option value="ADMIN">Admin (Akses Penuh)</option>
-          <option value="COORDINATOR">Coordinator</option>
-          <option value="VIEWER">Viewer</option>
+          <option value="admin">Admin (Akses Penuh)</option>
+          <option value="coordinator">Coordinator</option>
+          <option value="viewer">Viewer</option>
         </select>
+        {errors.role && <span style={{ color: "#ef4444", fontSize: "12px", marginTop: "4px", display: "block" }}>{errors.role}</span>}
+      </div>
+
+      {/* Divisi */}
+      <div>
+        <label style={{ display: "block", fontSize: "var(--text-sm)", fontWeight: 600, marginBottom: "6px" }}>
+          Divisi
+        </label>
+        <select
+          name="division"
+          value={formData.division}
+          onChange={handleChange}
+          style={{
+            width: "100%",
+            padding: "9px 12px",
+            borderRadius: "8px",
+            border: `1px solid ${errors.division ? "#ef4444" : "var(--border-light)"}`,
+            backgroundColor: "#ffffff",
+            fontSize: "var(--text-sm)",
+            outline: "none",
+          }}
+        >
+          <option value="none">Tidak Ada (None)</option>
+          <option value="after_sales">After Sales</option>
+          <option value="software">Software</option>
+        </select>
+        {errors.division && <span style={{ color: "#ef4444", fontSize: "12px", marginTop: "4px", display: "block" }}>{errors.division}</span>}
       </div>
 
       {/* Status (Khusus Edit) */}
@@ -269,16 +309,24 @@ function UserModalContent({ onClose, user, onSuccess }) {
               width: "100%",
               padding: "9px 12px",
               borderRadius: "8px",
-              border: "1px solid var(--border-light)",
+              border: `1px solid ${errors.status ? "#ef4444" : "var(--border-light)"}`,
               backgroundColor: "#ffffff",
               fontSize: "var(--text-sm)",
               outline: "none",
             }}
           >
-            <option value="ACTIVE">Aktif</option>
-            <option value="SUSPENDED">Suspended (Dinonaktifkan)</option>
-            <option value="INVITED">Invited</option>
+            {originalStatus === "invited" && (
+              <option value="invited">invited (Status Saat Ini)</option>
+            )}
+            <option value="active">active</option>
+            <option value="suspended">suspended</option>
           </select>
+          {originalStatus === "invited" && (
+            <small style={{ color: "#64748b", fontSize: "12px", marginTop: "4px", display: "block" }}>
+              Status akun saat ini adalah <strong>invited</strong>. Biarkan opsi ini jika tidak ingin mengubah status, atau pilih <strong>active</strong> / <strong>suspended</strong> untuk memperbarui akun.
+            </small>
+          )}
+          {errors.status && <span style={{ color: "#ef4444", fontSize: "12px", marginTop: "4px", display: "block" }}>{errors.status}</span>}
         </div>
       )}
 

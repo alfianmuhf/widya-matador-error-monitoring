@@ -5,10 +5,11 @@ import DashboardLayout from "./components/layout/DashboardLayout.jsx";
 import PenggunaWhitelist from "./pages/PenggunaWhitelist.jsx";
 import MasterData from "./pages/MasterData.jsx";
 import DaftarTiket from "./pages/DaftarTiket.jsx";
+import ManajemenTiket from "./pages/ManajemenTiket.jsx";
 import Ringkasan from "./pages/Ringkasan.jsx";
 import AnalitikError from "./pages/AnalitikError.jsx";
 import AuditLogPage from "./pages/AuditLogPage.jsx";
-import { ProtectedRoute, PublicOnlyRoute, AdminRoute } from "./components/ProtectedRoute.jsx";
+import { ProtectedRoute, PublicOnlyRoute, AdminRoute, CoordinatorRoute } from "./components/ProtectedRoute.jsx";
 import "./App.css";
 
 export default function App() {
@@ -44,11 +45,28 @@ export default function App() {
             {/* Menu Daftar Tiket */}
             <Route path="daftar-tiket" element={<DaftarTiket />} />
 
+            {/* Menu Manajemen & Update Tiket khusus COORDINATOR (Aftersales & Software) */}
+            <Route
+              path="manajemen-tiket"
+              element={
+                <CoordinatorRoute>
+                  <ManajemenTiket />
+                </CoordinatorRoute>
+              }
+            />
+
             {/* Master Data — semua role */}
             <Route path="master-data" element={<MasterData />} />
 
-            {/* Pengguna & Whitelist — dapat dilihat semua role, create/manage khusus ADMIN & COORDINATOR */}
-            <Route path="pengguna-whitelist" element={<PenggunaWhitelist />} />
+            {/* Pengguna & Whitelist — khusus ADMIN & COORDINATOR (Viewer ditolak) */}
+            <Route
+              path="pengguna-whitelist"
+              element={
+                <ProtectedRoute allowedRoles={["ADMIN", "COORDINATOR"]}>
+                  <PenggunaWhitelist />
+                </ProtectedRoute>
+              }
+            />
 
             {/* Audit Log — semua role dapat melihat */}
             <Route path="audit-log" element={<AuditLogPage />} />

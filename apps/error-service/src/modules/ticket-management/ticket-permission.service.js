@@ -1,12 +1,13 @@
 import createError from "http-errors";
-import prisma from "../../../config/prisma.js";
-import * as ticketRepo from "../ticket.repository.js";
+import prisma from "../../config/prisma.js";
+import * as ticketRepo from "../ticket/ticket.repository.js";
 
 /**
  * Permission checker for updating tickets:
- * - Tim Aftersales: dapat melakukan perubahan tiket tanpa harus masuk ke ticket_assignees.
- * - Tim Software: HANYA yang terdaftar di ticket_assignees yang dapat melakukan perubahan tiket DAN tiket harus berstatus 'escalated'.
- * - Role Admin: memiliki akses penuh.
+ * - Role Admin: Tidak memiliki akses di manajemen tiket (403).
+ * - Role Viewer: Hanya memiliki akses membaca tiket (403).
+ * - Tim Aftersales: Hanya dapat mengelola tiket yang berstatus 'open' dan dibuat oleh dirinya.
+ * - Tim Software: HANYA yang terdaftar di ticket_assignees DAN tiket harus berstatus 'escalated'.
  */
 export const checkUpdateTicketPermission = async (ticketId, actor, currentTicket = null) => {
   if (!actor) {
@@ -48,17 +49,48 @@ export const checkUpdateTicketPermission = async (ticketId, actor, currentTicket
   const role = (actorUser?.role || actor.role || "").toLowerCase();
   const division = (actorUser?.division || actorTelegram?.division || actor.division || "").toLowerCase();
 
-  // 1. Admin memiliki hak akses penuh
+  // 1. Role Admin: Tidak memiliki akses di manajemen tiket
   if (role === "admin") {
-    return { actorUser, actorTelegram, division, role, currentStatus };
+    throw createError(
+      403,
+      "Akses ditolak: Admin tidak memiliki akses untuk mengelola atau memperbarui tiket."
+    );
   }
 
-  // 2. Tim Aftersales: bebas mengupdate tanpa harus di ticket_assignees
+  // 2. Role Viewer: Hanya memiliki akses membaca tiket
+  if (role === "viewer") {
+    throw createError(
+      403,
+      "Akses ditolak: Viewer hanya memiliki akses membaca tiket."
+    );
+  }
+
+  // 3. Tim Aftersales: Mengelola tiket yang berstatus 'open' dan dibuat oleh dirinya
   if (division === "after_sales") {
+    if (currentStatus !== "open") {
+      throw createError(
+        403,
+        `Akses ditolak: Tim aftersales hanya dapat melakukan perubahan ketika tiket berstatus 'open' (status saat ini: '${currentStatus}').`
+      );
+    }
+
+    // Jika user web, pastikan dia adalah pembuat tiket (dilihat dari history version 1 atau 0)
+    if (actorUser?.id) {
+      const isCreator = (ticket.ticket_history || []).some(
+        (h) => (h.version === 1 || h.version === 0) && h.changed_by_user_id === actorUser.id
+      );
+      if (!isCreator) {
+        throw createError(
+          403,
+          "Akses ditolak: Anda hanya dapat mengelola tiket yang Anda buat sendiri."
+        );
+      }
+    }
+
     return { actorUser, actorTelegram, division, role, currentStatus };
   }
 
-  // 3. Tim Software: HANYA bisa melakukan perubahan ketika tiket berstatus 'escalated'
+  // 4. Tim Software: HANYA bisa melakukan perubahan ketika tiket berstatus 'escalated'
   // dan WAJIB terdaftar dalam ticket_assignees tiket ini
   if (division === "software") {
     if (currentStatus !== "escalated") {
@@ -83,7 +115,7 @@ export const checkUpdateTicketPermission = async (ticketId, actor, currentTicket
     return { actorUser, actorTelegram, division, role, isAssigned, currentStatus };
   }
 
-  // 4. Divisi lainnya / belum diset: jika terdaftar sebagai assignee diizinkan hanya jika tiket berstatus 'escalated'
+  // 5. Divisi lainnya / belum diset: jika terdaftar sebagai assignee diizinkan hanya jika tiket berstatus 'escalated'
   const isAssigned = await ticketRepo.findAssigneeByTicketAndMember(ticketId, {
     userId: actorUser?.id,
     telegramUserId: actorTelegram?.id,

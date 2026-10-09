@@ -19,8 +19,8 @@ export default function TicketTable({
 
   // Status Badge Component
   const renderStatusBadge = (status) => {
-    switch (status) {
-      case "Open":
+    const s = String(status || "open").toLowerCase();
+    switch (s) {
       case "open":
         return (
           <span
@@ -40,12 +40,11 @@ export default function TicketTable({
             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
               <circle cx="12" cy="12" r="10" />
             </svg>
-            Open
+            open
           </span>
         );
-      case "Escalated":
       case "escalated":
-      case "Monitor":
+      case "monitor":
         return (
           <span
             style={{
@@ -65,10 +64,9 @@ export default function TicketTable({
               <circle cx="12" cy="12" r="10" />
               <polyline points="12 6 12 12 16 14" />
             </svg>
-            Escalated
+            escalated
           </span>
         );
-      case "Solved":
       case "solved":
         return (
           <span
@@ -88,10 +86,10 @@ export default function TicketTable({
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
               <polyline points="20 6 9 17 4 12" />
             </svg>
-            Solved
+            solved
           </span>
         );
-      case "Closed":
+      case "closed":
       default:
         return (
           <span
@@ -111,7 +109,7 @@ export default function TicketTable({
             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
               <circle cx="12" cy="12" r="10" fill="currentColor" />
             </svg>
-            Closed
+            closed
           </span>
         );
     }
@@ -119,9 +117,10 @@ export default function TicketTable({
 
   // Severity Indicator Component
   const renderSeverity = (severity) => {
-    let color = "#3b82f6"; // Rendah = Blue
-    if (severity === "Sedang") color = "#f59e0b"; // Sedang = Amber
-    if (severity === "Tinggi") color = "#ef4444"; // Tinggi = Red
+    const s = String(severity || "rendah").toLowerCase();
+    let color = "#3b82f6"; // rendah = Blue
+    if (s === "sedang") color = "#f59e0b"; // sedang = Amber
+    if (s === "tinggi") color = "#ef4444"; // tinggi = Red
 
     return (
       <span
@@ -143,7 +142,7 @@ export default function TicketTable({
             flexShrink: 0,
           }}
         />
-        {severity}
+        {s}
       </span>
     );
   };

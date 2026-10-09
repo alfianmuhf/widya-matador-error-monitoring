@@ -4,7 +4,6 @@ import TicketTable from "../components/tickets/TicketTable.jsx";
 import TicketDetailDrawer from "../components/tickets/TicketDetailDrawer.jsx";
 import ExportReportModal from "../components/tickets/ExportReportModal.jsx";
 import { downloadTicketReport } from "../lib/exportReport.js";
-import { DEFAULT_TEAM_MEMBERS } from "../lib/ticketAssignees.js";
 import api from "../lib/api.js";
 import { useAuth } from "../context/AuthContext.jsx";
 
@@ -26,8 +25,8 @@ export default function DaftarTiket() {
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState(null);
 
-  // Available users for assignment
-  const [availableUsers, setAvailableUsers] = useState(DEFAULT_TEAM_MEMBERS);
+  // Available users for assignment directly from database API
+  const [availableUsers, setAvailableUsers] = useState([]);
   // Assignments map version counter to trigger reactive re-render
   const [assignmentVersion, setAssignmentVersion] = useState(0);
 
@@ -58,9 +57,10 @@ export default function DaftarTiket() {
 
   // Fetch available users from backend (Users & Telegram Whitelist)
   useEffect(() => {
+    if (!accessToken) return;
     Promise.all([
-      api.get("/users?limit=50").catch(() => ({ data: { data: { users: [] } } })),
-      api.get("/telegram-users?limit=50").catch(() => ({ data: { data: [] } })),
+      api.get("/users?limit=100").catch(() => ({ data: { data: { users: [] } } })),
+      api.get("/telegram-users?limit=100").catch(() => ({ data: { data: [] } })),
     ])
       .then(([usersRes, teleRes]) => {
         const dbUsers = usersRes.data?.data?.users || (Array.isArray(usersRes.data?.data) ? usersRes.data?.data : []);
@@ -73,7 +73,7 @@ export default function DaftarTiket() {
             userId: u.id,
             name: u.name,
             email: u.email,
-            role: u.role?.toUpperCase() || "VIEWER",
+            role: (u.role || "viewer").toUpperCase(),
             division: u.division,
             source: "web",
           });
@@ -91,14 +91,12 @@ export default function DaftarTiket() {
           });
         });
 
-        if (combined.length > 0) {
-          setAvailableUsers(combined);
-        }
+        setAvailableUsers(combined);
       })
       .catch((err) => {
         console.error("Failed to load available users:", err);
       });
-  }, []);
+  }, [accessToken]);
 
   // Fetch tickets from Backend API
   const fetchTickets = useCallback(async () => {
@@ -120,8 +118,9 @@ export default function DaftarTiket() {
   }, []);
 
   useEffect(() => {
+    if (!accessToken) return;
     fetchTickets();
-  }, [fetchTickets]);
+  }, [accessToken, fetchTickets]);
 
   // Merge tickets with team assignment info dari API backend
   const tickets = useMemo(() => {
@@ -260,6 +259,20 @@ export default function DaftarTiket() {
         }
       }
 
+      // Time range filter
+      if (timeRange && timeRange !== "all") {
+        const ticketDate = new Date(t.createdAt || t.created_at);
+        if (!isNaN(ticketDate.getTime())) {
+          const now = new Date();
+          let days = 180;
+          if (timeRange === "30d" || timeRange === "30hari") days = 30;
+          else if (timeRange === "90d" || timeRange === "90hari") days = 90;
+          else if (timeRange === "6m" || timeRange === "6bulan") days = 180;
+          const cutoff = new Date(now.getTime() - days * 24 * 3600000);
+          if (ticketDate < cutoff) return false;
+        }
+      }
+
       // Dropdowns
       if (selectedComponent && t.component !== selectedComponent) return false;
       if (selectedClient && t.client !== selectedClient) return false;
@@ -284,7 +297,7 @@ export default function DaftarTiket() {
 
       return true;
     });
-  }, [tickets, searchTerm, selectedComponent, selectedClient, selectedLocation, selectedStatus, selectedAssignee]);
+  }, [tickets, searchTerm, timeRange, selectedComponent, selectedClient, selectedLocation, selectedStatus, selectedAssignee]);
 
   // Pagination calculation
   const totalPages = Math.ceil(filteredTickets.length / itemsPerPage) || 1;

@@ -158,10 +158,18 @@ export const revokeUserRefreshTokens = async (userId) => {
  */
 export const deleteUser = async (id) => {
   return prisma.$transaction(async (tx) => {
-    // 1. Delete related refresh tokens
+    // 1. Unlink actor_user_id on audit logs to preserve audit records
+    await tx.audit_logs.updateMany({
+      where: { actor_user_id: id },
+      data: { actor_user_id: null },
+    });
+
+    // 2. Delete related assignees, export jobs, and refresh tokens
+    await tx.ticket_assignees.deleteMany({ where: { user_id: id } });
+    await tx.export_jobs.deleteMany({ where: { requested_by_user_id: id } });
     await tx.refresh_tokens.deleteMany({ where: { user_id: id } });
 
-    // 2. Delete the user
+    // 3. Delete the user
     return tx.users.delete({
       where: { id },
     });

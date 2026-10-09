@@ -17,27 +17,31 @@ router.use(authenticate);
 router.get("/", validate(queryLocationSchema, "query"), locationController.getLocations);
 router.get("/:id", locationController.getLocationById);
 
-// Create, Update, Delete — dapat diakses oleh semua role
+// Create, Update, Delete — khusus ADMIN & COORDINATOR
 router.post(
   "/",
+  authorize("ADMIN", "COORDINATOR"),
   validate(createLocationSchema, "body"),
   locationController.createLocation
 );
 
 router.patch(
   "/:id",
+  authorize("ADMIN", "COORDINATOR"),
   validate(updateLocationSchema, "body"),
   locationController.updateLocation
 );
 
 router.put(
   "/:id",
+  authorize("ADMIN", "COORDINATOR"),
   validate(updateLocationSchema, "body"),
   locationController.updateLocation
 );
 
 router.delete(
   "/:id",
+  authorize("ADMIN", "COORDINATOR"),
   locationController.deleteLocation
 );
 

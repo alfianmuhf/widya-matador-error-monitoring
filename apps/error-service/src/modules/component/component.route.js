@@ -17,27 +17,31 @@ router.use(authenticate);
 router.get("/", validate(queryComponentSchema, "query"), componentController.getComponents);
 router.get("/:id", componentController.getComponentById);
 
-// Create, Update, Delete — dapat diakses oleh semua role
+// Create, Update, Delete — khusus ADMIN & COORDINATOR
 router.post(
   "/",
+  authorize("ADMIN", "COORDINATOR"),
   validate(createComponentSchema, "body"),
   componentController.createComponent
 );
 
 router.patch(
   "/:id",
+  authorize("ADMIN", "COORDINATOR"),
   validate(updateComponentSchema, "body"),
   componentController.updateComponent
 );
 
 router.put(
   "/:id",
+  authorize("ADMIN", "COORDINATOR"),
   validate(updateComponentSchema, "body"),
   componentController.updateComponent
 );
 
 router.delete(
   "/:id",
+  authorize("ADMIN", "COORDINATOR"),
   componentController.deleteComponent
 );
 

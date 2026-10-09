@@ -26,8 +26,12 @@ export const createUserSchema = z.object({
     .trim()
     .min(2, "Nama minimal 2 karakter"),
   role: z
-    .enum(["ADMIN", "COORDINATOR", "VIEWER"])
-    .default("ADMIN"),
+    .enum(["ADMIN", "COORDINATOR", "VIEWER", "admin", "coordinator", "viewer"])
+    .default("admin"),
+  division: z
+    .enum(["none", "after_sales", "software", "NONE", "AFTER_SALES", "SOFTWARE"])
+    .optional()
+    .default("none"),
 });
 
 export const updateUserSchema = z.object({
@@ -43,10 +47,13 @@ export const updateUserSchema = z.object({
     .min(2, "Nama minimal 2 karakter")
     .optional(),
   role: z
-    .enum(["ADMIN", "COORDINATOR", "VIEWER"])
+    .enum(["ADMIN", "COORDINATOR", "VIEWER", "admin", "coordinator", "viewer"])
+    .optional(),
+  division: z
+    .enum(["none", "after_sales", "software", "NONE", "AFTER_SALES", "SOFTWARE"])
     .optional(),
   status: z
-    .enum(["INVITED", "ACTIVE", "SUSPENDED"])
+    .enum(["ACTIVE", "SUSPENDED", "active", "suspended"])
     .optional(),
 });
 

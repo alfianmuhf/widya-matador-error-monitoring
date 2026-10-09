@@ -10,7 +10,8 @@ import api from "../lib/api.js";
 export default function PenggunaWhitelist() {
   const { user } = useAuth();
   const currentUser = user?.user || user;
-  const canManageUsers = currentUser?.role === "ADMIN" || currentUser?.role === "COORDINATOR";
+  const userRole = (currentUser?.role || "").toLowerCase();
+  const canManageUsers = userRole === "admin";
 
   const [activeTab, setActiveTab] = useState("users"); // "users" | "telegram"
 

@@ -90,8 +90,12 @@ export const claimTicket = async (ticketId, actor) => {
   const role = (actorUser?.role || actor.role || "").toLowerCase();
   const division = (actorUser?.division || actorTelegram?.division || actor.division || "").toLowerCase();
 
-  if (division !== "software" && role !== "admin") {
-    throw createError(400, "Fitur claim tiket ditujukan khusus untuk anggota tim Software.");
+  if (role === "admin" || role === "viewer") {
+    throw createError(403, "Akses ditolak: Admin dan Viewer tidak memiliki akses untuk mengklaim tiket.");
+  }
+
+  if (division !== "software") {
+    throw createError(403, "Fitur claim tiket ditujukan khusus untuk anggota tim Software.");
   }
 
   // Ambil state terakhir tiket
@@ -206,13 +210,21 @@ export const addAssignee = async (ticketId, data, actor) => {
   const currentStatus = (currentHistory.status || "open").toLowerCase();
 
   const role = (actor.role || "").toLowerCase();
-  const isPrivileged = role === "admin" || role === "coordinator";
+  const division = (actor.division || "").toLowerCase();
 
-  if (currentStatus !== "escalated" && !isPrivileged) {
+  if (role === "admin" || role === "viewer") {
+    throw createError(403, "Akses ditolak: Admin dan Viewer tidak memiliki akses untuk mengelola anggota tiket.");
+  }
+
+  if (currentStatus !== "escalated") {
     throw createError(
       403,
       `Akses ditolak: Penambahan anggota tim software hanya dapat dilakukan ketika tiket berstatus 'escalated' (status saat ini: '${currentStatus}').`
     );
+  }
+
+  if (division !== "software") {
+    throw createError(403, "Akses ditolak: Hanya tim Software yang dapat menambahkan anggota ke tiket software.");
   }
 
   // 1. Cek leader saat ini
@@ -221,14 +233,19 @@ export const addAssignee = async (ticketId, data, actor) => {
     : null;
 
   const isLeader =
-    (leaderAssignee &&
-      ((leaderAssignee.user_id && leaderAssignee.user_id === actor.id) ||
-        (leaderAssignee.telegram_user_id && leaderAssignee.telegram_user_id === actor.telegram_user_id))) ||
-    isPrivileged;
+    leaderAssignee &&
+    ((leaderAssignee.user_id && leaderAssignee.user_id === actor.id) ||
+      (leaderAssignee.telegram_user_id && leaderAssignee.telegram_user_id === actor.telegram_user_id));
 
-  // Jika tiket sudah memiliki leader, hanya leader atau admin/coordinator yang dapat menambah
+  // Jika tiket sudah memiliki leader, hanya leader atau koordinator software yang ditugaskan pada tiket tersebut yang dapat menambah
   if (ticket.leader_assignee_id && !isLeader) {
-    throw createError(403, "Hanya Leader tiket atau Koordinator/Admin yang dapat menambahkan anggota tim.");
+    const isAssigned = await ticketRepo.findAssigneeByTicketAndMember(ticketId, {
+      userId: actor.id,
+      telegramUserId: actor.telegram_user_id,
+    });
+    if (!isAssigned) {
+      throw createError(403, "Akses ditolak: Hanya Leader tiket atau anggota yang ditugaskan pada tiket ini yang dapat menambahkan anggota tim.");
+    }
   }
 
   // 3. Resolusi anggota yang ingin ditambahkan (Web User atau Telegram User)
@@ -367,7 +384,11 @@ export const updateAssignee = async (ticketId, assigneeId, data, actor) => {
   const currentStatus = (currentHistory.status || "open").toLowerCase();
 
   const role = (actor.role || "").toLowerCase();
-  if (currentStatus !== "escalated" && role !== "admin") {
+  if (role === "admin" || role === "viewer") {
+    throw createError(403, "Akses ditolak: Admin dan Viewer tidak memiliki akses untuk mengubah anggota tim tiket.");
+  }
+
+  if (currentStatus !== "escalated") {
     throw createError(
       403,
       `Akses ditolak: Pengubahan anggota tim software hanya dapat dilakukan ketika tiket berstatus 'escalated' (status saat ini: '${currentStatus}').`
@@ -380,13 +401,12 @@ export const updateAssignee = async (ticketId, assigneeId, data, actor) => {
     throw createError(404, "Assignee tidak ditemukan pada tiket ini.");
   }
 
-  // 3. Validasi wewenang: HANYA Leader tiket (atau admin)
+  // 3. Validasi wewenang: HANYA Leader tiket
   const currentLeader = ticket.leader_assignee_id ? await ticketRepo.findAssigneeById(ticket.leader_assignee_id) : null;
   const isLeader =
-    (currentLeader &&
-      ((currentLeader.user_id && currentLeader.user_id === actor.id) ||
-        (currentLeader.telegram_user_id && currentLeader.telegram_user_id === actor.telegram_user_id))) ||
-    role === "admin";
+    currentLeader &&
+    ((currentLeader.user_id && currentLeader.user_id === actor.id) ||
+      (currentLeader.telegram_user_id && currentLeader.telegram_user_id === actor.telegram_user_id));
 
   if (!isLeader) {
     throw createError(403, "Hanya Leader tiket yang dapat mengubah anggota tim software.");
@@ -531,7 +551,11 @@ export const changeLeader = async (ticketId, data, actor) => {
   const currentStatus = (currentHistory.status || "open").toLowerCase();
 
   const role = (actor.role || "").toLowerCase();
-  if (currentStatus !== "escalated" && role !== "admin") {
+  if (role === "admin" || role === "viewer") {
+    throw createError(403, "Akses ditolak: Admin dan Viewer tidak memiliki akses untuk mengalihkan kepemimpinan tiket.");
+  }
+
+  if (currentStatus !== "escalated") {
     throw createError(
       403,
       `Akses ditolak: Pengalihan kepemimpinan tim software hanya dapat dilakukan ketika tiket berstatus 'escalated' (status saat ini: '${currentStatus}').`
@@ -542,13 +566,12 @@ export const changeLeader = async (ticketId, data, actor) => {
     throw createError(400, "Tiket belum memiliki leader");
   }
 
-  // Validasi: hanya leader saat ini atau admin yang dapat memindahkan kepemimpinan
+  // Validasi: hanya leader saat ini yang dapat memindahkan kepemimpinan
   const currentLeader = await ticketRepo.findAssigneeById(ticket.leader_assignee_id);
   const isLeader =
-    (currentLeader &&
-      ((currentLeader.user_id && currentLeader.user_id === actor.id) ||
-        (currentLeader.telegram_user_id && currentLeader.telegram_user_id === actor.telegram_user_id))) ||
-    (actor.role || "").toLowerCase() === "admin";
+    currentLeader &&
+    ((currentLeader.user_id && currentLeader.user_id === actor.id) ||
+      (currentLeader.telegram_user_id && currentLeader.telegram_user_id === actor.telegram_user_id));
 
   if (!isLeader) {
     throw createError(403, "Hanya Leader saat ini yang dapat mengalihkan kepemimpinan tiket.");
@@ -638,9 +661,11 @@ export const removeAssignee = async (ticketId, assigneeId, actor) => {
   const currentStatus = (currentHistory.status || "open").toLowerCase();
 
   const role = (actor.role || "").toLowerCase();
-  const isPrivileged = role === "admin" || role === "coordinator";
+  if (role === "admin" || role === "viewer") {
+    throw createError(403, "Akses ditolak: Admin dan Viewer tidak memiliki akses untuk menghapus anggota dari tiket.");
+  }
 
-  if (currentStatus !== "escalated" && !isPrivileged) {
+  if (currentStatus !== "escalated") {
     throw createError(
       403,
       `Akses ditolak: Perubahan anggota tim software hanya dapat dilakukan ketika tiket berstatus 'escalated' (status saat ini: '${currentStatus}').`
@@ -652,20 +677,25 @@ export const removeAssignee = async (ticketId, assigneeId, actor) => {
     throw createError(404, "Assignee tidak ditemukan pada tiket ini.");
   }
 
-  // Yang dapat menghapus: Leader, admin/coordinator, atau anggota itu sendiri (keluar dari tiket)
+  // Yang dapat menghapus: Leader atau anggota itu sendiri (keluar dari tiket)
   const currentLeader = ticket.leader_assignee_id ? await ticketRepo.findAssigneeById(ticket.leader_assignee_id) : null;
   const isLeader =
-    (currentLeader &&
-      ((currentLeader.user_id && currentLeader.user_id === actor.id) ||
-        (currentLeader.telegram_user_id && currentLeader.telegram_user_id === actor.telegram_user_id))) ||
-    isPrivileged;
+    currentLeader &&
+    ((currentLeader.user_id && currentLeader.user_id === actor.id) ||
+      (currentLeader.telegram_user_id && currentLeader.telegram_user_id === actor.telegram_user_id));
 
   const isSelf =
     (targetAssignee.user_id && targetAssignee.user_id === actor.id) ||
     (targetAssignee.telegram_user_id && targetAssignee.telegram_user_id === actor.telegram_user_id);
 
   if (!isLeader && !isSelf) {
-    throw createError(403, "Hanya Leader, Koordinator/Admin, atau anggota bersangkutan yang dapat menghapus keikutsertaan dari tiket.");
+    const isAssigned = await ticketRepo.findAssigneeByTicketAndMember(ticketId, {
+      userId: actor.id,
+      telegramUserId: actor.telegram_user_id,
+    });
+    if (!isAssigned) {
+      throw createError(403, "Hanya Leader, koordinator yang ditugaskan, atau anggota bersangkutan yang dapat menghapus keikutsertaan dari tiket.");
+    }
   }
 
   // Jika yang dihapus adalah Leader saat ini, alihkan ke anggota berikutnya atau null

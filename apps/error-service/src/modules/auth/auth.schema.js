@@ -34,9 +34,7 @@ export const registerSchema = z.object({
 
 export const changePasswordSchema = z
   .object({
-    currentPassword: z
-      .string({ required_error: "Password saat ini wajib diisi" })
-      .min(1, "Password saat ini wajib diisi"),
+    currentPassword: z.string().optional(),
     newPassword: z
       .string({ required_error: "Password baru wajib diisi" })
       .min(6, "Password baru minimal 6 karakter"),

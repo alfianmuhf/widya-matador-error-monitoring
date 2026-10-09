@@ -13,32 +13,41 @@ const router = Router();
 // Semua endpoint Whitelist Telegram wajib login
 router.use(authenticate);
 
-// GET all whitelisted Telegram users — dapat diakses oleh semua role terautentikasi
-router.get("/", validate(queryTelegramUserSchema, "query"), telegramController.getTelegramUsers);
-
-// GET single whitelisted Telegram user by internal UUID — dapat diakses oleh semua role terautentikasi
-router.get("/:id", telegramController.getTelegramUserById);
-
-// POST add new Telegram user to whitelist — khusus ADMIN & COORDINATOR
-router.post(
+// GET all whitelisted Telegram users — khusus ADMIN & COORDINATOR
+router.get(
   "/",
   authorize("ADMIN", "COORDINATOR"),
+  validate(queryTelegramUserSchema, "query"),
+  telegramController.getTelegramUsers
+);
+
+// GET single whitelisted Telegram user by internal UUID — khusus ADMIN & COORDINATOR
+router.get(
+  "/:id",
+  authorize("ADMIN", "COORDINATOR"),
+  telegramController.getTelegramUserById
+);
+
+// POST add new Telegram user to whitelist — KHUSUS ADMIN
+router.post(
+  "/",
+  authorize("ADMIN"),
   validate(createTelegramUserSchema, "body"),
   telegramController.createTelegramUser
 );
 
-// PATCH update Telegram user (status isActive, username, fullName) — khusus ADMIN & COORDINATOR
+// PATCH update Telegram user (status isActive, username, fullName) — KHUSUS ADMIN
 router.patch(
   "/:id",
-  authorize("ADMIN", "COORDINATOR"),
+  authorize("ADMIN"),
   validate(updateTelegramUserSchema, "body"),
   telegramController.updateTelegramUser
 );
 
-// DELETE remove Telegram user from whitelist — khusus ADMIN & COORDINATOR
+// DELETE remove Telegram user from whitelist — KHUSUS ADMIN
 router.delete(
   "/:id",
-  authorize("ADMIN", "COORDINATOR"),
+  authorize("ADMIN"),
   telegramController.deleteTelegramUser
 );
 

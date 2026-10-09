@@ -9,7 +9,7 @@
  */
 
 export * from "./services/ticket-format.service.js";
-export * from "./services/ticket-permission.service.js";
+export * from "../ticket-management/ticket-permission.service.js";
 export * from "./services/ticket-core.service.js";
 export * from "./services/ticket-history.service.js";
 export * from "./services/ticket-assignee.service.js";

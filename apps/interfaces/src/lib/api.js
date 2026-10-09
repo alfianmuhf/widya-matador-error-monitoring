@@ -5,14 +5,29 @@ const api = axios.create({
   withCredentials: true,
 });
 
-let isRefreshing = false;
-let failedQueue = [];
+let refreshPromise = null;
 
-const processQueue = (error, token) => {
-  failedQueue.forEach(({ resolve, reject }) => {
-    error ? reject(error) : resolve(token);
-  });
-  failedQueue = [];
+/**
+ * Singleton refresh session function.
+ * Ensures concurrent requests or React StrictMode share the same in-flight refresh call.
+ */
+export const refreshSession = async () => {
+  if (refreshPromise) return refreshPromise;
+
+  refreshPromise = axios
+    .post(`${api.defaults.baseURL}/auth/refresh`, null, { withCredentials: true })
+    .then((res) => {
+      const accessToken = res.data?.data?.accessToken;
+      if (accessToken) {
+        api.defaults.headers.common.Authorization = `Bearer ${accessToken}`;
+      }
+      return res.data;
+    })
+    .finally(() => {
+      refreshPromise = null;
+    });
+
+  return refreshPromise;
 };
 
 api.interceptors.request.use((config) => {
@@ -28,48 +43,28 @@ api.interceptors.response.use(
     const originalRequest = err.config;
 
     if (
+      !originalRequest ||
       err.response?.status !== 401 ||
       originalRequest._retry ||
-      originalRequest.url === "/auth/login" ||
-      originalRequest.url === "/auth/refresh"
+      originalRequest.url?.includes("/auth/login") ||
+      originalRequest.url?.includes("/auth/refresh")
     ) {
       return Promise.reject(err);
     }
 
-    if (isRefreshing) {
-      return new Promise((resolve, reject) => {
-        failedQueue.push({ resolve, reject });
-      }).then((token) => {
-        if (!token) return Promise.reject(new Error("Refresh token missing"));
-        originalRequest._retry = true;
-        originalRequest.headers = originalRequest.headers ?? {};
-        originalRequest.headers.Authorization = `Bearer ${token}`;
-        return api(originalRequest);
-      });
-    }
-
     originalRequest._retry = true;
-    isRefreshing = true;
 
     try {
-      const { data } = await axios.post(
-        `${api.defaults.baseURL}/auth/refresh`,
-        null,
-        { withCredentials: true }
-      );
+      const data = await refreshSession();
       const accessToken = data.data?.accessToken;
       if (!accessToken) throw new Error("Refresh token missing");
-      processQueue(null, accessToken);
-      api.defaults.headers.common.Authorization = `Bearer ${accessToken}`;
+
       originalRequest.headers = originalRequest.headers ?? {};
       originalRequest.headers.Authorization = `Bearer ${accessToken}`;
       return api(originalRequest);
     } catch (refreshError) {
-      processQueue(refreshError, null);
       delete api.defaults.headers.common.Authorization;
       return Promise.reject(refreshError);
-    } finally {
-      isRefreshing = false;
     }
   }
 );

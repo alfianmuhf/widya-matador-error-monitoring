@@ -136,6 +136,17 @@ export const revokeRefreshToken = async (token) => {
   });
 };
 
+export const findLatestActiveRefreshToken = async (userId) => {
+  return prisma.refresh_tokens.findFirst({
+    where: {
+      user_id: userId,
+      revoked_at: null,
+      expires_at: { gt: new Date() },
+    },
+    orderBy: { created_at: "desc" },
+  });
+};
+
 /**
  * Revoke all active refresh tokens for a user (force logout all devices)
  * @param {string} userId

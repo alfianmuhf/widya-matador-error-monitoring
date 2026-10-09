@@ -19,7 +19,9 @@ export function ProtectedRoute({ children, allowedRoles }) {
 
   if (allowedRoles && allowedRoles.length > 0) {
     const currentUser = user?.user || user;
-    if (!currentUser || !allowedRoles.includes(currentUser.role)) {
+    const userRole = (currentUser?.role || "").toLowerCase();
+    const normalizedRoles = allowedRoles.map((r) => r.toLowerCase());
+    if (!currentUser || !normalizedRoles.includes(userRole)) {
       return <Navigate to="/" replace />;
     }
   }
@@ -29,6 +31,10 @@ export function ProtectedRoute({ children, allowedRoles }) {
 
 export function AdminRoute({ children }) {
   return <ProtectedRoute allowedRoles={["ADMIN"]}>{children}</ProtectedRoute>;
+}
+
+export function CoordinatorRoute({ children }) {
+  return <ProtectedRoute allowedRoles={["COORDINATOR"]}>{children}</ProtectedRoute>;
 }
 
 export function PublicOnlyRoute({ children }) {

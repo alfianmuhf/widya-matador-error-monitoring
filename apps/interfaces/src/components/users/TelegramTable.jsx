@@ -113,8 +113,8 @@ export default function TelegramTable({
             }}
           >
             <option value="all">Semua Status</option>
-            <option value="active">Aktif</option>
-            <option value="inactive">Nonaktif</option>
+            <option value="active">active</option>
+            <option value="inactive">non active</option>
           </select>
         </div>
 
@@ -161,21 +161,22 @@ export default function TelegramTable({
               <th style={{ padding: "12px 16px", fontWeight: 600 }}>Username</th>
               <th style={{ padding: "12px 16px", fontWeight: 600 }}>Nama Lengkap</th>
               <th style={{ padding: "12px 16px", fontWeight: 600 }}>Status Whitelist</th>
-              <th style={{ padding: "12px 16px", fontWeight: 600 }}>Didafkarkan Oleh</th>
               <th style={{ padding: "12px 16px", fontWeight: 600 }}>Tanggal Daftar</th>
-              <th style={{ padding: "12px 16px", fontWeight: 700, color: "#1E293B", textAlign: "right" }}>Aksi</th>
+              {canManageUsers && (
+                <th style={{ padding: "12px 16px", fontWeight: 700, color: "#1E293B", textAlign: "right" }}>Aksi</th>
+              )}
             </tr>
           </thead>
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={7} style={{ textAlign: "center", padding: "40px 16px", color: "#94A3B8" }}>
+                <td colSpan={canManageUsers ? 6 : 5} style={{ textAlign: "center", padding: "40px 16px", color: "#94A3B8" }}>
                   Memuat data whitelist Telegram...
                 </td>
               </tr>
             ) : filteredUsers.length === 0 ? (
               <tr>
-                <td colSpan={7} style={{ textAlign: "center", padding: "40px 16px", color: "#94A3B8" }}>
+                <td colSpan={canManageUsers ? 6 : 5} style={{ textAlign: "center", padding: "40px 16px", color: "#94A3B8" }}>
                   Tidak ada pengguna Telegram yang ditemukan.
                 </td>
               </tr>
@@ -212,17 +213,14 @@ export default function TelegramTable({
                         color: user.isActive ? "#15803D" : "#B91C1C",
                       }}
                     >
-                      {user.isActive ? "Aktif" : "Nonaktif"}
+                      {user.isActive ? "active" : "non active"}
                     </span>
-                  </td>
-                  <td style={{ padding: "12px 16px", color: "#64748B", fontSize: "12px" }}>
-                    {user.whitelistedBy?.name || user.whitelistedBy?.email || "-"}
                   </td>
                   <td style={{ padding: "12px 16px", color: "#64748B", fontSize: "12px" }}>
                     {formatDate(user.createdAt)}
                   </td>
-                  <td style={{ padding: "12px 16px", textAlign: "right" }}>
-                    {canManageUsers ? (
+                  {canManageUsers && (
+                    <td style={{ padding: "12px 16px", textAlign: "right" }}>
                       <div style={{ display: "inline-flex", gap: "6px", alignItems: "center" }}>
                         <button
                           type="button"
@@ -291,10 +289,8 @@ export default function TelegramTable({
                           </svg>
                         </button>
                       </div>
-                    ) : (
-                      <span style={{ color: "#94a3b8", fontSize: "12px" }}>-</span>
-                    )}
-                  </td>
+                    </td>
+                  )}
                 </tr>
               ))
             )}

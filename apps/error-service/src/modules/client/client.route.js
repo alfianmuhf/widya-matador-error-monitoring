@@ -17,27 +17,31 @@ router.use(authenticate);
 router.get("/", validate(queryClientSchema, "query"), clientController.getClients);
 router.get("/:id", clientController.getClientById);
 
-// Create, Update, Delete — dapat diakses oleh semua role
+// Create, Update, Delete — khusus ADMIN & COORDINATOR
 router.post(
   "/",
+  authorize("ADMIN", "COORDINATOR"),
   validate(createClientSchema, "body"),
   clientController.createClient
 );
 
 router.patch(
   "/:id",
+  authorize("ADMIN", "COORDINATOR"),
   validate(updateClientSchema, "body"),
   clientController.updateClient
 );
 
 router.put(
   "/:id",
+  authorize("ADMIN", "COORDINATOR"),
   validate(updateClientSchema, "body"),
   clientController.updateClient
 );
 
 router.delete(
   "/:id",
+  authorize("ADMIN", "COORDINATOR"),
   clientController.deleteClient
 );
 

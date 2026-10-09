@@ -1,253 +1,238 @@
-import { useState, useEffect } from "react";
-import { useAuth } from "../../context/AuthContext.jsx";
+import { useMemo } from "react";
 
-export default function TicketDetailDrawer({
-  ticket,
-  onClose,
-  onUpdateTicket,
-  availableUsers = [],
-  onAssignMember,
-  onRemoveMember,
-  onAddHistoryNote,
-}) {
-  const { user } = useAuth();
-  const currentUser = user?.user || user;
-
-  const [selectedStatus, setSelectedStatus] = useState("Open");
-  const [handlingNote, setHandlingNote] = useState("");
-  const [saving, setSaving] = useState(false);
-
-  // Quick history note state
-  const [quickNote, setQuickNote] = useState("");
-  const [savingQuickNote, setSavingQuickNote] = useState(false);
-
-  // Assign team member selector state
-  const [isAssignFormOpen, setIsAssignFormOpen] = useState(false);
-  const [selectedUserId, setSelectedUserId] = useState("");
-  const [isLeadRole, setIsLeadRole] = useState(false);
-  const [customAssigneeName, setCustomAssigneeName] = useState("");
-  const [customAssigneeRole, setCustomAssigneeRole] = useState("Teknisi");
-
-  useEffect(() => {
-    if (ticket) {
-      setSelectedStatus(ticket.status || "Open");
-      setHandlingNote("");
-      setQuickNote("");
-      setIsAssignFormOpen(false);
-      setSelectedUserId("");
-    }
-  }, [ticket]);
-
+export default function TicketDetailDrawer({ ticket, onClose }) {
   if (!ticket) return null;
 
   const assignedMembers = ticket.assignees || ticket.assignedMembers || [];
 
-  const handleSave = async () => {
-    setSaving(true);
-    try {
-      await onUpdateTicket(ticket.id, {
-        status: selectedStatus.toLowerCase(),
-        handlingNote: handlingNote.trim() || undefined,
-      });
-      setHandlingNote("");
-    } catch (err) {
-      console.error("Failed to update ticket:", err);
-    } finally {
-      setSaving(false);
-    }
-  };
+  // Urutkan riwayat dari versi terbaru ke terlama (descending) untuk kemudahan membaca kronologi
+  const sortedHistory = useMemo(() => {
+    if (!ticket.history || !Array.isArray(ticket.history)) return [];
+    return [...ticket.history].sort((a, b) => (b.version ?? 0) - (a.version ?? 0));
+  }, [ticket.history]);
 
-  const handleAddQuickNote = async (e) => {
-    e.preventDefault();
-    if (!quickNote.trim()) return;
+  // Deteksi tim penanggung jawab berdasarkan siklus hidup & status tiket:
+  // - v0 status open: Tim Aftersales
+  // - status escalated: Tim Software
+  // - status solved: dideteksi apakah sebelum solved adalah escalated (Software) atau open (Aftersales)
+  const handlerInfo = useMemo(() => {
+    const rawStatus = (ticket.rawStatus || ticket.status || "").toLowerCase();
 
-    setSavingQuickNote(true);
-    try {
-      if (onAddHistoryNote) {
-        await onAddHistoryNote(ticket.id, quickNote.trim());
-      } else {
-        await onUpdateTicket(ticket.id, {
-          handlingNote: quickNote.trim(),
-        });
-      }
-      setQuickNote("");
-    } catch (err) {
-      console.error("Failed to add quick note:", err);
-    } finally {
-      setSavingQuickNote(false);
-    }
-  };
-
-  const handleAssignSubmit = (e) => {
-    e.preventDefault();
-    let memberToAssign = null;
-
-    if (selectedUserId === "custom") {
-      if (!customAssigneeName.trim()) return;
-      memberToAssign = {
-        id: `custom-${Date.now()}`,
-        name: customAssigneeName.trim(),
-        email: `${customAssigneeName.trim().toLowerCase().replace(/\s+/g, ".")}@widya.com`,
-        role: customAssigneeRole,
-      };
-    } else if (selectedUserId) {
-      const found = availableUsers.find((u) => u.id === selectedUserId);
-      if (found) {
-        memberToAssign = {
-          id: found.id,
-          userId: found.userId || found.id,
-          telegramUserId: found.telegramUserId,
-          telegramId: found.telegramId,
-          name: found.name,
-          email: found.email,
-          role: found.role || "TEKNISI",
-        };
-      }
-    }
-
-    if (memberToAssign && onAssignMember) {
-      onAssignMember(ticket.id, memberToAssign, isLeadRole || assignedMembers.length === 0);
-      setIsAssignFormOpen(false);
-      setSelectedUserId("");
-      setCustomAssigneeName("");
-    }
-  };
-
-  const statusOptions = ["Open", "Escalated", "Solved", "Closed"];
-
-  const getStatusButtonColors = (st, isCurrent) => {
-    if (!isCurrent) {
+    if (rawStatus === "open") {
       return {
-        border: "1px solid var(--border-light)",
-        backgroundColor: "#ffffff",
-        color: "var(--text-secondary)",
+        team: "Tim Aftersales",
+        badgeBg: "#fef2f2",
+        badgeBorder: "#fecaca",
+        badgeColor: "#dc2626",
+        icon: "🛠️",
+        description: "Tiket sedang ditangani oleh Tim Aftersales di lapangan.",
       };
     }
-    switch (st) {
-      case "Open":
-        return {
-          border: "1px solid #dc2626",
-          backgroundColor: "#fef2f2",
-          color: "#dc2626",
-        };
-      case "Escalated":
-      case "Monitor":
-        return {
-          border: "1px solid #d97706",
-          backgroundColor: "#fffbeb",
-          color: "#d97706",
-        };
-      case "Solved":
-        return {
-          border: "1px solid #16a34a",
-          backgroundColor: "#f0fdf4",
-          color: "#16a34a",
-        };
-      case "Closed":
-      default:
-        return {
-          border: "1px solid #475569",
-          backgroundColor: "#f8fafc",
-          color: "#1e293b",
-        };
+
+    if (rawStatus === "escalated") {
+      return {
+        team: "Tim Software",
+        badgeBg: "#fffbeb",
+        badgeBorder: "#fde68a",
+        badgeColor: "#b45309",
+        icon: "💻",
+        description: "Tiket telah dieskalasi ke Tim Software untuk investigasi teknis & perbaikan sistem.",
+      };
     }
+
+    if (rawStatus === "solved") {
+      // Periksa riwayat sebelum solved untuk mengetahui siapa yang menyelesaikan
+      let solvedByTeam = "Tim Aftersales";
+      if (ticket.history && Array.isArray(ticket.history)) {
+        const sortedAsc = [...ticket.history].sort((a, b) => (a.version ?? 0) - (b.version ?? 0));
+        const solvedIndex = sortedAsc.findIndex(
+          (h) => (h.rawStatus || h.status || "").toLowerCase() === "solved"
+        );
+        if (solvedIndex > 0) {
+          const prevStatus = (
+            sortedAsc[solvedIndex - 1].rawStatus || sortedAsc[solvedIndex - 1].status || ""
+          ).toLowerCase();
+          if (prevStatus === "escalated") {
+            solvedByTeam = "Tim Software";
+          }
+        }
+      }
+
+      return {
+        team: `Diselesaikan oleh ${solvedByTeam}`,
+        badgeBg: "#f0fdf4",
+        badgeBorder: "#bbf7d0",
+        badgeColor: "#15803d",
+        icon: "✅",
+        description: `Kendala unit berhasil diselesaikan dan status operasional kembali normal oleh ${solvedByTeam}.`,
+      };
+    }
+
+    return {
+      team: "Tim Aftersales",
+      badgeBg: "#f8fafc",
+      badgeBorder: "#e2e8f0",
+      badgeColor: "#475569",
+      icon: "ℹ️",
+      description: "Menunggu penanganan lebih lanjut.",
+    };
+  }, [ticket]);
+
+  // Format Status Badge
+  const getStatusBadge = (st) => {
+    const s = (st || "").toLowerCase();
+    if (s === "open") {
+      return {
+        bg: "#fef2f2",
+        border: "#fecaca",
+        color: "#dc2626",
+        dot: "#ef4444",
+        label: "open",
+      };
+    }
+    if (s === "escalated") {
+      return {
+        bg: "#fffbeb",
+        border: "#fde68a",
+        color: "#b45309",
+        dot: "#f59e0b",
+        label: "escalated",
+      };
+    }
+    if (s === "solved") {
+      return {
+        bg: "#f0fdf4",
+        border: "#bbf7d0",
+        color: "#15803d",
+        dot: "#22c55e",
+        label: "solved",
+      };
+    }
+    return {
+      bg: "#f8fafc",
+      border: "#e2e8f0",
+      color: "#475569",
+      dot: "#64748b",
+      label: s || "open",
+    };
   };
 
-  const getRoleBadgeStyle = (role) => {
-    const r = (role || "").toUpperCase();
-    if (r === "ADMIN") return { bg: "#f3e8ff", color: "#7e22ce", label: "Admin" };
-    if (r === "COORDINATOR") return { bg: "#e0f2fe", color: "#0369a1", label: "Koordinator" };
-    return { bg: "#ecfdf5", color: "#047857", label: "Teknisi" };
+  // Format Severity Badge
+  const getSeverityBadge = (sev) => {
+    const s = (sev || "").toLowerCase();
+    if (s === "tinggi") {
+      return { bg: "#fef2f2", border: "#fecaca", color: "#dc2626", label: "tinggi" };
+    }
+    if (s === "sedang") {
+      return { bg: "#fffbeb", border: "#fde68a", color: "#b45309", label: "sedang" };
+    }
+    return { bg: "#eff6ff", border: "#bfdbfe", color: "#1d4ed8", label: "rendah" };
   };
+
+  const statusBadge = getStatusBadge(ticket.rawStatus || ticket.status);
+  const severityBadge = getSeverityBadge(ticket.rawSeverity || ticket.severity);
 
   return (
     <div
       style={{
         position: "fixed",
         inset: 0,
-        zIndex: 999,
-        backgroundColor: "rgba(11, 30, 39, 0.45)",
-        backdropFilter: "blur(2px)",
+        backgroundColor: "rgba(11, 30, 39, 0.65)",
+        backdropFilter: "blur(4px)",
+        zIndex: 9999,
         display: "flex",
         justifyContent: "flex-end",
-        animation: "fadeIn 0.15s ease",
+        animation: "fadeIn 0.2s ease",
       }}
       onClick={onClose}
     >
+      {/* Drawer Container (Lebar & Lega: max 860px) */}
       <div
         style={{
           width: "100%",
-          maxWidth: "540px",
+          maxWidth: "860px",
           height: "100%",
           backgroundColor: "#f8fafc",
+          boxShadow: "-12px 0 35px rgba(0, 0, 0, 0.2)",
           display: "flex",
           flexDirection: "column",
-          boxShadow: "-8px 0 24px rgba(0, 0, 0, 0.15)",
-          overflow: "hidden",
-          animation: "slideInRight 0.2s ease",
+          animation: "slideInRight 0.25s cubic-bezier(0.16, 1, 0.3, 1)",
+          zIndex: 10001,
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Drawer Header (Dark Navy) */}
+        {/* Header Drawer */}
         <div
           style={{
-            backgroundColor: "var(--sidebar-bg)",
+            backgroundColor: "#0b1e27",
             padding: "20px 24px",
-            borderBottom: "1px solid #152c38",
+            borderBottom: "1px solid rgba(255,255,255,0.08)",
             display: "flex",
-            alignItems: "flex-start",
             justifyContent: "space-between",
+            alignItems: "flex-start",
+            flexShrink: 0,
           }}
         >
           <div>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+              <span
+                style={{
+                  fontSize: "11px",
+                  fontWeight: 700,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.08em",
+                  color: "#38bdf8",
+                  backgroundColor: "rgba(56, 189, 248, 0.12)",
+                  padding: "3px 8px",
+                  borderRadius: "5px",
+                }}
+              >
+                Detail Tiket Gangguan
+              </span>
+
+              {/* Version Pill */}
+              <span
+                style={{
+                  fontSize: "11px",
+                  fontWeight: 700,
+                  color: "#f1f5f9",
+                  backgroundColor: "rgba(255, 255, 255, 0.14)",
+                  padding: "3px 9px",
+                  borderRadius: "9999px",
+                  border: "1px solid rgba(255, 255, 255, 0.2)",
+                }}
+              >
+                Versi {ticket.currentVersion ?? ticket.current_version ?? 0}
+              </span>
+            </div>
+
             <h2
               style={{
-                fontSize: "1.25rem",
-                fontWeight: 700,
+                fontSize: "20px",
+                fontWeight: 750,
                 color: "#ffffff",
+                marginTop: "8px",
                 letterSpacing: "-0.01em",
-                margin: 0,
                 fontFamily: "monospace",
               }}
             >
               {ticket.id}
             </h2>
-            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "8px" }}>
-              {/* Status pill */}
-              <span
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "5px",
-                  padding: "2px 8px",
-                  borderRadius: "9999px",
-                  border: ticket.status === "Open" ? "1px solid rgba(239, 68, 68, 0.4)" : "1px solid rgba(255,255,255,0.2)",
-                  backgroundColor: ticket.status === "Open" ? "rgba(239, 68, 68, 0.15)" : "rgba(255,255,255,0.08)",
-                  color: ticket.status === "Open" ? "#fca5a5" : "#ffffff",
-                  fontSize: "11px",
-                  fontWeight: 600,
-                }}
-              >
-                <span
-                  style={{
-                    width: "6px",
-                    height: "6px",
-                    borderRadius: "50%",
-                    backgroundColor: ticket.status === "Open" ? "#ef4444" : "#22c55e",
-                  }}
-                />
-                {ticket.status}
-              </span>
 
-              {/* Severity dot */}
+            <div style={{ display: "flex", alignItems: "center", gap: "10px", marginTop: "10px", flexWrap: "wrap" }}>
+              {/* Status Pill */}
               <span
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
                   gap: "6px",
-                  fontSize: "11px",
-                  color: "#94a3b8",
-                  fontWeight: 500,
+                  padding: "4px 10px",
+                  borderRadius: "9999px",
+                  border: `1px solid ${statusBadge.border}`,
+                  backgroundColor: statusBadge.bg,
+                  color: statusBadge.color,
+                  fontSize: "12px",
+                  fontWeight: 700,
                 }}
               >
                 <span
@@ -255,11 +240,29 @@ export default function TicketDetailDrawer({
                     width: "7px",
                     height: "7px",
                     borderRadius: "50%",
-                    backgroundColor:
-                      ticket.severity === "Tinggi" ? "#ef4444" : ticket.severity === "Sedang" ? "#f59e0b" : "#3b82f6",
+                    backgroundColor: statusBadge.dot,
                   }}
                 />
-                {ticket.severity}
+                {statusBadge.label}
+              </span>
+
+              {/* Severity Pill */}
+              <span
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  padding: "4px 10px",
+                  borderRadius: "9999px",
+                  border: `1px solid ${severityBadge.border}`,
+                  backgroundColor: severityBadge.bg,
+                  color: severityBadge.color,
+                  fontSize: "12px",
+                  fontWeight: 650,
+                }}
+              >
+                <span style={{ fontSize: "11px", opacity: 0.8 }}>Severity:</span>
+                {severityBadge.label}
               </span>
             </div>
           </div>
@@ -270,19 +273,25 @@ export default function TicketDetailDrawer({
             onClick={onClose}
             title="Tutup detail tiket"
             style={{
-              background: "none",
-              border: "none",
+              background: "rgba(255,255,255,0.08)",
+              border: "1px solid rgba(255,255,255,0.12)",
               color: "#94a3b8",
               cursor: "pointer",
-              padding: "4px",
+              padding: "7px",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              borderRadius: "6px",
-              transition: "color 0.15s ease",
+              borderRadius: "8px",
+              transition: "all 0.15s ease",
             }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = "#ffffff")}
-            onMouseLeave={(e) => (e.currentTarget.style.color = "#94a3b8")}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.color = "#ffffff";
+              e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.18)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.color = "#94a3b8";
+              e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.08)";
+            }}
           >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <line x1="18" y1="6" x2="6" y2="18" />
@@ -291,681 +300,477 @@ export default function TicketDetailDrawer({
           </button>
         </div>
 
-        {/* Drawer Scrollable Content */}
+        {/* Scrollable Content Body */}
         <div
           style={{
             flex: 1,
             overflowY: "auto",
-            padding: "20px",
+            padding: "24px",
             display: "flex",
             flexDirection: "column",
-            gap: "16px",
+            gap: "20px",
           }}
         >
-          {/* Card 1: Informasi unit */}
+          {/* BANNER: INFORMASI TIM PENANGGUNG JAWAB SAAT INI */}
           <div
             style={{
-              backgroundColor: "#ffffff",
+              backgroundColor: handlerInfo.badgeBg,
+              border: `1px solid ${handlerInfo.badgeBorder}`,
               borderRadius: "12px",
-              border: "1px solid var(--border-light)",
-              padding: "18px 20px",
-              boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
+              padding: "16px 20px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: "14px",
+              boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
             }}
           >
-            <h3 style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-dark)", marginBottom: "14px" }}>
-              Informasi Unit
-            </h3>
-
-            <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span style={{ fontSize: "13px", color: "var(--text-muted)" }}>Unit</span>
-                <span style={{ fontSize: "13px", fontWeight: 650, color: "var(--text-dark)", fontFamily: "monospace" }}>
-                  {ticket.unit} <span style={{ fontWeight: 400, color: "var(--text-muted)" }}>({ticket.unitType || "portable"})</span>
-                </span>
-              </div>
-
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span style={{ fontSize: "13px", color: "var(--text-muted)" }}>Lokasi</span>
-                <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-dark)" }}>
-                  {ticket.location}
-                </span>
-              </div>
-
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span style={{ fontSize: "13px", color: "var(--text-muted)" }}>Client</span>
-                <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-dark)" }}>
-                  {ticket.client}
-                </span>
-              </div>
-
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                <span style={{ fontSize: "13px", color: "var(--text-muted)" }}>Component / Failure</span>
-                <div style={{ textAlign: "right" }}>
-                  <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-dark)" }}>
-                    {ticket.component}
-                  </div>
-                  <div style={{ fontSize: "12px", color: "var(--primary-teal)", fontWeight: 600, marginTop: "2px", fontFamily: "monospace" }}>
-                    {ticket.failureCode} {ticket.failureName}
-                  </div>
+            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+              <span style={{ fontSize: "24px" }}>{handlerInfo.icon}</span>
+              <div>
+                <div style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: handlerInfo.badgeColor }}>
+                  Tim Penanggung Jawab Saat Ini
                 </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Card 2: Laporan & Kerusakan */}
-          <div
-            style={{
-              backgroundColor: "#ffffff",
-              borderRadius: "12px",
-              border: "1px solid var(--border-light)",
-              padding: "18px 20px",
-              boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
-            }}
-          >
-            <h3 style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-dark)", marginBottom: "14px" }}>
-              Laporan Kerusakan
-            </h3>
-
-            <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginBottom: "16px" }}>
-              <div>
-                <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-muted)", display: "block" }}>
-                  Deskripsi Kerusakan
-                </span>
-                <p style={{ fontSize: "13px", color: "var(--text-dark)", marginTop: "3px", lineHeight: 1.4 }}>
-                  {ticket.description || "-"}
-                </p>
-              </div>
-
-              <div>
-                <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-muted)", display: "block" }}>
-                  Penanganan Terakhir
-                </span>
-                <p style={{ fontSize: "13px", color: "var(--text-dark)", marginTop: "3px", lineHeight: 1.4 }}>
-                  {ticket.handling || "Belum ada penanganan"}
+                <div style={{ fontSize: "15px", fontWeight: 750, color: "var(--text-dark)", marginTop: "2px" }}>
+                  {handlerInfo.team}
+                </div>
+                <p style={{ fontSize: "12.5px", color: "var(--text-secondary)", marginTop: "2px", margin: 0 }}>
+                  {handlerInfo.description}
                 </p>
               </div>
             </div>
 
-            {/* Meta Footer */}
             <div
               style={{
-                borderTop: "1px solid var(--border-light)",
-                paddingTop: "12px",
-                display: "flex",
-                flexWrap: "wrap",
-                gap: "12px",
                 fontSize: "12px",
-                color: "var(--text-secondary)",
+                fontWeight: 650,
+                color: handlerInfo.badgeColor,
+                backgroundColor: "#ffffff",
+                padding: "6px 14px",
+                borderRadius: "8px",
+                border: `1px solid ${handlerInfo.badgeBorder}`,
+                whiteSpace: "nowrap",
               }}
             >
-              <div>
-                <span style={{ color: "var(--text-muted)" }}>Dibuat: </span>
-                <span style={{ fontWeight: 600 }}>{ticket.createdDateTimeText}</span>
-              </div>
-              <div>
-                <span style={{ color: "var(--text-muted)" }}>Durasi: </span>
-                <span style={{ fontWeight: 600 }}>{ticket.durationText || "—"}</span>
-              </div>
-              <div>
-                <span style={{ color: "var(--text-muted)" }}>Sumber: </span>
-                <span style={{ fontWeight: 600 }}>{ticket.source || "telegram"}</span>
-              </div>
-              <div style={{ width: "100%" }}>
-                <span style={{ color: "var(--text-muted)" }}>Pelapor: </span>
-                <span style={{ fontWeight: 600, color: "var(--primary-teal)" }}>{ticket.reporter || "-"}</span>
-              </div>
+              Versi Terkini: v{ticket.currentVersion ?? ticket.current_version ?? 0}
             </div>
           </div>
 
-          {/* CARD 3: TIM PENANGANAN TIKET (PIC & ASSIGNEES) */}
+          {/* CARD 1: DETAIL UPDATE TERAKHIR TIKET */}
           <div
             style={{
               backgroundColor: "#ffffff",
               borderRadius: "12px",
               border: "1px solid var(--border-light)",
-              padding: "18px 20px",
+              padding: "20px 22px",
               boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
             }}
           >
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "14px" }}>
-              <div>
-                <h3 style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-dark)", margin: 0 }}>
-                  Tim Penanganan (PIC)
-                </h3>
-                <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>
-                  Anggota yang ditugaskan menangani tiket ini
-                </span>
-              </div>
-
-              {!isAssignFormOpen && (
-                <button
-                  type="button"
-                  onClick={() => setIsAssignFormOpen(true)}
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "5px",
-                    padding: "6px 12px",
-                    borderRadius: "7px",
-                    border: "1px solid #0e8587",
-                    backgroundColor: "#f0fdfa",
-                    color: "#0e8587",
-                    fontSize: "12px",
-                    fontWeight: 650,
-                    cursor: "pointer",
-                    transition: "all 0.15s ease",
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.backgroundColor = "#ccfbf1";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.backgroundColor = "#f0fdfa";
-                  }}
-                >
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                    <line x1="12" y1="5" x2="12" y2="19" />
-                    <line x1="5" y1="12" x2="19" y2="12" />
-                  </svg>
-                  Tambah Tim
-                </button>
-              )}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px" }}>
+              <h3 style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-dark)", margin: 0 }}>
+                Detail Update Terakhir Tiket
+              </h3>
+              <span style={{ fontSize: "12px", color: "var(--text-muted)" }}>
+                Durasi Gangguan: <strong style={{ color: "var(--text-dark)" }}>{ticket.durationText || "—"}</strong>
+              </span>
             </div>
 
-            {/* List Assigned Members */}
-            {assignedMembers.length === 0 ? (
+            {/* Grid 2 Kolom untuk Informasi Unit & Kerusakan */}
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
+                gap: "16px",
+                paddingBottom: "16px",
+                borderBottom: "1px solid var(--border-light)",
+              }}
+            >
+              {/* Kolom Kiri: Unit & Site */}
               <div
                 style={{
-                  padding: "16px",
-                  borderRadius: "8px",
                   backgroundColor: "#f8fafc",
-                  border: "1px dashed #cbd5e1",
-                  textAlign: "center",
-                }}
-              >
-                <div style={{ color: "var(--text-muted)", fontSize: "12.5px" }}>
-                  Tiket ini belum memiliki penanggung jawab (PIC).
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setIsAssignFormOpen(true)}
-                  style={{
-                    marginTop: "8px",
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "6px",
-                    fontSize: "12px",
-                    fontWeight: 600,
-                    color: "#0e8587",
-                    background: "none",
-                    border: "none",
-                    cursor: "pointer",
-                    textDecoration: "underline",
-                  }}
-                >
-                  + Tugaskan anggota tim sekarang
-                </button>
-              </div>
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: isAssignFormOpen ? "14px" : "0" }}>
-                {assignedMembers.map((member) => {
-                  const roleStyle = getRoleBadgeStyle(member.role);
-                  return (
-                    <div
-                      key={member.id}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        padding: "10px 14px",
-                        borderRadius: "8px",
-                        backgroundColor: "#f8fafc",
-                        border: "1px solid var(--border-light)",
-                      }}
-                    >
-                      <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                        <div
-                          style={{
-                            width: "34px",
-                            height: "34px",
-                            borderRadius: "50%",
-                            backgroundColor: "#0e8587",
-                            color: "#ffffff",
-                            fontSize: "13px",
-                            fontWeight: 700,
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            textTransform: "uppercase",
-                          }}
-                        >
-                          {(member.name || "U").slice(0, 2)}
-                        </div>
-                        <div>
-                          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                            <span style={{ fontSize: "13px", fontWeight: 700, color: "var(--text-dark)" }}>
-                              {member.name}
-                            </span>
-                            {(member.isLead || member.isLeader) && (
-                              <span
-                                style={{
-                                  fontSize: "10px",
-                                  fontWeight: 700,
-                                  padding: "2px 6px",
-                                  borderRadius: "4px",
-                                  backgroundColor: "#fef3c7",
-                                  color: "#b45309",
-                                  border: "1px solid #fde68a",
-                                }}
-                              >
-                                PIC Utama
-                              </span>
-                            )}
-                          </div>
-                          <div style={{ display: "flex", alignItems: "center", gap: "6px", marginTop: "2px" }}>
-                            <span
-                              style={{
-                                fontSize: "10.5px",
-                                fontWeight: 600,
-                                padding: "1px 6px",
-                                borderRadius: "4px",
-                                backgroundColor: roleStyle.bg,
-                                color: roleStyle.color,
-                              }}
-                            >
-                              {roleStyle.label}
-                            </span>
-                            {member.email && (
-                              <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>
-                                · {member.email}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Remove Button */}
-                      {onRemoveMember && (
-                        <button
-                          type="button"
-                          onClick={() => onRemoveMember(ticket.id, member.id, member.name)}
-                          title={`Hapus ${member.name} dari penanganan`}
-                          style={{
-                            background: "none",
-                            border: "none",
-                            color: "#94a3b8",
-                            cursor: "pointer",
-                            padding: "6px",
-                            borderRadius: "6px",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            transition: "all 0.12s ease",
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.color = "#ef4444";
-                            e.currentTarget.style.backgroundColor = "#fee2e2";
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.color = "#94a3b8";
-                            e.currentTarget.style.backgroundColor = "transparent";
-                          }}
-                        >
-                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                            <line x1="18" y1="6" x2="6" y2="18" />
-                            <line x1="6" y1="6" x2="18" y2="18" />
-                          </svg>
-                        </button>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
-            {/* FORM ASSIGN ANGGOTA TIM (EXPANDABLE) */}
-            {isAssignFormOpen && (
-              <form
-                onSubmit={handleAssignSubmit}
-                style={{
-                  marginTop: "12px",
-                  padding: "14px",
-                  borderRadius: "8px",
-                  backgroundColor: "#f1f5f9",
-                  border: "1px solid #cbd5e1",
+                  padding: "14px 16px",
+                  borderRadius: "10px",
+                  border: "1px solid #edf2f7",
                   display: "flex",
                   flexDirection: "column",
                   gap: "10px",
                 }}
               >
-                <div style={{ fontSize: "12.5px", fontWeight: 700, color: "var(--text-dark)" }}>
-                  Pilih Anggota Tim untuk Ditugaskan:
+                <div style={{ fontSize: "12px", fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase" }}>
+                  Informasi Unit & Penempatan
                 </div>
 
-                {/* Dropdown User */}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontSize: "13px", color: "var(--text-muted)" }}>Unit Code:</span>
+                  <span style={{ fontSize: "13px", fontWeight: 700, color: "var(--text-dark)", fontFamily: "monospace" }}>
+                    {ticket.unit} <span style={{ fontWeight: 500, color: "var(--text-muted)" }}>({ticket.unitType || "portable"})</span>
+                  </span>
+                </div>
+
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontSize: "13px", color: "var(--text-muted)" }}>Klien:</span>
+                  <span style={{ fontSize: "13px", fontWeight: 650, color: "var(--text-dark)" }}>
+                    {ticket.client}
+                  </span>
+                </div>
+
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontSize: "13px", color: "var(--text-muted)" }}>Lokasi Site:</span>
+                  <span style={{ fontSize: "13px", fontWeight: 650, color: "var(--text-dark)" }}>
+                    {ticket.location}
+                  </span>
+                </div>
+              </div>
+
+              {/* Kolom Kanan: Komponen & Failure Code */}
+              <div
+                style={{
+                  backgroundColor: "#f8fafc",
+                  padding: "14px 16px",
+                  borderRadius: "10px",
+                  border: "1px solid #edf2f7",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "10px",
+                }}
+              >
+                <div style={{ fontSize: "12px", fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase" }}>
+                  Modul & Kode Kerusakan
+                </div>
+
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontSize: "13px", color: "var(--text-muted)" }}>Modul Komponen:</span>
+                  <span style={{ fontSize: "13px", fontWeight: 700, color: "var(--text-dark)" }}>
+                    {ticket.component}
+                  </span>
+                </div>
+
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontSize: "13px", color: "var(--text-muted)" }}>Failure Code:</span>
+                  <span
+                    style={{
+                      fontSize: "12.5px",
+                      fontWeight: 750,
+                      color: "var(--primary-teal)",
+                      fontFamily: "monospace",
+                      backgroundColor: "var(--primary-teal-light)",
+                      padding: "2px 8px",
+                      borderRadius: "6px",
+                    }}
+                  >
+                    {ticket.failureCode}
+                  </span>
+                </div>
+
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontSize: "13px", color: "var(--text-muted)" }}>Nama Failure:</span>
+                  <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-dark)", textAlign: "right" }}>
+                    {ticket.failureName || "-"}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Rincian Gejala, Tindakan Terakhir, dan Root Cause */}
+            <div style={{ display: "flex", flexDirection: "column", gap: "14px", marginTop: "16px" }}>
+              <div>
+                <span style={{ fontSize: "12px", fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase" }}>
+                  Deskripsi / Gejala Kerusakan
+                </span>
+                <p
+                  style={{
+                    fontSize: "13.5px",
+                    color: "var(--text-dark)",
+                    marginTop: "4px",
+                    lineHeight: 1.5,
+                    backgroundColor: "#f8fafc",
+                    padding: "12px 14px",
+                    borderRadius: "8px",
+                    border: "1px solid var(--border-light)",
+                    margin: "4px 0 0 0",
+                  }}
+                >
+                  {ticket.damageDescription || ticket.description || "Tidak ada deskripsi kerusakan."}
+                </p>
+              </div>
+
+              <div>
+                <span style={{ fontSize: "12px", fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase" }}>
+                  Tindakan Penanganan Terakhir (Action Taken)
+                </span>
+                <p
+                  style={{
+                    fontSize: "13.5px",
+                    color: "var(--text-dark)",
+                    marginTop: "4px",
+                    lineHeight: 1.5,
+                    backgroundColor: "#f0fdf4",
+                    padding: "12px 14px",
+                    borderRadius: "8px",
+                    border: "1px solid #bbf7d0",
+                    margin: "4px 0 0 0",
+                  }}
+                >
+                  {ticket.actionTaken || ticket.handling || "Belum ada tindakan penanganan yang dicatat."}
+                </p>
+              </div>
+
+              {Boolean(ticket.rootCause || ticket.cause) && (
                 <div>
-                  <select
-                    value={selectedUserId}
-                    onChange={(e) => setSelectedUserId(e.target.value)}
-                    required
+                  <span style={{ fontSize: "12px", fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase" }}>
+                    Akar Penyebab (Root Cause)
+                  </span>
+                  <p
                     style={{
-                      width: "100%",
-                      padding: "8px 12px",
-                      borderRadius: "6px",
-                      border: "1px solid #cbd5e1",
-                      backgroundColor: "#ffffff",
-                      fontSize: "13px",
+                      fontSize: "13.5px",
                       color: "var(--text-dark)",
-                      outline: "none",
+                      marginTop: "4px",
+                      lineHeight: 1.5,
+                      backgroundColor: "#fffbeb",
+                      padding: "12px 14px",
+                      borderRadius: "8px",
+                      border: "1px solid #fde68a",
+                      margin: "4px 0 0 0",
                     }}
                   >
-                    <option value="">-- Pilih dari Daftar Pengguna Sistem --</option>
-                    {availableUsers.map((u) => {
-                      const isAssigned = assignedMembers.some((m) => m.id === u.id || m.email === u.email);
-                      return (
-                        <option key={u.id} value={u.id} disabled={isAssigned}>
-                          {u.name} ({u.role || "Teknisi"}) {isAssigned ? "- Sudah ditugaskan" : ""}
-                        </option>
-                      );
-                    })}
-                    <option value="custom">+ Input Nama Anggota Lain...</option>
-                  </select>
+                    {ticket.rootCause || ticket.cause}
+                  </p>
                 </div>
+              )}
+            </div>
 
-                {/* Custom Name input if 'custom' selected */}
-                {selectedUserId === "custom" && (
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 120px", gap: "8px" }}>
-                    <input
-                      type="text"
-                      placeholder="Nama lengkap teknisi..."
-                      value={customAssigneeName}
-                      onChange={(e) => setCustomAssigneeName(e.target.value)}
-                      required
-                      style={{
-                        padding: "8px 12px",
-                        borderRadius: "6px",
-                        border: "1px solid #cbd5e1",
-                        fontSize: "13px",
-                        outline: "none",
-                      }}
-                    />
-                    <select
-                      value={customAssigneeRole}
-                      onChange={(e) => setCustomAssigneeRole(e.target.value)}
-                      style={{
-                        padding: "8px 8px",
-                        borderRadius: "6px",
-                        border: "1px solid #cbd5e1",
-                        fontSize: "12px",
-                        backgroundColor: "#ffffff",
-                        outline: "none",
-                      }}
-                    >
-                      <option value="Teknisi">Teknisi</option>
-                      <option value="Koordinator">Koordinator</option>
-                      <option value="Admin">Admin</option>
-                    </select>
-                  </div>
-                )}
+            {/* Meta Footer: Pelapor & Waktu Dibuat */}
+            <div
+              style={{
+                borderTop: "1px solid var(--border-light)",
+                marginTop: "16px",
+                paddingTop: "14px",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                flexWrap: "wrap",
+                gap: "12px",
+                fontSize: "12.5px",
+                color: "var(--text-secondary)",
+              }}
+            >
+              <div>
+                <span style={{ color: "var(--text-muted)" }}>Pembuat Tiket (v0): </span>
+                <strong style={{ color: "var(--text-dark)" }}>{ticket.reporter || "-"}</strong>
+              </div>
 
-                {/* Checkbox PIC Utama */}
-                <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", fontSize: "12px", color: "var(--text-dark)" }}>
-                  <input
-                    type="checkbox"
-                    checked={isLeadRole}
-                    onChange={(e) => setIsLeadRole(e.target.checked)}
-                    style={{ accentColor: "#0e8587" }}
-                  />
-                  <span>Jadikan sebagai <strong>PIC Utama</strong> penanganan tiket</span>
-                </label>
+              <div>
+                <span style={{ color: "var(--text-muted)" }}>Waktu Dibuat: </span>
+                <strong style={{ color: "var(--text-dark)" }}>{ticket.createdDateTimeText}</strong>
+              </div>
 
-                {/* Action buttons */}
-                <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px", marginTop: "4px" }}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsAssignFormOpen(false);
-                      setSelectedUserId("");
-                    }}
-                    style={{
-                      padding: "6px 12px",
-                      borderRadius: "6px",
-                      border: "1px solid #cbd5e1",
-                      backgroundColor: "#ffffff",
-                      fontSize: "12px",
-                      fontWeight: 600,
-                      color: "var(--text-secondary)",
-                      cursor: "pointer",
-                    }}
-                  >
-                    Batal
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={!selectedUserId || (selectedUserId === "custom" && !customAssigneeName.trim())}
-                    style={{
-                      padding: "6px 14px",
-                      borderRadius: "6px",
-                      border: "none",
-                      backgroundColor: "#0e8587",
-                      fontSize: "12px",
-                      fontWeight: 700,
-                      color: "#ffffff",
-                      cursor: "pointer",
-                      opacity: !selectedUserId ? 0.6 : 1,
-                    }}
-                  >
-                    Tugaskan ke Tiket
-                  </button>
-                </div>
-              </form>
-            )}
+              <div>
+                <span style={{ color: "var(--text-muted)" }}>Sumber: </span>
+                <span
+                  style={{
+                    fontWeight: 700,
+                    textTransform: "uppercase",
+                    fontSize: "11px",
+                    padding: "2px 7px",
+                    borderRadius: "4px",
+                    backgroundColor: "#e2e8f0",
+                    color: "#334155",
+                  }}
+                >
+                  {ticket.source || "dashboard"}
+                </span>
+              </div>
+            </div>
           </div>
 
-          {/* CARD 4: UBAH STATUS / TAMBAH CATATAN PENANGANAN */}
+          {/* CARD 2: ANGGOTA TIM SOFTWARE (JIKA ADA) */}
           <div
             style={{
               backgroundColor: "#ffffff",
               borderRadius: "12px",
               border: "1px solid var(--border-light)",
-              padding: "18px 20px",
+              padding: "20px 22px",
               boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
             }}
           >
-            <h3 style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-dark)", marginBottom: "14px" }}>
-              Ubah Status / Catatan Penanganan
-            </h3>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "14px" }}>
+              <div>
+                <h3 style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-dark)", margin: 0 }}>
+                  Anggota Tim Software ({assignedMembers.length})
+                </h3>
+                <span style={{ fontSize: "12px", color: "var(--text-muted)" }}>
+                  Anggota tim software yang ditugaskan / mengklaim tiket ini
+                </span>
+              </div>
 
-            {/* Status baru selection */}
-            <div style={{ marginBottom: "14px" }}>
-              <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-muted)", display: "block", marginBottom: "8px" }}>
-                Status Baru
-              </span>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "8px" }}>
-                {statusOptions.map((st) => {
-                  const isCurrent = selectedStatus === st;
-                  const styleProps = getStatusButtonColors(st, isCurrent);
+              {assignedMembers.some((m) => m.isLeader) && (
+                <span
+                  style={{
+                    fontSize: "11.5px",
+                    fontWeight: 700,
+                    padding: "3px 9px",
+                    borderRadius: "9999px",
+                    backgroundColor: "#eff6ff",
+                    color: "#1d4ed8",
+                    border: "1px solid #bfdbfe",
+                  }}
+                >
+                  👑 Leader Terdaftar
+                </span>
+              )}
+            </div>
+
+            {assignedMembers.length === 0 ? (
+              <div
+                style={{
+                  textAlign: "center",
+                  padding: "24px 16px",
+                  borderRadius: "10px",
+                  backgroundColor: "#f8fafc",
+                  border: "1px dashed #cbd5e1",
+                  color: "var(--text-muted)",
+                  fontSize: "13px",
+                }}
+              >
+                {(ticket.rawStatus || ticket.status || "").toLowerCase() === "escalated" ? (
+                  <div>
+                    <span style={{ display: "block", fontSize: "20px", marginBottom: "4px" }}>⏳</span>
+                    <strong>Tiket berstatus Escalated.</strong> Belum ada anggota tim Software yang mengklaim atau ditugaskan pada tiket ini.
+                  </div>
+                ) : (
+                  <div>
+                    <span style={{ display: "block", fontSize: "20px", marginBottom: "4px" }}>🛠️</span>
+                    Tiket sedang ditangani secara internal oleh <strong>Tim Aftersales</strong> (belum dieskalasi ke tim Software).
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))",
+                  gap: "12px",
+                }}
+              >
+                {assignedMembers.map((member, idx) => {
+                  const isLeader = Boolean(member.isLeader);
                   return (
-                    <button
-                      key={st}
-                      type="button"
-                      onClick={() => setSelectedStatus(st)}
+                    <div
+                      key={member.id || idx}
                       style={{
-                        padding: "7px 4px",
-                        borderRadius: "8px",
-                        fontSize: "12px",
-                        fontWeight: isCurrent ? 700 : 500,
-                        cursor: "pointer",
-                        textAlign: "center",
-                        transition: "all 0.12s ease",
-                        ...styleProps,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "12px",
+                        padding: "12px 14px",
+                        borderRadius: "10px",
+                        backgroundColor: isLeader ? "#f0fdfa" : "#f8fafc",
+                        border: isLeader ? "1.5px solid #0e8587" : "1px solid var(--border-light)",
+                        boxShadow: "0 1px 2px rgba(0,0,0,0.02)",
                       }}
                     >
-                      {st}
-                    </button>
+                      <div
+                        style={{
+                          width: "38px",
+                          height: "38px",
+                          borderRadius: "50%",
+                          backgroundColor: isLeader ? "#0e8587" : "#e2e8f0",
+                          color: isLeader ? "#ffffff" : "#334155",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          fontWeight: 750,
+                          fontSize: "14px",
+                          flexShrink: 0,
+                        }}
+                      >
+                        {member.name ? member.name.charAt(0).toUpperCase() : "U"}
+                      </div>
+
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                          <span
+                            style={{
+                              fontSize: "13.5px",
+                              fontWeight: 700,
+                              color: "var(--text-dark)",
+                              whiteSpace: "nowrap",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                            }}
+                          >
+                            {member.name || "Nama Pengguna"}
+                          </span>
+                        </div>
+
+                        <div style={{ fontSize: "12px", color: "var(--text-muted)", marginTop: "1px" }}>
+                          {member.identifier || member.email || "-"}
+                        </div>
+
+                        <div style={{ marginTop: "4px" }}>
+                          {isLeader ? (
+                            <span
+                              style={{
+                                fontSize: "10.5px",
+                                fontWeight: 750,
+                                padding: "2px 6px",
+                                borderRadius: "4px",
+                                backgroundColor: "#0e8587",
+                                color: "#ffffff",
+                              }}
+                            >
+                              👑 Leader Software
+                            </span>
+                          ) : (
+                            <span
+                              style={{
+                                fontSize: "10.5px",
+                                fontWeight: 650,
+                                padding: "2px 6px",
+                                borderRadius: "4px",
+                                backgroundColor: "#e2e8f0",
+                                color: "#475569",
+                              }}
+                            >
+                              Anggota Tim Software
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
                   );
                 })}
               </div>
-            </div>
-
-            {/* Catatan penanganan */}
-            <div style={{ marginBottom: "16px" }}>
-              <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-muted)", display: "block", marginBottom: "6px" }}>
-                Catatan Penanganan Lapangan
-              </span>
-              <textarea
-                rows={3}
-                value={handlingNote}
-                onChange={(e) => setHandlingNote(e.target.value)}
-                placeholder="Contoh: Modul sensor dibersihkan dan konektor dipasang ulang..."
-                style={{
-                  width: "100%",
-                  padding: "10px 12px",
-                  borderRadius: "8px",
-                  border: "1px solid var(--border-light)",
-                  fontSize: "13px",
-                  color: "var(--text-dark)",
-                  outline: "none",
-                  resize: "vertical",
-                  fontFamily: "inherit",
-                }}
-                onFocus={(e) => (e.target.style.borderColor = "var(--primary-teal)")}
-                onBlur={(e) => (e.target.style.borderColor = "var(--border-light)")}
-              />
-            </div>
-
-            {/* Submit Action */}
-            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-              <button
-                type="button"
-                disabled={saving}
-                onClick={handleSave}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: "8px",
-                  backgroundColor: "var(--primary-teal)",
-                  color: "#ffffff",
-                  border: "none",
-                  borderRadius: "8px",
-                  padding: "10px 16px",
-                  fontSize: "13px",
-                  fontWeight: 650,
-                  cursor: saving ? "not-allowed" : "pointer",
-                  transition: "background-color 0.15s ease",
-                }}
-                onMouseEnter={(e) => {
-                  if (!saving) e.currentTarget.style.backgroundColor = "var(--primary-teal-hover)";
-                }}
-                onMouseLeave={(e) => {
-                  if (!saving) e.currentTarget.style.backgroundColor = "var(--primary-teal)";
-                }}
-              >
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                  <polyline points="20 6 9 17 4 12" />
-                </svg>
-                {saving ? "Menyimpan..." : "Simpan Perubahan Status"}
-              </button>
-
-              <span style={{ fontSize: "11px", color: "var(--text-muted)", textAlign: "center" }}>
-                Perubahan status & penanganan langsung dicatat ke Riwayat Tiket.
-              </span>
-            </div>
+            )}
           </div>
 
-          {/* CARD 5: RIWAYAT TIKET (TICKET HISTORY & TIMELINE) */}
+          {/* CARD 3: RIWAYAT PERUBAHAN TIKET (TICKET HISTORY & TIMELINE) */}
           <div
             style={{
               backgroundColor: "#ffffff",
               borderRadius: "12px",
               border: "1px solid var(--border-light)",
-              padding: "18px 20px",
+              padding: "20px 22px",
               boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
             }}
           >
-            <div style={{ marginBottom: "14px" }}>
-              <h3 style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-dark)", margin: 0 }}>
-                Riwayat Tiket ({ticket.history?.length || 0})
-              </h3>
-              <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>
-                Jejak perubahan status, penugasan, dan catatan teknisi
+            <div style={{ marginBottom: "16px" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <h3 style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-dark)", margin: 0 }}>
+                  Linimasa Riwayat Tiket ({sortedHistory.length} Versi)
+                </h3>
+                <span style={{ fontSize: "12px", color: "var(--text-muted)" }}>
+                  Dimulai dari Versi 0 (Tiket Dibuat)
+                </span>
+              </div>
+              <span style={{ fontSize: "12px", color: "var(--text-muted)", marginTop: "3px", display: "block" }}>
+                Rekam jejak setiap perubahan status, penanganan, dan tindakan pada tiket
               </span>
             </div>
 
-            {/* Form Cepat Tambah Catatan Riwayat */}
-            <form
-              onSubmit={handleAddQuickNote}
-              style={{
-                marginBottom: "16px",
-                display: "flex",
-                flexDirection: "column",
-                gap: "8px",
-                backgroundColor: "#f8fafc",
-                padding: "12px",
-                borderRadius: "8px",
-                border: "1px solid var(--border-light)",
-              }}
-            >
-              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#0e8587" strokeWidth="2.5">
-                  <path d="M12 20h9" />
-                  <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
-                </svg>
-                <span style={{ fontSize: "12px", fontWeight: 700, color: "var(--text-dark)" }}>
-                  Tambah Log Progres / Catatan Riwayat
-                </span>
-              </div>
-              <textarea
-                rows={2}
-                value={quickNote}
-                onChange={(e) => setQuickNote(e.target.value)}
-                placeholder="Tulis update riwayat penanganan di lapangan..."
-                style={{
-                  width: "100%",
-                  padding: "8px 10px",
-                  borderRadius: "6px",
-                  border: "1px solid #cbd5e1",
-                  fontSize: "12.5px",
-                  color: "var(--text-dark)",
-                  outline: "none",
-                  resize: "vertical",
-                  backgroundColor: "#ffffff",
-                }}
-                onFocus={(e) => (e.target.style.borderColor = "var(--primary-teal)")}
-                onBlur={(e) => (e.target.style.borderColor = "#cbd5e1")}
-              />
-              <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                <button
-                  type="submit"
-                  disabled={!quickNote.trim() || savingQuickNote}
-                  style={{
-                    padding: "5px 12px",
-                    borderRadius: "6px",
-                    border: "none",
-                    backgroundColor: "#0e8587",
-                    color: "#ffffff",
-                    fontSize: "12px",
-                    fontWeight: 650,
-                    cursor: !quickNote.trim() || savingQuickNote ? "not-allowed" : "pointer",
-                    opacity: !quickNote.trim() || savingQuickNote ? 0.6 : 1,
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "5px",
-                  }}
-                >
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                    <line x1="22" y1="2" x2="11" y2="13" />
-                    <polygon points="22 2 15 22 11 13 2 9 22 2" />
-                  </svg>
-                  {savingQuickNote ? "Menyimpan..." : "Kirim Catatan"}
-                </button>
-              </div>
-            </form>
-
-            {/* Timeline Items */}
-            {(!ticket.history || ticket.history.length === 0) ? (
-              <div style={{ textAlign: "center", padding: "20px 0", color: "var(--text-muted)", fontSize: "12.5px" }}>
-                Belum ada aktivitas riwayat yang tercatat untuk tiket ini.
+            {sortedHistory.length === 0 ? (
+              <div style={{ textAlign: "center", padding: "24px 0", color: "var(--text-muted)", fontSize: "13px" }}>
+                Belum ada data riwayat yang tercatat untuk tiket ini.
               </div>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: "0px", position: "relative" }}>
@@ -973,35 +778,29 @@ export default function TicketDetailDrawer({
                 <div
                   style={{
                     position: "absolute",
-                    left: "13px",
-                    top: "14px",
-                    bottom: "14px",
+                    left: "17px",
+                    top: "16px",
+                    bottom: "16px",
                     width: "2px",
                     backgroundColor: "#e2e8f0",
                     zIndex: 0,
                   }}
                 />
 
-                {ticket.history.map((h, idx) => {
-                  const isAssignAction = (h.action || "").toLowerCase().includes("tugaskan") || (h.action || "").toLowerCase().includes("tim");
-                  const isStatusAction = (h.action || "").toLowerCase().includes("status");
+                {sortedHistory.map((h, idx) => {
+                  const histStatus = getStatusBadge(h.rawStatus || h.status);
+                  const histSeverity = getSeverityBadge(h.rawSeverity || h.severity);
+                  const isInitialVersion = (h.version === 0);
+                  const isCurrentLatest = idx === 0;
 
-                  let nodeColor = "#0e8587";
-                  let badgeBg = "#f0fdfa";
-                  let badgeColor = "#0e8587";
-                  let typeLabel = "Catatan";
+                  // Deteksi sumber perubahan dari changedByUserId / changedByTelegramUserId / source
+                  const isWebSource = Boolean(h.changedByUserId || h.source === "web" || h.source === "dashboard");
+                  const isTeleSource = Boolean(h.changedByTelegramUserId || h.source === "telegram");
 
-                  if (isAssignAction) {
-                    nodeColor = "#3b82f6";
-                    badgeBg = "#eff6ff";
-                    badgeColor = "#1d4ed8";
-                    typeLabel = "Penugasan Tim";
-                  } else if (isStatusAction) {
-                    nodeColor = "#f59e0b";
-                    badgeBg = "#fffbeb";
-                    badgeColor = "#b45309";
-                    typeLabel = "Status";
-                  }
+                  const damageText = h.damageDescription || h.damage_description || null;
+                  const actionText = h.actionTaken || h.action_taken || null;
+                  const causeText = h.rootCause || h.root_cause || null;
+                  const notesText = h.notes || h.action || null;
 
                   return (
                     <div
@@ -1009,72 +808,295 @@ export default function TicketDetailDrawer({
                       style={{
                         display: "flex",
                         alignItems: "flex-start",
-                        gap: "12px",
+                        gap: "14px",
                         position: "relative",
                         zIndex: 1,
-                        paddingBottom: idx === ticket.history.length - 1 ? "0" : "16px",
+                        paddingBottom: idx === sortedHistory.length - 1 ? "0" : "20px",
                       }}
                     >
-                      {/* Timeline circle node */}
+                      {/* Timeline circle node with version label */}
                       <div
                         style={{
-                          width: "28px",
-                          height: "28px",
+                          width: "38px",
+                          height: "38px",
                           borderRadius: "50%",
-                          backgroundColor: "#ffffff",
-                          border: `2px solid ${nodeColor}`,
+                          backgroundColor: isCurrentLatest ? "#0e8587" : "#ffffff",
+                          color: isCurrentLatest ? "#ffffff" : "#0e8587",
+                          border: "2px solid #0e8587",
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "center",
                           flexShrink: 0,
-                          boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
+                          fontSize: "12px",
+                          fontWeight: 750,
+                          boxShadow: "0 2px 4px rgba(0,0,0,0.06)",
                         }}
                       >
-                        <div
-                          style={{
-                            width: "8px",
-                            height: "8px",
-                            borderRadius: "50%",
-                            backgroundColor: nodeColor,
-                          }}
-                        />
+                        v{h.version ?? 0}
                       </div>
 
-                      {/* Content block */}
+                      {/* Content Card Box */}
                       <div
                         style={{
                           flex: 1,
-                          backgroundColor: "#f8fafc",
-                          borderRadius: "8px",
-                          border: "1px solid var(--border-light)",
-                          padding: "10px 14px",
+                          backgroundColor: isCurrentLatest ? "#f8fafc" : "#ffffff",
+                          borderRadius: "12px",
+                          border: isCurrentLatest ? "1.5px solid #0e8587" : "1px solid var(--border-light)",
+                          padding: "16px 18px",
+                          boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
                         }}
                       >
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "6px", marginBottom: "4px" }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                        {/* Header Riwayat: Versi, Status, Severity, Sumber (Web/Telegram), Waktu */}
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            flexWrap: "wrap",
+                            gap: "8px",
+                            paddingBottom: "10px",
+                            borderBottom: "1px solid #edf2f7",
+                            marginBottom: "12px",
+                          }}
+                        >
+                          <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+                            {/* Chip Versi */}
                             <span
                               style={{
-                                fontSize: "10.5px",
-                                fontWeight: 700,
-                                padding: "1px 6px",
+                                fontSize: "11px",
+                                fontWeight: 750,
+                                padding: "2px 8px",
                                 borderRadius: "4px",
-                                backgroundColor: badgeBg,
-                                color: badgeColor,
+                                backgroundColor: isInitialVersion ? "#eff6ff" : "#f1f5f9",
+                                color: isInitialVersion ? "#1d4ed8" : "#334155",
+                                border: `1px solid ${isInitialVersion ? "#bfdbfe" : "#cbd5e1"}`,
                               }}
                             >
-                              {typeLabel}
+                              {isInitialVersion ? "v0 • Dibuat" : `v${h.version}`}
                             </span>
-                            <span style={{ fontSize: "12px", fontWeight: 700, color: "var(--text-dark)" }}>
-                              {h.author || "Sistem"}
+
+                            {/* Badge Status */}
+                            <span
+                              style={{
+                                fontSize: "11px",
+                                fontWeight: 700,
+                                padding: "2px 8px",
+                                borderRadius: "4px",
+                                backgroundColor: histStatus.bg,
+                                color: histStatus.color,
+                                border: `1px solid ${histStatus.border}`,
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "4px",
+                              }}
+                            >
+                              <span
+                                style={{
+                                  width: "5px",
+                                  height: "5px",
+                                  borderRadius: "50%",
+                                  backgroundColor: histStatus.dot,
+                                }}
+                              />
+                              {histStatus.label}
                             </span>
+
+                            {/* Badge Severity */}
+                            <span
+                              style={{
+                                fontSize: "11px",
+                                fontWeight: 650,
+                                padding: "2px 8px",
+                                borderRadius: "4px",
+                                backgroundColor: histSeverity.bg,
+                                color: histSeverity.color,
+                                border: `1px solid ${histSeverity.border}`,
+                              }}
+                            >
+                              severity: {histSeverity.label}
+                            </span>
+
+                            {/* Badge Sumber Perubahan (Web vs Telegram) */}
+                            {isTeleSource ? (
+                              <span
+                                style={{
+                                  fontSize: "11px",
+                                  fontWeight: 700,
+                                  padding: "2px 8px",
+                                  borderRadius: "4px",
+                                  backgroundColor: "#f0fdfa",
+                                  color: "#0f766e",
+                                  border: "1px solid #99f6e4",
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "4px",
+                                }}
+                              >
+                                📱 Telegram Bot
+                              </span>
+                            ) : isWebSource ? (
+                              <span
+                                style={{
+                                  fontSize: "11px",
+                                  fontWeight: 700,
+                                  padding: "2px 8px",
+                                  borderRadius: "4px",
+                                  backgroundColor: "#eff6ff",
+                                  color: "#1d4ed8",
+                                  border: "1px solid #bfdbfe",
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "4px",
+                                }}
+                              >
+                                🌐 Web Dashboard
+                              </span>
+                            ) : (
+                              <span
+                                style={{
+                                  fontSize: "11px",
+                                  fontWeight: 650,
+                                  padding: "2px 8px",
+                                  borderRadius: "4px",
+                                  backgroundColor: "#f8fafc",
+                                  color: "#64748b",
+                                  border: "1px solid #e2e8f0",
+                                }}
+                              >
+                                ⚙️ Sistem
+                              </span>
+                            )}
                           </div>
-                          <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>
+
+                          {/* Waktu update */}
+                          <span style={{ fontSize: "12px", color: "var(--text-muted)", fontWeight: 500 }}>
                             {h.timestamp}
                           </span>
                         </div>
 
-                        <div style={{ fontSize: "12.5px", color: "#334155", lineHeight: 1.45, fontWeight: 500 }}>
-                          {h.action}
+                        {/* Identitas Aktor Pengubah */}
+                        <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "10px" }}>
+                          <span style={{ fontSize: "12px", color: "var(--text-muted)" }}>Diperbarui oleh:</span>
+                          <strong style={{ fontSize: "13px", color: "var(--text-dark)" }}>
+                            {h.author || "Sistem"}
+                          </strong>
+                          {Boolean(h.authorDivision) && (
+                            <span
+                              style={{
+                                fontSize: "10.5px",
+                                fontWeight: 650,
+                                padding: "1px 6px",
+                                borderRadius: "4px",
+                                backgroundColor: "#e2e8f0",
+                                color: "#334155",
+                              }}
+                            >
+                              Divisi: {h.authorDivision}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Grid Rincian Data Transparansi Versi */}
+                        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                          {/* 1. Catatan Log / Notes */}
+                          <div
+                            style={{
+                              backgroundColor: "#f8fafc",
+                              padding: "10px 12px",
+                              borderRadius: "8px",
+                              border: "1px solid #e2e8f0",
+                            }}
+                          >
+                            <span style={{ fontSize: "11px", fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", display: "block" }}>
+                              Catatan Log / Notes:
+                            </span>
+                            <div style={{ fontSize: "13px", color: "#1e293b", marginTop: "2px", lineHeight: 1.45, fontWeight: 500 }}>
+                              {notesText || "—"}
+                            </div>
+                          </div>
+
+                          {/* 2. Gejala / Damage Description */}
+                          <div
+                            style={{
+                              backgroundColor: "#f8fafc",
+                              padding: "10px 12px",
+                              borderRadius: "8px",
+                              border: "1px solid #e2e8f0",
+                            }}
+                          >
+                            <span style={{ fontSize: "11px", fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", display: "block" }}>
+                              Deskripsi Kerusakan (damage_description):
+                            </span>
+                            <div style={{ fontSize: "13px", color: "#1e293b", marginTop: "2px", lineHeight: 1.45 }}>
+                              {damageText || "—"}
+                            </div>
+                          </div>
+
+                          {/* 3. Tindakan Penanganan / Action Taken */}
+                          <div
+                            style={{
+                              backgroundColor: actionText ? "#f0fdf4" : "#f8fafc",
+                              padding: "10px 12px",
+                              borderRadius: "8px",
+                              border: actionText ? "1px solid #bbf7d0" : "1px solid #e2e8f0",
+                            }}
+                          >
+                            <span
+                              style={{
+                                fontSize: "11px",
+                                fontWeight: 700,
+                                color: actionText ? "#166534" : "var(--text-muted)",
+                                textTransform: "uppercase",
+                                display: "block",
+                              }}
+                            >
+                              Tindakan Penanganan (action_taken):
+                            </span>
+                            <div
+                              style={{
+                                fontSize: "13px",
+                                color: actionText ? "#14532d" : "#64748b",
+                                marginTop: "2px",
+                                lineHeight: 1.45,
+                                fontWeight: actionText ? 500 : 400,
+                              }}
+                            >
+                              {actionText || "Belum ada tindakan khusus yang dicatat pada versi ini."}
+                            </div>
+                          </div>
+
+                          {/* 4. Akar Masalah / Root Cause */}
+                          <div
+                            style={{
+                              backgroundColor: causeText ? "#fffbeb" : "#f8fafc",
+                              padding: "10px 12px",
+                              borderRadius: "8px",
+                              border: causeText ? "1px solid #fde68a" : "1px solid #e2e8f0",
+                            }}
+                          >
+                            <span
+                              style={{
+                                fontSize: "11px",
+                                fontWeight: 700,
+                                color: causeText ? "#92400e" : "var(--text-muted)",
+                                textTransform: "uppercase",
+                                display: "block",
+                              }}
+                            >
+                              Akar Masalah (root_cause):
+                            </span>
+                            <div
+                              style={{
+                                fontSize: "13px",
+                                color: causeText ? "#78350f" : "#64748b",
+                                marginTop: "2px",
+                                lineHeight: 1.45,
+                                fontWeight: causeText ? 500 : 400,
+                              }}
+                            >
+                              {causeText || "Belum diidentifikasi pada versi ini."}
+                            </div>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -1083,6 +1105,43 @@ export default function TicketDetailDrawer({
               </div>
             )}
           </div>
+        </div>
+
+        {/* Footer Drawer */}
+        <div
+          style={{
+            padding: "16px 24px",
+            backgroundColor: "#ffffff",
+            borderTop: "1px solid var(--border-light)",
+            display: "flex",
+            justifyContent: "flex-end",
+            alignItems: "center",
+            flexShrink: 0,
+          }}
+        >
+          <button
+            type="button"
+            onClick={onClose}
+            style={{
+              padding: "9px 20px",
+              borderRadius: "8px",
+              border: "1px solid #cbd5e1",
+              backgroundColor: "#ffffff",
+              fontSize: "13px",
+              fontWeight: 650,
+              color: "var(--text-dark)",
+              cursor: "pointer",
+              transition: "all 0.15s ease",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = "#f1f5f9";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = "#ffffff";
+            }}
+          >
+            Tutup Detail Tiket
+          </button>
         </div>
       </div>
     </div>

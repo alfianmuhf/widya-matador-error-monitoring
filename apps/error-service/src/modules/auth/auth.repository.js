@@ -172,6 +172,7 @@ export const updateUserPassword = async (id, passwordHash) => {
     where: { id },
     data: {
       password_hash: passwordHash,
+      status: "active",
       must_change_password: false,
       password_changed_at: new Date(),
     },

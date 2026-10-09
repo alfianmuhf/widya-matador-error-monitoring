@@ -122,6 +122,11 @@ export const formatTicket = (t) => {
     }
 
     const action = h.notes || `Update ke versi ${h.version}`;
+    const source = h.changed_by_user_id
+      ? "web"
+      : h.changed_by_telegram_user_id
+      ? "telegram"
+      : "sistem";
 
     return {
       id: h.id,
@@ -134,11 +139,17 @@ export const formatTicket = (t) => {
       timestamp: formatDateTimeWIB(h.changed_at),
       changedAt: h.changed_at,
       author,
+      authorRole: h.changed_by_user?.role || null,
+      authorDivision: h.changed_by_user?.division || h.changed_by_telegram?.division || null,
+      source,
       changedByUserId: h.changed_by_user_id,
       changedByTelegramUserId: h.changed_by_telegram_user_id,
       damageDescription: h.damage_description,
+      damage_description: h.damage_description,
       actionTaken: h.action_taken,
+      action_taken: h.action_taken,
       rootCause: h.root_cause,
+      root_cause: h.root_cause,
       severity: capitalizeStatus(h.severity),
       rawSeverity: h.severity,
     };
@@ -199,7 +210,7 @@ export const formatTicket = (t) => {
     createdDateText: formatDateWIB(t.created_at),
     createdDateTimeText: formatDateTimeWIB(t.created_at),
     durationText: computeDurationText(t.created_at, resolvedAt),
-    source: "dashboard",
+    source: initialHistory.changed_by_telegram_user_id ? "telegram" : "dashboard",
     reporter,
     reporterUserId: initialHistory.changed_by_user_id || null,
     reporterTelegramId: initialHistory.changed_by_telegram_user_id || null,

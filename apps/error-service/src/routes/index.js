@@ -9,6 +9,7 @@ import componentRoutes from "../modules/component/component.route.js";
 import failureCodeRoutes from "../modules/failure-code/failure-code.route.js";
 import assetRoutes from "../modules/asset/asset.route.js";
 import ticketRoutes from "../modules/ticket/ticket.route.js";
+import ticketManagementRoutes from "../modules/ticket-management/ticket-management.route.js";
 import exportRoutes from "../modules/export/export.route.js";
 import auditLogRoutes from "../modules/audit-log/audit-log.route.js";
 import summaryRoutes from "../modules/summary/summary.route.js";
@@ -50,6 +51,9 @@ router.use("/assets", assetRoutes);
 
 // Ticket Service (/tickets)
 router.use("/tickets", ticketRoutes);
+
+// Ticket Management Service khusus Coordinator (/ticket-management)
+router.use("/ticket-management", ticketManagementRoutes);
 
 // Export Service (/exports)
 router.use("/exports", exportRoutes);

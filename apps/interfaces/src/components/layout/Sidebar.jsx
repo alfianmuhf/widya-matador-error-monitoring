@@ -7,22 +7,42 @@ export default function Sidebar() {
   const location = useLocation();
   const { user, accessToken } = useAuth();
   const currentUser = user?.user || user;
-  const isAdmin = currentUser?.role === "ADMIN";
-  const canAccessMasterData = currentUser?.role === "ADMIN" || currentUser?.role === "COORDINATOR";
+  const userRole = (currentUser?.role || "").toLowerCase();
+  const isAdmin = userRole === "admin";
+  const isCoordinator = userRole === "coordinator";
+  const isViewer = userRole === "viewer";
 
-  const [openTicketsCount, setOpenTicketsCount] = useState(28);
+  const [openTicketsCount, setOpenTicketsCount] = useState(0);
+  const [manageTicketsCount, setManageTicketsCount] = useState(0);
+
+  const fetchManagedTicketsCount = () => {
+    if (!isCoordinator) return;
+    api.get("/ticket-management")
+      .then((res) => {
+        const count = res.data?.data?.length ?? 0;
+        setManageTicketsCount(count);
+      })
+      .catch(() => {});
+  };
+
+  const updateCountsFromSummary = (data) => {
+    if (!data) return;
+    const open = data.kpis?.openTickets ?? 0;
+    setOpenTicketsCount(open);
+  };
 
   useEffect(() => {
+    if (!accessToken) return;
     // Initial fetch
     api.get("/summary?timeRange=all")
       .then((res) => {
-        if (res.data?.data?.kpis?.openTickets !== undefined) {
-          setOpenTicketsCount(res.data.data.kpis.openTickets);
-        }
+        updateCountsFromSummary(res.data?.data);
       })
       .catch(() => {});
 
-    if (!accessToken) return;
+    if (isCoordinator) {
+      fetchManagedTicketsCount();
+    }
 
     // Real-time live updates via Server-Sent Events (SSE)
     const baseURL = import.meta.env.VITE_API_BASE_URL || "http://localhost:3000";
@@ -38,21 +58,16 @@ export default function Sidebar() {
       } catch {}
     });
 
-    const handleTicketChange = (event) => {
-      try {
-        const payload = JSON.parse(event.data);
-        if (payload.openTicketsCount !== undefined) {
-          setOpenTicketsCount(payload.openTicketsCount);
-        } else {
-          api.get("/summary?timeRange=all")
-            .then((res) => {
-              if (res.data?.data?.kpis?.openTickets !== undefined) {
-                setOpenTicketsCount(res.data.data.kpis.openTickets);
-              }
-            })
-            .catch(() => {});
-        }
-      } catch {}
+    const handleTicketChange = () => {
+      api.get("/summary?timeRange=all")
+        .then((res) => {
+          updateCountsFromSummary(res.data?.data);
+        })
+        .catch(() => {});
+
+      if (isCoordinator) {
+        fetchManagedTicketsCount();
+      }
     };
 
     eventSource.addEventListener("ticket_created", handleTicketChange);
@@ -61,7 +76,7 @@ export default function Sidebar() {
     return () => {
       eventSource.close();
     };
-  }, [accessToken]);
+  }, [accessToken, isCoordinator]);
 
   const navItems = [
     {
@@ -102,6 +117,25 @@ export default function Sidebar() {
         </svg>
       ),
     },
+    // Menu Manajemen Tiket HANYA untuk role COORDINATOR (Aftersales & Software)
+    ...(isCoordinator
+      ? [
+          {
+            to: "/manajemen-tiket",
+            label: "Manajemen Tiket",
+            badge: manageTicketsCount > 0 ? manageTicketsCount : null,
+            badgeBg: "#0e8587",
+            badgeColor: "#ffffff",
+            icon: (
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+                <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
+                <path d="m9 14 2 2 4-4" />
+              </svg>
+            ),
+          },
+        ]
+      : []),
     {
       to: "/master-data",
       label: "Master Data",
@@ -113,18 +147,22 @@ export default function Sidebar() {
         </svg>
       ),
     },
-    {
-      to: "/pengguna-whitelist",
-      label: "Pengguna & Whitelist",
-      icon: (
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-          <circle cx="9" cy="7" r="4" />
-          <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-          <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-        </svg>
-      ),
-    },
+    ...(!isViewer
+      ? [
+          {
+            to: "/pengguna-whitelist",
+            label: "Pengguna & Whitelist",
+            icon: (
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                <circle cx="9" cy="7" r="4" />
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+              </svg>
+            ),
+          },
+        ]
+      : []),
     {
       to: "/audit-log",
       label: "Audit Log",
@@ -280,7 +318,7 @@ export default function Sidebar() {
           </span>
         </div>
         <div style={{ color: "#64748b", fontSize: "11px" }}>
-          Prototipe v1.1 · data dummy
+          After-Sales Platform v1.0 · Live Data
         </div>
       </div>
     </aside>

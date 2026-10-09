@@ -8,21 +8,6 @@ export default function UserTable({
   onEditUser,
   onDeleteUser,
 }) {
-  const formatDate = (dateStr) => {
-    if (!dateStr) return "-";
-    try {
-      const d = new Date(dateStr);
-      const year = d.getFullYear();
-      const month = String(d.getMonth() + 1).padStart(2, "0");
-      const day = String(d.getDate()).padStart(2, "0");
-      const hours = String(d.getHours()).padStart(2, "0");
-      const mins = String(d.getMinutes()).padStart(2, "0");
-      return `${year}-${month}-${day} ${hours}:${mins}`;
-    } catch {
-      return "-";
-    }
-  };
-
   return (
     <div
       style={{
@@ -82,45 +67,70 @@ export default function UserTable({
         <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
           <thead>
             <tr style={{ borderBottom: "1px solid var(--border-light)" }}>
-              <th style={{ padding: "12px 14px", fontSize: "13px", fontWeight: 600, color: "var(--text-muted)", width: "23%" }}>
+              <th style={{ padding: "12px 14px", fontSize: "13px", fontWeight: 600, color: "var(--text-muted)", width: canManageUsers ? "24%" : "26%" }}>
                 Nama
               </th>
-              <th style={{ padding: "12px 14px", fontSize: "13px", fontWeight: 600, color: "var(--text-muted)", width: "23%" }}>
+              <th style={{ padding: "12px 14px", fontSize: "13px", fontWeight: 600, color: "var(--text-muted)", width: canManageUsers ? "24%" : "26%" }}>
                 Email
               </th>
-              <th style={{ padding: "12px 14px", fontSize: "13px", fontWeight: 600, color: "var(--text-muted)", width: "15%" }}>
+              <th style={{ padding: "12px 14px", fontSize: "13px", fontWeight: 600, color: "var(--text-muted)", width: canManageUsers ? "16%" : "18%" }}>
                 Peran
               </th>
-              <th style={{ padding: "12px 14px", fontSize: "13px", fontWeight: 600, color: "var(--text-muted)", width: "18%" }}>
-                Login terakhir
+              <th style={{ padding: "12px 14px", fontSize: "13px", fontWeight: 600, color: "var(--text-muted)", width: canManageUsers ? "16%" : "18%" }}>
+                Divisi
               </th>
-              <th style={{ padding: "12px 14px", fontSize: "13px", fontWeight: 600, color: "var(--text-muted)", width: "11%" }}>
+              <th style={{ padding: "12px 14px", fontSize: "13px", fontWeight: 600, color: "var(--text-muted)", width: "12%" }}>
                 Status
               </th>
-              <th style={{ padding: "12px 14px", fontSize: "13px", fontWeight: 700, color: "var(--text-dark)", width: "10%", textAlign: "right" }}>
-                Aksi
-              </th>
+              {canManageUsers && (
+                <th style={{ padding: "12px 14px", fontSize: "13px", fontWeight: 700, color: "var(--text-dark)", width: "8%", textAlign: "right" }}>
+                  Aksi
+                </th>
+              )}
             </tr>
           </thead>
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan="6" style={{ padding: "40px", textAlign: "center", color: "var(--text-muted)" }}>
+                <td colSpan={canManageUsers ? 6 : 5} style={{ padding: "40px", textAlign: "center", color: "var(--text-muted)" }}>
                   Memuat data pengguna...
                 </td>
               </tr>
             ) : users.length === 0 ? (
               <tr>
-                <td colSpan="6" style={{ padding: "40px", textAlign: "center", color: "var(--text-muted)" }}>
+                <td colSpan={canManageUsers ? 6 : 5} style={{ padding: "40px", textAlign: "center", color: "var(--text-muted)" }}>
                   Belum ada data pengguna dashboard.
                 </td>
               </tr>
             ) : (
               users.map((item) => {
-                const isActive = item.status === "ACTIVE";
-                const roleLabel = item.role === "ADMIN" ? "Admin"
-                  : item.role === "COORDINATOR" ? "Coordinator"
-                  : "Viewer";
+                const role = (item.role || "").toLowerCase();
+                const roleLabel = role || "-";
+
+                const div = (item.division || "").toLowerCase();
+                const divisionLabel =
+                  div === "after_sales"
+                    ? "After Sales"
+                    : div === "software"
+                    ? "Software"
+                    : "-";
+
+                const status = (item.status || "").toLowerCase();
+                const isActive = status === "active";
+                const isInvited = status === "invited";
+                const statusLabel = status || "-";
+
+                const dotColor = isActive
+                  ? "var(--status-active-dot)"
+                  : isInvited
+                  ? "#f59e0b"
+                  : "var(--status-suspended-dot)";
+
+                const textColor = isActive
+                  ? "var(--status-active-text)"
+                  : isInvited
+                  ? "#d97706"
+                  : "var(--status-suspended-text)";
 
                 return (
                   <tr
@@ -159,8 +169,25 @@ export default function UserTable({
                         {roleLabel}
                       </span>
                     </td>
-                    <td style={{ padding: "16px 14px", color: "var(--text-secondary)", fontSize: "var(--text-sm)" }}>
-                      {formatDate(item.lastLoginAt)}
+                    <td style={{ padding: "16px 14px", fontSize: "var(--text-sm)" }}>
+                      {div && div !== "none" ? (
+                        <span
+                          style={{
+                            display: "inline-block",
+                            padding: "3px 10px",
+                            borderRadius: "6px",
+                            fontSize: "12px",
+                            fontWeight: 600,
+                            backgroundColor: div === "after_sales" ? "#eff6ff" : "#fdf4ff",
+                            color: div === "after_sales" ? "#1d4ed8" : "#a21caf",
+                            border: `1px solid ${div === "after_sales" ? "#bfdbfe" : "#f5d0fe"}`,
+                          }}
+                        >
+                          {divisionLabel}
+                        </span>
+                      ) : (
+                        <span style={{ color: "var(--text-muted)", fontSize: "13px" }}>-</span>
+                      )}
                     </td>
                     <td style={{ padding: "16px 14px", fontSize: "var(--text-sm)", fontWeight: 500 }}>
                       <span
@@ -168,7 +195,7 @@ export default function UserTable({
                           display: "inline-flex",
                           alignItems: "center",
                           gap: "6px",
-                          color: isActive ? "var(--status-active-text)" : "var(--status-suspended-text)",
+                          color: textColor,
                         }}
                       >
                         <span
@@ -176,14 +203,14 @@ export default function UserTable({
                             width: "7px",
                             height: "7px",
                             borderRadius: "50%",
-                            backgroundColor: isActive ? "var(--status-active-dot)" : "var(--status-suspended-dot)",
+                            backgroundColor: dotColor,
                           }}
                         />
-                        {isActive ? "Aktif" : item.status === "INVITED" ? "Diundang" : "Nonaktif"}
+                        {statusLabel}
                       </span>
                     </td>
-                    <td style={{ padding: "16px 14px", textAlign: "right" }}>
-                      {canManageUsers ? (
+                    {canManageUsers && (
+                      <td style={{ padding: "16px 14px", textAlign: "right" }}>
                         <div style={{ display: "inline-flex", gap: "6px", alignItems: "center", justifyContent: "flex-end" }}>
                           <button
                             type="button"
@@ -252,10 +279,8 @@ export default function UserTable({
                             </svg>
                           </button>
                         </div>
-                      ) : (
-                        <span style={{ color: "var(--text-muted)", fontSize: "12px" }}>-</span>
-                      )}
-                    </td>
+                      </td>
+                    )}
                   </tr>
                 );
               })

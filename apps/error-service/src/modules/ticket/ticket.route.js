@@ -1,6 +1,6 @@
 import { Router } from "express";
 import * as ticketController from "./ticket.controller.js";
-import { authenticate } from "../../middlewares/auth.middleware.js";
+import { authenticate, authorize } from "../../middlewares/auth.middleware.js";
 import { validate } from "../../middlewares/validate.middleware.js";
 import {
   queryTicketsSchema,
@@ -77,8 +77,6 @@ router.get(
   ticketController.getTicketAssignees
 );
 
-
-
 /**
  * POST /tickets/:id/claim
  * Software team member claims ticket (first claim becomes Leader)
@@ -86,6 +84,7 @@ router.get(
 router.post(
   "/:id/claim",
   authenticate,
+  authorize("COORDINATOR"),
   ticketController.claimTicket
 );
 
@@ -96,6 +95,7 @@ router.post(
 router.post(
   "/:id/assignees",
   authenticate,
+  authorize("COORDINATOR"),
   validate(addAssigneeSchema, "body"),
   ticketController.addAssignee
 );
@@ -108,12 +108,14 @@ router.post(
 router.patch(
   "/:id/assignees/:assigneeId",
   authenticate,
+  authorize("COORDINATOR"),
   validate(updateAssigneeSchema, "body"),
   ticketController.updateAssignee
 );
 router.put(
   "/:id/assignees/:assigneeId",
   authenticate,
+  authorize("COORDINATOR"),
   validate(updateAssigneeSchema, "body"),
   ticketController.updateAssignee
 );
@@ -125,6 +127,7 @@ router.put(
 router.patch(
   "/:id/leader",
   authenticate,
+  authorize("COORDINATOR"),
   validate(changeLeaderSchema, "body"),
   ticketController.changeLeader
 );
@@ -136,6 +139,7 @@ router.patch(
 router.delete(
   "/:id/assignees/:assigneeId",
   authenticate,
+  authorize("COORDINATOR"),
   ticketController.removeAssignee
 );
 
@@ -148,11 +152,12 @@ router.get("/:id", authenticate, ticketController.getTicketById);
 /**
  * PATCH /tickets/:id
  * Update status, handling note, or other ticket data
- * (Restricted: Software team must be in assignees; Aftersales freely allowed)
+ * (Khusus COORDINATOR: Aftersales & Software sesuai tiket yang dihandle)
  */
 router.patch(
   "/:id",
   authenticate,
+  authorize("COORDINATOR"),
   validate(updateTicketSchema, "body"),
   ticketController.updateTicket
 );
@@ -164,17 +169,19 @@ router.patch(
 router.post(
   "/:id/comments",
   authenticate,
+  authorize("COORDINATOR"),
   validate(addCommentSchema, "body"),
   ticketController.addComment
 );
 
 /**
  * POST /tickets
- * Create new ticket from dashboard (all authenticated roles)
+ * Create new ticket from dashboard (Khusus COORDINATOR)
  */
 router.post(
   "/",
   authenticate,
+  authorize("COORDINATOR"),
   validate(createTicketSchema, "body"),
   ticketController.createTicket
 );

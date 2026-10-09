@@ -7,6 +7,7 @@ import AssetTable from "../components/master-data/AssetTable.jsx";
 import MasterDataModal from "../components/master-data/MasterDataModal.jsx";
 import DeleteConfirmModal from "../components/common/DeleteConfirmModal.jsx";
 import api from "../lib/api.js";
+import { useAuth } from "../context/AuthContext.jsx";
 
 const TABS = [
   { id: "asset", label: "Unit Load Scanner" },
@@ -79,6 +80,11 @@ const renderTabIcon = (id, isActive) => {
 };
 
 export default function MasterData() {
+  const { user } = useAuth();
+  const currentUser = user?.user || user;
+  const userRole = (currentUser?.role || "").toLowerCase();
+  const canManage = userRole === "admin" || userRole === "coordinator";
+
   const [activeTab, setActiveTab] = useState("asset");
 
   // Search & Filter
@@ -394,40 +400,42 @@ export default function MasterData() {
               }}
             >
               <option value="all">Semua Status</option>
-              <option value="true">Hanya Aktif</option>
-              <option value="false">Hanya Nonaktif</option>
+              <option value="true">active</option>
+              <option value="false">non active</option>
             </select>
 
-            {/* 1 Tombol Create Dinamis */}
-            <button
-              type="button"
-              onClick={handleOpenCreate}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "8px",
-                backgroundColor: "var(--primary-teal)",
-                color: "#ffffff",
-                border: "none",
-                borderRadius: "8px",
-                padding: "8px 16px",
-                fontSize: "var(--text-sm)",
-                fontWeight: 600,
-                cursor: "pointer",
-                transition: "background-color 0.15s ease",
-                boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
-                outline: "none",
-                transform: "none",
-              }}
-              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "var(--primary-teal-hover)")}
-              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "var(--primary-teal)")}
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                <line x1="12" y1="5" x2="12" y2="19" />
-                <line x1="5" y1="12" x2="19" y2="12" />
-              </svg>
-              <span>{getCreateButtonLabel()}</span>
-            </button>
+            {/* 1 Tombol Create Dinamis — Khusus ADMIN & COORDINATOR */}
+            {canManage && (
+              <button
+                type="button"
+                onClick={handleOpenCreate}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  backgroundColor: "var(--primary-teal)",
+                  color: "#ffffff",
+                  border: "none",
+                  borderRadius: "8px",
+                  padding: "8px 16px",
+                  fontSize: "var(--text-sm)",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  transition: "background-color 0.15s ease",
+                  boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
+                  outline: "none",
+                  transform: "none",
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "var(--primary-teal-hover)")}
+                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "var(--primary-teal)")}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <line x1="12" y1="5" x2="12" y2="19" />
+                  <line x1="5" y1="12" x2="19" y2="12" />
+                </svg>
+                <span>{getCreateButtonLabel()}</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -438,6 +446,7 @@ export default function MasterData() {
             loading={loading}
             onEdit={handleOpenEdit}
             onDelete={handleOpenDelete}
+            canManage={canManage}
           />
         )}
 
@@ -447,6 +456,7 @@ export default function MasterData() {
             loading={loading}
             onEdit={handleOpenEdit}
             onDelete={handleOpenDelete}
+            canManage={canManage}
           />
         )}
 
@@ -456,6 +466,7 @@ export default function MasterData() {
             loading={loading}
             onEdit={handleOpenEdit}
             onDelete={handleOpenDelete}
+            canManage={canManage}
           />
         )}
 
@@ -465,6 +476,7 @@ export default function MasterData() {
             loading={loading}
             onEdit={handleOpenEdit}
             onDelete={handleOpenDelete}
+            canManage={canManage}
           />
         )}
 
@@ -474,6 +486,7 @@ export default function MasterData() {
             loading={loading}
             onEdit={handleOpenEdit}
             onDelete={handleOpenDelete}
+            canManage={canManage}
           />
         )}
       </div>

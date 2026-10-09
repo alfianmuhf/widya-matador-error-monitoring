@@ -17,27 +17,31 @@ router.use(authenticate);
 router.get("/", validate(queryFailureCodeSchema, "query"), failureCodeController.getFailureCodes);
 router.get("/:id", failureCodeController.getFailureCodeById);
 
-// Create, Update, Delete — dapat diakses oleh semua role
+// Create, Update, Delete — khusus ADMIN & COORDINATOR
 router.post(
   "/",
+  authorize("ADMIN", "COORDINATOR"),
   validate(createFailureCodeSchema, "body"),
   failureCodeController.createFailureCode
 );
 
 router.patch(
   "/:id",
+  authorize("ADMIN", "COORDINATOR"),
   validate(updateFailureCodeSchema, "body"),
   failureCodeController.updateFailureCode
 );
 
 router.put(
   "/:id",
+  authorize("ADMIN", "COORDINATOR"),
   validate(updateFailureCodeSchema, "body"),
   failureCodeController.updateFailureCode
 );
 
 router.delete(
   "/:id",
+  authorize("ADMIN", "COORDINATOR"),
   failureCodeController.deleteFailureCode
 );
 

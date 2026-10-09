@@ -63,8 +63,8 @@ export const updateUserSchema = z
       .nullable()
       .transform((val) => (val ? val.toLowerCase() : null)),
     status: z
-      .enum(["INVITED", "ACTIVE", "SUSPENDED", "invited", "active", "suspended"], {
-        errorMap: () => ({ message: "Status harus berupa INVITED, ACTIVE, atau SUSPENDED" }),
+      .enum(["ACTIVE", "SUSPENDED", "INVITED", "active", "suspended", "invited"], {
+        errorMap: () => ({ message: "Status harus berupa ACTIVE atau SUSPENDED" }),
       })
       .optional()
       .transform((val) => (val ? val.toLowerCase() : undefined)),

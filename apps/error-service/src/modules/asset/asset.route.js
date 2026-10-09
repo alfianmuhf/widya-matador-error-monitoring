@@ -17,27 +17,31 @@ router.use(authenticate);
 router.get("/", validate(queryAssetSchema, "query"), assetController.getAssets);
 router.get("/:id", assetController.getAssetById);
 
-// Create, Update, Delete — dapat diakses oleh semua role
+// Create, Update, Delete — khusus ADMIN & COORDINATOR
 router.post(
   "/",
+  authorize("ADMIN", "COORDINATOR"),
   validate(createAssetSchema, "body"),
   assetController.createAsset
 );
 
 router.patch(
   "/:id",
+  authorize("ADMIN", "COORDINATOR"),
   validate(updateAssetSchema, "body"),
   assetController.updateAsset
 );
 
 router.put(
   "/:id",
+  authorize("ADMIN", "COORDINATOR"),
   validate(updateAssetSchema, "body"),
   assetController.updateAsset
 );
 
 router.delete(
   "/:id",
+  authorize("ADMIN", "COORDINATOR"),
   assetController.deleteAsset
 );
 

@@ -4,7 +4,7 @@ import * as ticketRepo from "../ticket.repository.js";
 import { ticketEvents } from "../ticket.events.js";
 import { recordLog } from "../../audit-log/audit-log.service.js";
 import { formatTicket, capitalizeStatus, generateTicketId } from "./ticket-format.service.js";
-import { checkUpdateTicketPermission } from "./ticket-permission.service.js";
+import { checkUpdateTicketPermission } from "../../ticket-management/ticket-permission.service.js";
 
 /**
  * Get tickets list with filtering, searching, and pagination

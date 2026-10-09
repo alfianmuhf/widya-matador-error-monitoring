@@ -80,8 +80,18 @@ router.get(
 
 
 /**
+ * POST /tickets/:id/claim
+ * Software team member claims ticket (first claim becomes Leader)
+ */
+router.post(
+  "/:id/claim",
+  authenticate,
+  ticketController.claimTicket
+);
+
+/**
  * POST /tickets/:id/assignees
- * Add team member to ticket (strictly allowed for Leader only)
+ * Add team member to ticket
  */
 router.post(
   "/:id/assignees",

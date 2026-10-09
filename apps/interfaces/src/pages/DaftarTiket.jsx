@@ -4,13 +4,6 @@ import TicketTable from "../components/tickets/TicketTable.jsx";
 import TicketDetailDrawer from "../components/tickets/TicketDetailDrawer.jsx";
 import ExportReportModal from "../components/tickets/ExportReportModal.jsx";
 import { downloadTicketReport } from "../lib/exportReport.js";
-import {
-  getAllTicketAssignments,
-  getAssignmentsForTicket,
-  assignMemberToTicket,
-  removeMemberFromTicket,
-  DEFAULT_TEAM_MEMBERS,
-} from "../lib/ticketAssignees.js";
 import api from "../lib/api.js";
 import { useAuth } from "../context/AuthContext.jsx";
 
@@ -46,29 +39,6 @@ export default function DaftarTiket() {
     }, 3500);
   };
 
-  // Fetch available users from backend
-  useEffect(() => {
-    api
-      .get("/users?limit=50")
-      .then((res) => {
-        const users = res.data?.data?.users;
-        if (users && users.length > 0) {
-          // Merge with defaults to ensure complete role representation
-          const combined = [...users];
-          DEFAULT_TEAM_MEMBERS.forEach((dt) => {
-            if (!combined.some((u) => u.email === dt.email)) {
-              combined.push(dt);
-            }
-          });
-          setAvailableUsers(combined);
-        }
-      })
-      .catch(() => {
-        // Fallback to default team members if offline
-        setAvailableUsers(DEFAULT_TEAM_MEMBERS);
-      });
-  }, []);
-
   // Fetch tickets from Backend API
   const fetchTickets = useCallback(async () => {
     try {
@@ -92,20 +62,6 @@ export default function DaftarTiket() {
     fetchTickets();
   }, [fetchTickets]);
 
-  // Merge tickets with team assignment info
-  const tickets = useMemo(() => {
-    // dependency on assignmentVersion forces recomputation when assignments change
-    void assignmentVersion;
-    const assignmentsMap = getAllTicketAssignments();
-    return rawTickets.map((t) => {
-      const assigned = assignmentsMap[t.id] || [];
-      return {
-        ...t,
-        assignedMembers: assigned,
-      };
-    });
-  }, [rawTickets, assignmentVersion]);
-
   // Real-time updates via Server-Sent Events (SSE)
   useEffect(() => {
     if (!accessToken) return;
@@ -121,16 +77,10 @@ export default function DaftarTiket() {
     eventSource.addEventListener("ticket_updated", (event) => {
       try {
         const updated = JSON.parse(event.data);
-        setRawTickets((prev) =>
+        setTickets((prev) =>
           prev.map((t) => (t.id === updated.id ? updated : t))
         );
-        setSelectedTicket((prev) => {
-          if (prev?.id === updated.id) {
-            const assigned = getAssignmentsForTicket(updated.id);
-            return { ...updated, assignedMembers: assigned };
-          }
-          return prev;
-        });
+        setSelectedTicket((prev) => (prev?.id === updated.id ? updated : prev));
         showToast(`Tiket ${updated.id} diperbarui via real-time`);
       } catch (err) {
         console.error("Error parsing ticket_updated SSE:", err);
@@ -140,7 +90,7 @@ export default function DaftarTiket() {
     eventSource.addEventListener("ticket_created", (event) => {
       try {
         const created = JSON.parse(event.data);
-        setRawTickets((prev) => [created, ...prev.filter((t) => t.id !== created.id)]);
+        setTickets((prev) => [created, ...prev.filter((t) => t.id !== created.id)]);
         showToast(`Tiket baru masuk: ${created.id}`);
       } catch (err) {
         console.error("Error parsing ticket_created SSE:", err);
@@ -154,16 +104,10 @@ export default function DaftarTiket() {
         api.get(`/tickets/${ticketId}`).then((res) => {
           const fresh = res.data?.data;
           if (fresh) {
-            setRawTickets((prev) => prev.map((t) => (t.id === ticketId ? fresh : t)));
-            setSelectedTicket((prev) => {
-              if (prev?.id === ticketId) {
-                const assigned = getAssignmentsForTicket(ticketId);
-                return { ...fresh, assignedMembers: assigned };
-              }
-              return prev;
-            });
+            setTickets((prev) => prev.map((t) => (t.id === ticketId ? fresh : t)));
+            setSelectedTicket((prev) => (prev?.id === ticketId ? fresh : prev));
           }
-        }).catch(() => {});
+        }).catch(() => { });
       } catch (err) {
         console.error("Error parsing ticket_comment_added SSE:", err);
       }
@@ -176,7 +120,7 @@ export default function DaftarTiket() {
     return () => {
       eventSource.close();
     };
-  }, [accessToken]);
+  }, [accessToken, normalizeAssignee]);
 
   // Listen to header export button event
   useEffect(() => {
@@ -267,19 +211,13 @@ export default function DaftarTiket() {
     return filteredTickets.slice(start, start + itemsPerPage);
   }, [filteredTickets, currentPage]);
 
-  // Handle select ticket: fetch fresh detail with history
+  // Handle select ticket: fetch fresh detail with history & assignees from API
   const handleSelectTicket = async (t) => {
-    const currentAssigned = getAssignmentsForTicket(t.id);
-    setSelectedTicket({ ...t, assignedMembers: currentAssigned });
-
+    setSelectedTicket(t);
     try {
       const res = await api.get(`/tickets/${t.id}`);
       if (res.data?.data) {
-        const fresh = res.data.data;
-        setSelectedTicket({
-          ...fresh,
-          assignedMembers: getAssignmentsForTicket(fresh.id),
-        });
+        setSelectedTicket(res.data.data);
       }
     } catch {
       // fallback to selected item
@@ -292,11 +230,8 @@ export default function DaftarTiket() {
       const res = await api.patch(`/tickets/${ticketId}`, payload);
       const updated = res.data?.data;
       if (updated) {
-        const assigned = getAssignmentsForTicket(ticketId);
-        const fullUpdated = { ...updated, assignedMembers: assigned };
-
-        setRawTickets((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
-        setSelectedTicket(fullUpdated);
+        setTickets((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
+        setSelectedTicket(updated);
         showToast(`Status tiket ${updated.id} berhasil diperbarui.`);
         return fullUpdated;
       }
@@ -304,126 +239,6 @@ export default function DaftarTiket() {
       console.error("Error updating ticket:", err);
       const msg = err.response?.data?.message || "Gagal memperbarui tiket.";
       showToast(msg);
-      throw err;
-    }
-  };
-
-  // Handle assign member to ticket
-  const handleAssignMember = async (ticketId, member, isLead) => {
-    const updatedAssignments = assignMemberToTicket(ticketId, member, isLead);
-    setAssignmentVersion((v) => v + 1);
-
-    const roleName = member.role || "Teknisi";
-    const leadLabel = isLead ? "PIC Utama" : "Anggota Tim";
-    const historyNote = `Menugaskan ${member.name} (${roleName}) sebagai ${leadLabel} penanganan tiket.`;
-
-    // Local synthetic history item for instantaneous feedback
-    const newHistoryEntry = {
-      id: `hist-assign-${Date.now()}`,
-      action: historyNote,
-      notes: historyNote,
-      timestamp: "Baru saja",
-      author: currentUser?.name || currentUser?.email || "Koordinator",
-      type: "update",
-    };
-
-    setSelectedTicket((prev) => {
-      if (!prev || prev.id !== ticketId) return prev;
-      return {
-        ...prev,
-        assignedMembers: updatedAssignments,
-        history: [newHistoryEntry, ...(prev.history || [])],
-      };
-    });
-
-    // Sync to backend history & audit log
-    try {
-      await api.patch(`/tickets/${ticketId}`, {
-        handlingNote: historyNote,
-      });
-    } catch (err) {
-      console.error("Sync assignment note to backend:", err);
-    }
-
-    showToast(`Berhasil menugaskan ${member.name} ke tiket ${ticketId}`);
-  };
-
-  // Handle remove member from ticket
-  const handleRemoveMember = async (ticketId, memberId, memberName) => {
-    const updatedAssignments = removeMemberFromTicket(ticketId, memberId);
-    setAssignmentVersion((v) => v + 1);
-
-    const historyNote = `Menghapus penugasan ${memberName || "anggota tim"} dari tiket.`;
-
-    const newHistoryEntry = {
-      id: `hist-remove-${Date.now()}`,
-      action: historyNote,
-      notes: historyNote,
-      timestamp: "Baru saja",
-      author: currentUser?.name || currentUser?.email || "Koordinator",
-      type: "update",
-    };
-
-    setSelectedTicket((prev) => {
-      if (!prev || prev.id !== ticketId) return prev;
-      return {
-        ...prev,
-        assignedMembers: updatedAssignments,
-        history: [newHistoryEntry, ...(prev.history || [])],
-      };
-    });
-
-    // Sync note to backend
-    try {
-      await api.patch(`/tickets/${ticketId}`, {
-        handlingNote: historyNote,
-      });
-    } catch (err) {
-      console.error("Sync unassignment note to backend:", err);
-    }
-
-    showToast(`Penugasan ${memberName || "anggota"} dihapus dari tiket.`);
-  };
-
-  // Handle adding quick history note directly
-  const handleAddHistoryNote = async (ticketId, noteText) => {
-    try {
-      // Try POST /tickets/:id/comments first
-      let updated = null;
-      try {
-        const res = await api.post(`/tickets/${ticketId}/comments`, { notes: noteText });
-        updated = res.data?.data;
-      } catch {
-        // Fallback to PATCH /tickets/:id
-        const res = await api.patch(`/tickets/${ticketId}`, { handlingNote: noteText });
-        updated = res.data?.data;
-      }
-
-      if (updated) {
-        const assigned = getAssignmentsForTicket(ticketId);
-        const full = { ...updated, assignedMembers: assigned };
-        setRawTickets((prev) => prev.map((t) => (t.id === ticketId ? updated : t)));
-        setSelectedTicket(full);
-      } else {
-        // Manual append to history if response wasn't full ticket
-        const entry = {
-          id: `hist-${Date.now()}`,
-          action: noteText,
-          notes: noteText,
-          timestamp: "Baru saja",
-          author: currentUser?.name || currentUser?.email || "Teknisi",
-          type: "update",
-        };
-        setSelectedTicket((prev) => {
-          if (!prev) return prev;
-          return { ...prev, history: [entry, ...(prev.history || [])] };
-        });
-      }
-
-      showToast("Catatan riwayat berhasil ditambahkan.");
-    } catch (err) {
-      console.error("Failed to add history note:", err);
-      showToast("Gagal menambahkan catatan riwayat.");
       throw err;
     }
   };

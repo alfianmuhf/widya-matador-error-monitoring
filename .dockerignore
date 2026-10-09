@@ -1,0 +1,15 @@
+# Dependency directories
+**/node_modules/
+
+# Production build outputs
+**/dist/
+**/build/
+**/coverage/
+
+# Version control and IDE files
+.git/
+.vscode/
+.idea/
+
+# Local logs
+*.log

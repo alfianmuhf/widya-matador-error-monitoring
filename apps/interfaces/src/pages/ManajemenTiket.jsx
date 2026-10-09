@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
-import api from "../lib/api.js";
+import api, { API_BASE_URL } from "../lib/api.js";
 import { useAuth } from "../context/AuthContext.jsx";
 import UpdateTicketModal from "../components/tickets/UpdateTicketModal.jsx";
 import TicketDetailDrawer from "../components/tickets/TicketDetailDrawer.jsx";
@@ -87,8 +87,7 @@ export default function ManajemenTiket() {
   useEffect(() => {
     if (!accessToken) return;
 
-    const baseURL = import.meta.env.VITE_API_BASE_URL || "http://localhost:3000";
-    const sseUrl = `${baseURL}/tickets/stream?token=${encodeURIComponent(accessToken)}`;
+    const sseUrl = `${API_BASE_URL}/tickets/stream?token=${encodeURIComponent(accessToken)}`;
     const eventSource = new EventSource(sseUrl);
 
     const handleSSEUpdate = () => {

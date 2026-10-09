@@ -4,7 +4,7 @@ import TicketTable from "../components/tickets/TicketTable.jsx";
 import TicketDetailDrawer from "../components/tickets/TicketDetailDrawer.jsx";
 import ExportReportModal from "../components/tickets/ExportReportModal.jsx";
 import { downloadTicketReport } from "../lib/exportReport.js";
-import api from "../lib/api.js";
+import api, { API_BASE_URL } from "../lib/api.js";
 import { useAuth } from "../context/AuthContext.jsx";
 
 export default function DaftarTiket() {
@@ -138,8 +138,7 @@ export default function DaftarTiket() {
   useEffect(() => {
     if (!accessToken) return;
 
-    const baseURL = import.meta.env.VITE_API_BASE_URL || "http://localhost:3000";
-    const sseUrl = `${baseURL}/tickets/stream?token=${encodeURIComponent(accessToken)}`;
+    const sseUrl = `${API_BASE_URL}/tickets/stream?token=${encodeURIComponent(accessToken)}`;
     const eventSource = new EventSource(sseUrl);
 
     eventSource.addEventListener("init", () => {

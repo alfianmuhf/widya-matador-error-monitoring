@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import api from "../lib/api.js";
+import api, { API_BASE_URL } from "../lib/api.js";
 import { useAuth } from "../context/AuthContext.jsx";
 
 export default function AuditLogPage() {
@@ -209,8 +209,7 @@ export default function AuditLogPage() {
   useEffect(() => {
     if (!accessToken) return;
 
-    const baseURL = import.meta.env.VITE_API_BASE_URL || "http://localhost:3000";
-    const sseUrl = `${baseURL}/audit-logs/stream?token=${encodeURIComponent(accessToken)}`;
+    const sseUrl = `${API_BASE_URL}/audit-logs/stream?token=${encodeURIComponent(accessToken)}`;
     const es = new EventSource(sseUrl, { withCredentials: true });
 
     es.addEventListener("log_created", (ev) => {

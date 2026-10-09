@@ -4,6 +4,7 @@ import TicketTable from "../components/tickets/TicketTable.jsx";
 import TicketDetailDrawer from "../components/tickets/TicketDetailDrawer.jsx";
 import ExportReportModal from "../components/tickets/ExportReportModal.jsx";
 import { downloadTicketReport } from "../lib/exportReport.js";
+import { DEFAULT_TEAM_MEMBERS } from "../lib/ticketAssignees.js";
 import api from "../lib/api.js";
 import { useAuth } from "../context/AuthContext.jsx";
 
@@ -39,6 +40,66 @@ export default function DaftarTiket() {
     }, 3500);
   };
 
+  // Helper normalize assignee dari backend
+  const normalizeAssignee = useCallback((a) => {
+    if (!a) return null;
+    return {
+      id: a.id,
+      ticketId: a.ticketId || a.ticket_id,
+      name: a.name || a.user?.name || a.telegramUser?.full_name || a.telegramUser?.username || "Anggota Tim",
+      email: a.identifier || a.user?.email || (a.telegramUser?.username ? `@${a.telegramUser.username}` : (a.email || "")),
+      role: a.user?.role?.toUpperCase() || (a.telegramUser ? "TELEGRAM" : (a.role || "TEKNISI")),
+      isLead: Boolean(a.isLeader || a.isLead),
+      isLeader: Boolean(a.isLeader || a.isLead),
+      userId: a.userId || a.user_id,
+      telegramUserId: a.telegramUserId || a.telegram_user_id,
+    };
+  }, []);
+
+  // Fetch available users from backend (Users & Telegram Whitelist)
+  useEffect(() => {
+    Promise.all([
+      api.get("/users?limit=50").catch(() => ({ data: { data: { users: [] } } })),
+      api.get("/telegram-users?limit=50").catch(() => ({ data: { data: [] } })),
+    ])
+      .then(([usersRes, teleRes]) => {
+        const dbUsers = usersRes.data?.data?.users || (Array.isArray(usersRes.data?.data) ? usersRes.data?.data : []);
+        const teleUsers = teleRes.data?.data?.telegramUsers || (Array.isArray(teleRes.data?.data) ? teleRes.data?.data : []);
+
+        const combined = [];
+        dbUsers.forEach((u) => {
+          combined.push({
+            id: u.id,
+            userId: u.id,
+            name: u.name,
+            email: u.email,
+            role: u.role?.toUpperCase() || "VIEWER",
+            division: u.division,
+            source: "web",
+          });
+        });
+
+        teleUsers.forEach((tg) => {
+          combined.push({
+            id: tg.id,
+            telegramUserId: tg.id,
+            name: tg.fullName || tg.full_name || tg.username || `Telegram (${tg.telegramId || tg.telegram_id})`,
+            email: tg.username ? `@${tg.username}` : (tg.telegramId || tg.telegram_id),
+            role: "TELEGRAM",
+            division: tg.division,
+            source: "telegram",
+          });
+        });
+
+        if (combined.length > 0) {
+          setAvailableUsers(combined);
+        }
+      })
+      .catch((err) => {
+        console.error("Failed to load available users:", err);
+      });
+  }, []);
+
   // Fetch tickets from Backend API
   const fetchTickets = useCallback(async () => {
     try {
@@ -62,6 +123,18 @@ export default function DaftarTiket() {
     fetchTickets();
   }, [fetchTickets]);
 
+  // Merge tickets with team assignment info dari API backend
+  const tickets = useMemo(() => {
+    return rawTickets.map((t) => {
+      const backendAssignees = (t.assignees || []).map(normalizeAssignee).filter(Boolean);
+      return {
+        ...t,
+        assignees: backendAssignees,
+        assignedMembers: backendAssignees,
+      };
+    });
+  }, [rawTickets, normalizeAssignee]);
+
   // Real-time updates via Server-Sent Events (SSE)
   useEffect(() => {
     if (!accessToken) return;
@@ -77,11 +150,14 @@ export default function DaftarTiket() {
     eventSource.addEventListener("ticket_updated", (event) => {
       try {
         const updated = JSON.parse(event.data);
-        setTickets((prev) =>
-          prev.map((t) => (t.id === updated.id ? updated : t))
+        const freshAssignees = (updated.assignees || []).map(normalizeAssignee).filter(Boolean);
+        const full = { ...updated, assignees: freshAssignees, assignedMembers: freshAssignees };
+
+        setRawTickets((prev) =>
+          prev.map((t) => (t.id === full.id ? full : t))
         );
-        setSelectedTicket((prev) => (prev?.id === updated.id ? updated : prev));
-        showToast(`Tiket ${updated.id} diperbarui via real-time`);
+        setSelectedTicket((prev) => (prev?.id === full.id ? full : prev));
+        showToast(`Tiket ${full.id} diperbarui via real-time`);
       } catch (err) {
         console.error("Error parsing ticket_updated SSE:", err);
       }
@@ -90,8 +166,11 @@ export default function DaftarTiket() {
     eventSource.addEventListener("ticket_created", (event) => {
       try {
         const created = JSON.parse(event.data);
-        setTickets((prev) => [created, ...prev.filter((t) => t.id !== created.id)]);
-        showToast(`Tiket baru masuk: ${created.id}`);
+        const freshAssignees = (created.assignees || []).map(normalizeAssignee).filter(Boolean);
+        const full = { ...created, assignees: freshAssignees, assignedMembers: freshAssignees };
+
+        setRawTickets((prev) => [full, ...prev.filter((t) => t.id !== full.id)]);
+        showToast(`Tiket baru masuk: ${full.id}`);
       } catch (err) {
         console.error("Error parsing ticket_created SSE:", err);
       }
@@ -104,10 +183,13 @@ export default function DaftarTiket() {
         api.get(`/tickets/${ticketId}`).then((res) => {
           const fresh = res.data?.data;
           if (fresh) {
-            setTickets((prev) => prev.map((t) => (t.id === ticketId ? fresh : t)));
-            setSelectedTicket((prev) => (prev?.id === ticketId ? fresh : prev));
+            const freshAssignees = (fresh.assignees || []).map(normalizeAssignee).filter(Boolean);
+            const full = { ...fresh, assignees: freshAssignees, assignedMembers: freshAssignees };
+
+            setRawTickets((prev) => prev.map((t) => (t.id === ticketId ? full : t)));
+            setSelectedTicket((prev) => (prev?.id === ticketId ? full : prev));
           }
-        }).catch(() => { });
+        }).catch(() => {});
       } catch (err) {
         console.error("Error parsing ticket_comment_added SSE:", err);
       }
@@ -213,11 +295,21 @@ export default function DaftarTiket() {
 
   // Handle select ticket: fetch fresh detail with history & assignees from API
   const handleSelectTicket = async (t) => {
-    setSelectedTicket(t);
+    const initialAssignees = (t.assignees || t.assignedMembers || []).map(normalizeAssignee).filter(Boolean);
+    setSelectedTicket({ ...t, assignees: initialAssignees, assignedMembers: initialAssignees });
+
     try {
       const res = await api.get(`/tickets/${t.id}`);
       if (res.data?.data) {
-        setSelectedTicket(res.data.data);
+        const fresh = res.data.data;
+        const freshAssignees = (fresh.assignees || []).map(normalizeAssignee).filter(Boolean);
+        const full = {
+          ...fresh,
+          assignees: freshAssignees,
+          assignedMembers: freshAssignees,
+        };
+        setSelectedTicket(full);
+        setRawTickets((prev) => prev.map((item) => (item.id === t.id ? full : item)));
       }
     } catch {
       // fallback to selected item
@@ -230,8 +322,11 @@ export default function DaftarTiket() {
       const res = await api.patch(`/tickets/${ticketId}`, payload);
       const updated = res.data?.data;
       if (updated) {
-        setTickets((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
-        setSelectedTicket(updated);
+        const freshAssignees = (updated.assignees || []).map(normalizeAssignee).filter(Boolean);
+        const fullUpdated = { ...updated, assignees: freshAssignees, assignedMembers: freshAssignees };
+
+        setRawTickets((prev) => prev.map((t) => (t.id === updated.id ? fullUpdated : t)));
+        setSelectedTicket(fullUpdated);
         showToast(`Status tiket ${updated.id} berhasil diperbarui.`);
         return fullUpdated;
       }
@@ -242,6 +337,123 @@ export default function DaftarTiket() {
       throw err;
     }
   };
+
+  // Handle assign member to ticket via Backend API (POST /tickets/:id/assignees)
+  const handleAssignMember = async (ticketId, member, isLead) => {
+    try {
+      const isUUID = (str) =>
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(str || ""));
+
+      const payload = {
+        isLeader: Boolean(isLead),
+      };
+      if (member.telegramUserId && isUUID(member.telegramUserId)) {
+        payload.telegramUserId = member.telegramUserId;
+      } else if (member.userId && isUUID(member.userId)) {
+        payload.userId = member.userId;
+      } else if (member.id && isUUID(member.id)) {
+        payload.userId = member.id;
+      } else if (member.email) {
+        payload.email = member.email;
+      } else if (member.telegramId) {
+        payload.telegramId = member.telegramId;
+      }
+
+      const res = await api.post(`/tickets/${ticketId}/assignees`, payload);
+      const updatedTicket = res.data?.data?.ticket;
+
+      if (updatedTicket) {
+        const freshAssignees = (updatedTicket.assignees || []).map(normalizeAssignee).filter(Boolean);
+        const full = { ...updatedTicket, assignees: freshAssignees, assignedMembers: freshAssignees };
+        setRawTickets((prev) => prev.map((t) => (t.id === ticketId ? full : t)));
+        setSelectedTicket(full);
+      } else {
+        const freshRes = await api.get(`/tickets/${ticketId}`);
+        if (freshRes.data?.data) {
+          const fresh = freshRes.data.data;
+          const freshAssignees = (fresh.assignees || []).map(normalizeAssignee).filter(Boolean);
+          const full = { ...fresh, assignees: freshAssignees, assignedMembers: freshAssignees };
+          setRawTickets((prev) => prev.map((t) => (t.id === ticketId ? full : t)));
+          setSelectedTicket(full);
+        }
+      }
+
+      showToast(`Berhasil menugaskan ${member.name} ke tiket ${ticketId}`);
+    } catch (err) {
+      console.error("Gagal menugaskan anggota tim:", err);
+      const detailMsg = err.response?.data?.details?.[0]?.message;
+      const msg = detailMsg ? `${detailMsg}` : (err.response?.data?.message || "Gagal menugaskan anggota ke tiket.");
+      showToast(msg);
+    }
+  };
+
+  // Handle remove member from ticket via Backend API (DELETE /tickets/:id/assignees/:assigneeId)
+  const handleRemoveMember = async (ticketId, memberId, memberName) => {
+    try {
+      const res = await api.delete(`/tickets/${ticketId}/assignees/${memberId}`);
+      const updatedTicket = res.data?.data?.ticket;
+
+      if (updatedTicket) {
+        const freshAssignees = (updatedTicket.assignees || []).map(normalizeAssignee).filter(Boolean);
+        const full = { ...updatedTicket, assignees: freshAssignees, assignedMembers: freshAssignees };
+        setRawTickets((prev) => prev.map((t) => (t.id === ticketId ? full : t)));
+        setSelectedTicket(full);
+      } else {
+        const freshRes = await api.get(`/tickets/${ticketId}`);
+        if (freshRes.data?.data) {
+          const fresh = freshRes.data.data;
+          const freshAssignees = (fresh.assignees || []).map(normalizeAssignee).filter(Boolean);
+          const full = { ...fresh, assignees: freshAssignees, assignedMembers: freshAssignees };
+          setRawTickets((prev) => prev.map((t) => (t.id === ticketId ? full : t)));
+          setSelectedTicket(full);
+        }
+      }
+
+      showToast(`Penugasan ${memberName || "anggota"} dihapus dari tiket.`);
+    } catch (err) {
+      console.error("Gagal menghapus anggota tim:", err);
+      const msg = err.response?.data?.message || "Gagal menghapus penugasan dari tiket.";
+      showToast(msg);
+    }
+  };
+
+  // Handle adding quick history note directly
+  const handleAddHistoryNote = async (ticketId, noteText) => {
+    try {
+      let updated = null;
+      try {
+        const res = await api.post(`/tickets/${ticketId}/comments`, { notes: noteText });
+        updated = res.data?.data;
+      } catch {
+        const res = await api.patch(`/tickets/${ticketId}`, { handlingNote: noteText });
+        updated = res.data?.data;
+      }
+
+      if (updated) {
+        const freshAssignees = (updated.assignees || []).map(normalizeAssignee).filter(Boolean);
+        const full = { ...updated, assignees: freshAssignees, assignedMembers: freshAssignees };
+        setRawTickets((prev) => prev.map((t) => (t.id === ticketId ? full : t)));
+        setSelectedTicket(full);
+      } else {
+        const freshRes = await api.get(`/tickets/${ticketId}`);
+        if (freshRes.data?.data) {
+          const fresh = freshRes.data.data;
+          const freshAssignees = (fresh.assignees || []).map(normalizeAssignee).filter(Boolean);
+          const full = { ...fresh, assignees: freshAssignees, assignedMembers: freshAssignees };
+          setRawTickets((prev) => prev.map((t) => (t.id === ticketId ? full : t)));
+          setSelectedTicket(full);
+        }
+      }
+
+      showToast("Catatan riwayat berhasil ditambahkan.");
+    } catch (err) {
+      console.error("Failed to add history note:", err);
+      showToast("Gagal menambahkan catatan riwayat.");
+      throw err;
+    }
+  };
+
+
 
   const handleExportDownload = async (format, customDateRange = null) => {
     let compId = undefined;

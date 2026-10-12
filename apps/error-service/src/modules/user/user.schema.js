@@ -27,6 +27,20 @@ export const createUserSchema = z.object({
     .optional()
     .nullable()
     .transform((val) => (val ? val.toLowerCase() : null)),
+  // Opsional: tujuan DM notifikasi invite via Telegram (tanpa migrasi — tidak disimpan di DB)
+  telegramId: z
+    .string()
+    .trim()
+    .min(1, "Telegram ID tidak boleh kosong")
+    .max(50, "Telegram ID maksimal 50 karakter")
+    .optional()
+    .nullable(),
+  username: z
+    .string()
+    .trim()
+    .max(100, "Username Telegram maksimal 100 karakter")
+    .optional()
+    .nullable(),
 });
 
 /**

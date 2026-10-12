@@ -200,3 +200,24 @@ export const updateUserPassword = async (id, passwordHash) => {
     },
   });
 };
+
+/**
+ * Reset password lewat OTP: update hash + clear lockout (percobaan login gagal).
+ * Status hanya diaktifkan bila masih "invited" — akun suspended tetap suspended.
+ * @param {string} id
+ * @param {string} passwordHash
+ * @param {boolean} activate
+ */
+export const resetPasswordWithOtp = async (id, passwordHash, activate) => {
+  return prisma.users.update({
+    where: { id },
+    data: {
+      password_hash: passwordHash,
+      must_change_password: false,
+      password_changed_at: new Date(),
+      failed_login_attempts: 0,
+      locked_until: null,
+      ...(activate ? { status: "active" } : {}),
+    },
+  });
+};

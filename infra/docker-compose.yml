@@ -6,6 +6,8 @@ services:
     container_name: after-sales-backend
     restart: unless-stopped
     network_mode: host
+    depends_on:
+      - rabbitmq
 
   frontend:
     build:
@@ -17,3 +19,12 @@ services:
       - "5173:5173"
     depends_on:
       - backend
+
+  # Event bus: error-service → RabbitMQ → n8n → Telegram
+  rabbitmq:
+    image: rabbitmq:4-management
+    container_name: after-sales-rabbitmq
+    restart: unless-stopped
+    ports:
+      - "5672:5672"    # AMQP (dipakai backend)
+      - "15672:15672"  # Management dashboard (user: guest, pass: guest)

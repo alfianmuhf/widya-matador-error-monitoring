@@ -11,6 +11,29 @@ export const loginSchema = z.object({
     .min(6, "Password minimal 6 karakter"),
 });
 
+export const forgotPasswordSchema = z.object({
+  email: z
+    .string({ required_error: "Email wajib diisi" })
+    .trim()
+    .toLowerCase()
+    .email("Format email tidak valid"),
+});
+
+export const resetPasswordSchema = z.object({
+  email: z
+    .string({ required_error: "Email wajib diisi" })
+    .trim()
+    .toLowerCase()
+    .email("Format email tidak valid"),
+  otp: z
+    .string({ required_error: "OTP wajib diisi" })
+    .trim()
+    .regex(/^\d{6}$/, "OTP harus 6 digit angka"),
+  newPassword: z
+    .string({ required_error: "Password baru wajib diisi" })
+    .min(6, "Password minimal 6 karakter"),
+});
+
 export const registerSchema = z.object({
   email: z
     .string({ required_error: "Email wajib diisi" })

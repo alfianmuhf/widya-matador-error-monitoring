@@ -30,17 +30,31 @@ export const createTelegramUser = async ({ telegramId, username, fullName, divis
   const adminId = typeof adminUser === "object" ? adminUser?.id : adminUser;
   const adminActor = typeof adminUser === "object" ? (adminUser?.email || adminUser?.name) : (adminUser ? `User:${adminId}` : "Sistem");
 
-  // 1. Check if telegramId already whitelisted
-  const existingUser = await telegramRepository.findTelegramUserByTelegramId(telegramId);
-  if (existingUser) {
-    throw createError(409, "Telegram ID sudah terdaftar di daftar whitelist.");
+  const cleanUsername = username ? String(username).replace(/^@/, "").trim() : null;
+  if (!cleanUsername) {
+    throw createError(400, "Username Telegram wajib diisi.");
+  }
+
+  // 1. Cek duplikasi username Telegram
+  const existingByUsername = await telegramRepository.findTelegramUserByUsername(cleanUsername);
+  if (existingByUsername) {
+    throw createError(409, "Username Telegram sudah terdaftar di daftar whitelist.");
+  }
+
+  // 1b. Jika telegramId disertakan, cek duplikasi telegramId
+  const cleanTeleId = telegramId ? String(telegramId).trim() : null;
+  if (cleanTeleId) {
+    const existingUser = await telegramRepository.findTelegramUserByTelegramId(cleanTeleId);
+    if (existingUser) {
+      throw createError(409, "Telegram ID sudah terdaftar di daftar whitelist.");
+    }
   }
 
   // 2. Insert into database (whitelisted_by is tracked in audit log)
   const created = await telegramRepository.createTelegramUser({
-    telegram_id: telegramId,
-    username: username || null,
-    full_name: fullName || null,
+    telegram_id: cleanTeleId || null,
+    username: cleanUsername,
+    full_name: fullName ? String(fullName).trim() : null,
     division: division ? division.toLowerCase() : null,
     is_active: isActive !== undefined ? isActive : true,
   });
@@ -144,9 +158,31 @@ export const updateTelegramUser = async (id, data, adminUser = null) => {
   const updatePayload = {};
   if (data.isActive !== undefined) updatePayload.is_active = data.isActive;
   if (data.is_active !== undefined) updatePayload.is_active = data.is_active;
-  if (data.username !== undefined) updatePayload.username = data.username || null;
-  if (data.fullName !== undefined) updatePayload.full_name = data.fullName || null;
-  if (data.full_name !== undefined) updatePayload.full_name = data.full_name || null;
+
+  if (data.username !== undefined) {
+    const cleanUsername = data.username ? String(data.username).replace(/^@/, "").trim() : null;
+    if (cleanUsername) {
+      const duplicateUser = await telegramRepository.findTelegramUserByUsername(cleanUsername);
+      if (duplicateUser && duplicateUser.id !== id) {
+        throw createError(409, "Username Telegram sudah digunakan oleh akun whitelist lain.");
+      }
+    }
+    updatePayload.username = cleanUsername;
+  }
+
+  if (data.fullName !== undefined) updatePayload.full_name = data.fullName ? String(data.fullName).trim() : null;
+  if (data.full_name !== undefined) updatePayload.full_name = data.full_name ? String(data.full_name).trim() : null;
+  if (data.telegramId !== undefined || data.telegram_id !== undefined) {
+    const rawTeleId = data.telegramId !== undefined ? data.telegramId : data.telegram_id;
+    const cleanTeleId = rawTeleId ? String(rawTeleId).trim() : null;
+    if (cleanTeleId) {
+      const duplicateTeleId = await telegramRepository.findTelegramUserByTelegramId(cleanTeleId);
+      if (duplicateTeleId && duplicateTeleId.id !== id) {
+        throw createError(409, "Telegram ID sudah digunakan oleh akun whitelist lain.");
+      }
+    }
+    updatePayload.telegram_id = cleanTeleId;
+  }
   if (data.division !== undefined) updatePayload.division = data.division ? data.division.toLowerCase() : null;
 
   const updated = await telegramRepository.updateTelegramUser(id, updatePayload);

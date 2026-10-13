@@ -1,13 +1,17 @@
 import { z } from "zod";
 
 export const createTelegramUserSchema = z.object({
-  telegramId: z
-    .string({ required_error: "Telegram ID wajib diisi" })
+  username: z
+    .string({ required_error: "Username Telegram wajib diisi" })
     .trim()
-    .min(1, "Telegram ID wajib diisi")
-    .max(50, "Telegram ID maksimal 50 karakter"),
-  username: z.string().trim().max(100).nullable().optional(),
-  fullName: z.string().trim().max(100).nullable().optional(),
+    .min(1, "Username Telegram wajib diisi")
+    .max(100, "Username Telegram maksimal 100 karakter"),
+  fullName: z
+    .string({ required_error: "Nama lengkap wajib diisi" })
+    .trim()
+    .min(1, "Nama lengkap wajib diisi")
+    .max(100, "Nama lengkap maksimal 100 karakter"),
+  telegramId: z.string().trim().max(50, "Telegram ID maksimal 50 karakter").nullable().optional(),
   division: z
     .enum(["none", "after_sales", "software", "NONE", "AFTER_SALES", "SOFTWARE"], {
       errorMap: () => ({ message: "Divisi harus berupa none, after_sales, atau software" }),
@@ -20,8 +24,9 @@ export const createTelegramUserSchema = z.object({
 
 export const updateTelegramUserSchema = z
   .object({
-    username: z.string().trim().max(100).nullable().optional(),
-    fullName: z.string().trim().max(100).nullable().optional(),
+    username: z.string().trim().min(1, "Username tidak boleh kosong").max(100).optional(),
+    fullName: z.string().trim().min(1, "Nama lengkap tidak boleh kosong").max(100).optional(),
+    telegramId: z.string().trim().max(50).nullable().optional(),
     division: z
       .enum(["none", "after_sales", "software", "NONE", "AFTER_SALES", "SOFTWARE"], {
         errorMap: () => ({ message: "Divisi harus berupa none, after_sales, atau software" }),

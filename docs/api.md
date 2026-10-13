@@ -59,7 +59,7 @@ Tabel berikut menyajikan seluruh endpoint yang tersedia pada sistem, metode HTTP
 | 13 | **Users** | REST API | `GET` | `/users/:id` | `admin`, `coordinator` | Ambil detail satu pengguna |
 | 14 | **Users** | REST API | `PATCH`, `PUT` | `/users/:id` | `admin` | Ubah data pengguna (status hanya `active`/`suspended`) |
 | 15 | **Users** | REST API | `DELETE` | `/users/:id` | `admin` | Hapus pengguna dashboard |
-| 16 | **Telegram** | REST API | `POST` | `/telegram-users` | `admin` | Tambah user Telegram ke whitelist bot |
+| 16 | **Telegram** | REST API | `POST` | `/telegram-users` | `admin` | Tambah user Telegram ke whitelist bot (cukup username & nama lengkap) |
 | 17 | **Telegram** | REST API | `GET` | `/telegram-users` | `admin`, `coordinator` | Daftar user Telegram yang di-whitelist (read-only coordinator) |
 | 18 | **Telegram** | REST API | `GET` | `/telegram-users/:id` | `admin`, `coordinator` | Detail user Telegram whitelist |
 | 19 | **Telegram** | REST API | `PATCH` | `/telegram-users/:id` | `admin` | Update status/username/divisi user Telegram |
@@ -875,22 +875,21 @@ Endpoint ini mengelola akun pengguna Telegram yang diizinkan berinteraksi dengan
 | **Autentikasi** | `Authorization: Bearer <access_token>` |
 | **Role Izin** | **Hanya `admin`** |
 
-Menambahkan akun Telegram baru ke whitelist bot.
+Menambahkan akun Telegram baru ke whitelist bot. Cukup memasukkan **`username`** Telegram dan **`fullName`** (nama lengkap). `telegramId` tidak perlu dimasukkan secara manual.
 
 #### Request Body Valid
 ```json
 {
-  "telegramId": "123456789",
   "username": "john_doe",
-  "fullName": "John Doe Tele",
+  "fullName": "John Doe",
   "division": "software",
   "isActive": true
 }
 ```
 
-* **`telegramId`** *(String, wajib, max 50)*: ID unik pengguna Telegram.
-* **`username`** *(String, opsional, max 100)*: Username Telegram tanpa atau dengan tanda `@`.
-* **`fullName`** *(String, opsional, max 100)*: Nama lengkap pengguna.
+* **`username`** *(String, wajib, max 100)*: Username Telegram tanpa atau dengan tanda `@` (unik di whitelist).
+* **`fullName`** *(String, wajib, max 100)*: Nama lengkap pengguna.
+* **`telegramId`** *(String, opsional, max 50)*: ID unik numerik pengguna Telegram (opsional).
 * **`division`** *(Enum string, opsional)*: Pilihan divisi: `"none"`, `"after_sales"`, atau `"software"`.
 * **`isActive`** *(Boolean, opsional, default `true`)*: Status keaktifan whitelist.
 
@@ -902,9 +901,9 @@ Menambahkan akun Telegram baru ke whitelist bot.
   "data": {
     "telegramUser": {
       "id": "771e8400-e29b-41d4-a716-446655440001",
-      "telegramId": "123456789",
+      "telegramId": null,
       "username": "john_doe",
-      "fullName": "John Doe Tele",
+      "fullName": "John Doe",
       "division": "software",
       "isActive": true,
       "createdAt": "2026-10-09T08:00:00.000Z",
@@ -915,12 +914,12 @@ Menambahkan akun Telegram baru ke whitelist bot.
 ```
 
 #### âŒ Contoh Error Validasi Input: `422 Unprocessable Entity`
-Jika `telegramId` kosong atau divisi tidak valid:
+Jika `username` atau `fullName` kosong:
 ```json
 // Request Body yang Salah:
 {
-  "telegramId": "",
-  "division": "marketing"
+  "username": "",
+  "fullName": ""
 }
 
 // Response Error Server:
@@ -930,12 +929,12 @@ Jika `telegramId` kosong atau divisi tidak valid:
   "message": "Validation Error",
   "details": [
     {
-      "field": "telegramId",
-      "message": "Telegram ID wajib diisi"
+      "field": "username",
+      "message": "Username Telegram wajib diisi"
     },
     {
-      "field": "division",
-      "message": "Divisi harus berupa none, after_sales, atau software"
+      "field": "fullName",
+      "message": "Nama lengkap wajib diisi"
     }
   ]
 }
@@ -946,7 +945,7 @@ Jika `telegramId` kosong atau divisi tidak valid:
 {
   "success": false,
   "statusCode": 409,
-  "message": "Telegram ID tersebut sudah terdaftar di whitelist"
+  "message": "Username Telegram sudah terdaftar di daftar whitelist."
 }
 ```
 

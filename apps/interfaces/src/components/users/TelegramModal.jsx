@@ -3,7 +3,6 @@ import api from "../../lib/api.js";
 
 function TelegramModalContent({ onClose, telegramUser, onSuccess }) {
   const isEdit = Boolean(telegramUser);
-  const [telegramId, setTelegramId] = useState(telegramUser?.telegramId || "");
   const [username, setUsername] = useState(telegramUser?.username || "");
   const [fullName, setFullName] = useState(telegramUser?.fullName || "");
   const [isActive, setIsActive] = useState(telegramUser?.isActive !== false);
@@ -13,12 +12,10 @@ function TelegramModalContent({ onClose, telegramUser, onSuccess }) {
 
   useEffect(() => {
     if (telegramUser) {
-      setTelegramId(telegramUser.telegramId || "");
       setUsername(telegramUser.username || "");
       setFullName(telegramUser.fullName || "");
       setIsActive(telegramUser.isActive !== false);
     } else {
-      setTelegramId("");
       setUsername("");
       setFullName("");
       setIsActive(true);
@@ -28,28 +25,30 @@ function TelegramModalContent({ onClose, telegramUser, onSuccess }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(null);
+
+    const cleanUsername = username.replace(/^@/, "").trim();
+    if (!cleanUsername) {
+      setError("Username Telegram wajib diisi.");
+      return;
+    }
+
+    if (!fullName.trim()) {
+      setError("Nama lengkap wajib diisi.");
+      return;
+    }
+
     setLoading(true);
 
     try {
+      const payload = {
+        username: cleanUsername,
+        fullName: fullName.trim(),
+        isActive,
+      };
+
       if (isEdit) {
-        const payload = {
-          username: username.replace(/^@/, "").trim() || null,
-          fullName: fullName.trim() || null,
-          isActive,
-        };
         await api.patch(`/telegram-users/${telegramUser.id}`, payload);
       } else {
-        if (!telegramId.trim()) {
-          setError("Telegram ID wajib diisi.");
-          setLoading(false);
-          return;
-        }
-        const payload = {
-          telegramId: telegramId.trim(),
-          username: username.replace(/^@/, "").trim() || null,
-          fullName: fullName.trim() || null,
-          isActive,
-        };
         await api.post("/telegram-users", payload);
       }
 
@@ -134,47 +133,10 @@ function TelegramModalContent({ onClose, telegramUser, onSuccess }) {
           )}
 
           <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-            {/* Telegram ID */}
-            <div>
-              <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "#475569", marginBottom: "4px" }}>
-                Telegram ID {isEdit ? "(Permanen)" : "*"}
-              </label>
-              <input
-                type="text"
-                value={telegramId}
-                onChange={(e) => setTelegramId(e.target.value)}
-                disabled={isEdit}
-                placeholder="Contoh: 123456789"
-                style={{
-                  width: "100%",
-                  padding: "8px 12px",
-                  borderRadius: "8px",
-                  border: "1px solid #CBD5E1",
-                  fontSize: "13px",
-                  backgroundColor: isEdit ? "#F8FAFC" : "#FFFFFF",
-                  cursor: isEdit ? "not-allowed" : "text",
-                  boxSizing: "border-box",
-                  outline: "none",
-                  transition: "border-color 0.15s ease",
-                }}
-                onFocus={(e) => {
-                  if (!isEdit) e.target.style.borderColor = "var(--primary-teal, #0d9488)";
-                }}
-                onBlur={(e) => {
-                  if (!isEdit) e.target.style.borderColor = "#CBD5E1";
-                }}
-              />
-              {!isEdit && (
-                <span style={{ fontSize: "11px", color: "#94A3B8", marginTop: "2px", display: "block" }}>
-                  ID unik numerik pengguna Telegram (bisa didapat dari bot @userinfobot).
-                </span>
-              )}
-            </div>
-
             {/* Username */}
             <div>
               <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "#475569", marginBottom: "4px" }}>
-                Username Telegram (Opsional)
+                Username Telegram *
               </label>
               <div style={{ display: "flex", alignItems: "center" }}>
                 <span
@@ -211,18 +173,21 @@ function TelegramModalContent({ onClose, telegramUser, onSuccess }) {
                   onBlur={(e) => (e.target.style.borderColor = "#CBD5E1")}
                 />
               </div>
+              <span style={{ fontSize: "11px", color: "#94A3B8", marginTop: "2px", display: "block" }}>
+                Username Telegram tanpa spasi (contoh: budi_teknisi).
+              </span>
             </div>
 
             {/* Full Name */}
             <div>
               <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "#475569", marginBottom: "4px" }}>
-                Nama Lengkap / Jabatan
+                Nama Lengkap *
               </label>
               <input
                 type="text"
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
-                placeholder="Contoh: Budi Santoso (Teknisi Lapangan)"
+                placeholder="Contoh: Budi Santoso"
                 style={{
                   width: "100%",
                   padding: "8px 12px",

@@ -189,7 +189,7 @@ export default function TelegramTable({
                   onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
                 >
                   <td style={{ padding: "12px 16px", fontFamily: "monospace", fontWeight: 600, color: "#1E293B" }}>
-                    {user.telegramId}
+                    {user.telegramId || <span style={{ color: "#94A3B8", fontWeight: 400 }}>-</span>}
                   </td>
                   <td style={{ padding: "12px 16px", color: "#334155" }}>
                     {user.username ? (

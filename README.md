@@ -13,7 +13,8 @@ after-sales-platform/
 │   └── interfaces/         # Antarmuka web pengguna (Frontend React)
 ├── docs/                   # Dokumen spesifikasi dan perancangan sistem
 ├── infra/                  # Konfigurasi infrastruktur, container, & deployment
-├── .env.example            # Template variabel environment terpadu (Backend & Frontend)
+├── .env.backend.example    # Template variabel environment Backend (copy ke apps/error-service/.env)
+├── .env.frontend.example   # Template variabel environment Frontend (copy ke apps/interfaces/.env)
 ├── .gitignore              # Konfigurasi file yang diabaikan oleh Git
 └── README.md               # Dokumentasi utama proyek
 ```
@@ -55,6 +56,7 @@ Layanan backend dibangun dengan Node.js dan Express untuk menangani pencatatan e
 | **[cookie-parser](https://github.com/expressjs/cookie-parser)** | `^1.4.7` | Middleware untuk mem-parsing cookie dari HTTP request header (diperlukan untuk membaca refresh token di HttpOnly cookie). |
 | **[http-errors](https://github.com/jshttp/http-errors)** | `^2.0.1` | Utilitas pembuatan objek error HTTP standar dengan kode status yang sesuai. |
 | **[dotenv](https://github.com/motdotla/dotenv)** | `^17.4.2` | Memuat variabel konfigurasi lingkungan dari file `.env` ke `process.env`. |
+| **[amqplib](https://www.npmjs.com/package/amqplib)** | `^2.2.0` | Klien RabbitMQ untuk publish/subscribe event ke exchange `erad.events` dan queue `erad.telegram.notify`. |
 | **[nodemon](https://nodemon.io/)** *(Dev)* | `^3.1.14` | Tool otomatis yang merestart server Node.js setiap kali ada perubahan file pada masa pengembangan. |
 
 ---
@@ -101,6 +103,12 @@ Layanan backend dibangun dengan Node.js dan Express untuk menangani pencatatan e
    - Pencatatan seluruh jejak aktivitas pengguna (login, logout, mutasi tiket, perubahan master data) dengan metadata IP address, user agent, dan timestamp.
    - Live stream SSE untuk audit log.
 
+8. **Notifikasi Telegram via n8n**:
+   - Undangan user (`user.invited`), klaim tiket grup (`ticket.claimed`), dan penambahan anggota tim (`ticket.member_added`) dikirim ke workflow n8n yang terintegrasi dengan Bot API Telegram. Undangan dikirim sebagai DM ke username yang ditentukan.
+
+9. **Reset password via OTP 6 digit**:
+   - Reset password via OTP 6 digit yang dikirim ke Telegram (tanpa tabel baru, in-memory, TTL 5 menit, single-use).
+
 ---
 
 ## 🚀 Panduan Memulai (Setup untuk Developer)
@@ -115,6 +123,10 @@ Pastikan perangkat Anda telah terpasang:
 - **PostgreSQL Database** (Lokal atau Cloud seperti Supabase/Neon)
 
 ---
+
+## Alur Notifikasi Telegram (Webhook)
+
+Error service mempublish event JSON ke RabbitMQ (exchange `erad.events`, routing key `user.invited` / `ticket.claimed` / `ticket.member_added` / `otp.password_reset`) → queue `erad.telegram.notify` → workflow n8n → Bot API Telegram. Tanpa `RABBITMQ_URL` sistem tetap jalan tanpa notifikasi; detail kontrak event + panduan import workflow ada di `docs/webhook-telegram/`, konfigurasi infra di `infra/` (docker compose RabbitMQ), referensi API HTTP di `docs/api.md`.
 
 ### 2. Clone Repository
 Buka terminal dan clone repository menggunakan salah satu protokol:
@@ -154,22 +166,25 @@ npm install
 
 ### 4. Konfigurasi Environment Variables (`.env`)
 
-Template konfigurasi lingkungan tersedia di root folder: [`.env.example`](.env.example) yang mencakup konfigurasi untuk **Backend (Express)** dan **Frontend (React/Vite)** sekaligus.
+Tersedia dua template terpisah di root folder: [`.env.backend.example`](.env.backend.example) untuk Backend (Express) dan [`.env.frontend.example`](.env.frontend.example) untuk Frontend (React/Vite).
 
-1. Salin template `.env.example` di root menjadi `.env`:
+1. Salin template sesuai aplikasinya:
    ```bash
-   # Di Windows PowerShell:
-   Copy-Item .env.example .env
+   # Backend → apps/error-service/.env
+   cp .env.backend.example apps/error-service/.env
 
-   # Di Linux / macOS / Git Bash:
-   cp .env.example .env
+   # Frontend → apps/interfaces/.env
+   cp .env.frontend.example apps/interfaces/.env
    ```
-2. Salin atau arahkan file `.env` tersebut ke aplikasi terkait jika diperlukan:
+   > Windows PowerShell: `Copy-Item .env.backend.example apps\error-service\.env` (dst).
+
+2. Isi nilai pada tiap file:
    - **Backend (`apps/error-service/.env`)**:
      - `PORT`: Port server backend (default: `3000`).
      - `DATABASE_URL`: Connection string PostgreSQL Anda (contoh: `postgresql://postgres:password@localhost:5432/widya_db?schema=public`).
      - `JWT_SECRET` & `JWT_REFRESH_SECRET`: String rahasia untuk enkripsi token JWT.
      - `FRONTEND_URL`: URL aplikasi frontend (default: `http://localhost:5173`).
+     - `RABBITMQ_URL` & `RABBITMQ_EXCHANGE`: Event bus notifikasi Telegram (contoh: `amqp://localhost:5672` / `erad.events`). Kosongkan untuk mode dev tanpa notifikasi (publish dilewati + warning).
    - **Frontend (`apps/interfaces/.env`)**:
      - `VITE_API_BASE_URL`: URL endpoint REST API backend (default: `http://localhost:3000`).
 
@@ -229,11 +244,13 @@ Seluruh endpoint backend dapat diakses secara langsung (*unversioned*) pada root
 | `POST` | `/auth/logout` | Cookie | Mencabut refresh token di database dan menghapus cookie |
 | `GET` | `/auth/me` | Bearer Token | Mengambil data profil pengguna yang sedang login |
 | `POST` / `PATCH` | `/auth/change-password` | Bearer Token | Mengubah password akun pengguna yang sedang login |
+| `POST` | `/auth/forgot-password` | Public | Minta OTP reset password ke Telegram (respons generik) |
+| `POST` | `/auth/reset-password` | Public | Reset password via OTP 6 digit |
 
 ### 3. User Management Module
 | Method | Endpoint | Auth | Role | Deskripsi |
 | :--- | :--- | :--- | :--- | :--- |
-| `POST` | `/users` | Bearer Token | `ADMIN` | Registrasi pengguna baru oleh admin dengan initial password |
+| `POST` | `/users` | Bearer Token | `ADMIN` | Registrasi pengguna baru oleh admin dengan initial password; field opsional `telegramId`/`username` untuk tujuan DM notifikasi invite |
 | `GET` | `/users` | Bearer Token | `ADMIN` | Mengambil daftar seluruh pengguna dashboard |
 | `GET` | `/users/:id` | Bearer Token | `ADMIN`, `COORDINATOR` | Mengambil rincian detail akun pengguna |
 | `PATCH` | `/users/:id` | Bearer Token | `ADMIN` | Mengubah profil, status aktif/suspend, atau role pengguna |

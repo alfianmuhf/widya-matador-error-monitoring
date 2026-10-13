@@ -67,8 +67,7 @@ await recordLog({
     before: { location: "Yogyakarta" },
     after: { location: "Probowangi" },
   },
-});
-```
+}
 
 ### Pola Standar Ringkasan Perubahan:
 - **Perubahan Nilai / Status**: `${field}: ${lama} → ${baru}`  
@@ -133,3 +132,36 @@ eventSource.addEventListener("log_created", (event) => {
   setLogs((prev) => [newLog, ...prev]);
 });
 ```
+
+---
+## 6. Format Log Error Webhook
+
+Ketika publish event ke RabbitMQ gagal, sistem mencatat log dengan format berikut:
+
+**action**: `ERROR`
+**entityType**: `Webhook`
+**actor**: `Sistem`
+**entityId**: `deliveryId` (uuid pesan)
+**details** berisi:
+- **identifier**: `routingKey` (string routing key event)
+- **changeSummary**: `gagal publish event '<routingKey>' ke RabbitMQ: <pesan error>`
+
+Contoh lengkap pembentukan log:
+```javascript
+await recordLog({
+  actor: "Sistem",
+  actorUserId: null,
+  action: "ERROR",
+  deleteAction: "NONE",
+  entityType: "Webhook",
+  entityId: "c1f7b7f1-88bc-4eb7-a720-3b9508bc5c6d",
+  details: {
+    identifier: "otp.password_reset",
+    changeSummary: "gagal publish event 'otp.password_reset' ke RabbitMQ: Connection refused",
+    routingKey: "otp.password_reset",
+    deliveryId: "c1f7b7f1-88bc-4eb7-a720-3b9508bc5c6d",
+  },
+});
+```
+
+---

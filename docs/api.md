@@ -1,4 +1,4 @@
-# API Documentation — After-Sales Monitoring System (ERAD)
+# API Documentation â€” After-Sales Monitoring System (ERAD)
 
 Dokumentasi teknis resmi Application Programming Interface (API) untuk **Error Report Automation Dashboard (ERAD) / Load Scanner After-Sales Monitoring Platform**.
 
@@ -7,9 +7,9 @@ Dokumentasi teknis resmi Application Programming Interface (API) untuk **Error R
 
 ---
 
-## 🌐 Protokol Komunikasi & Arsitektur Jaringan
+## ðŸŒ Protokol Komunikasi & Arsitektur Jaringan
 
-Sistem ini menerapkan dua protokol komunikasi utama melalui HTTP standar:
+Sistem ini menerapkan **tiga protokol komunikasi** utama:
 
 1. **REST API (Representational State Transfer)**:
    - Digunakan untuk operasi transaksional CRUD standar, autentikasi, filtering data, manipulasi tiket, serta streaming file unduhan binary (Excel `.xlsx` dan PDF `.pdf`).
@@ -22,7 +22,15 @@ Sistem ini menerapkan dua protokol komunikasi utama melalui HTTP standar:
      - `GET /tickets/stream`: Menyiarkan event pembuatan tiket baru (`ticket_created`), pembaruan status (`ticket_updated`), dan penambahan komentar (`ticket_comment_added`).
      - `GET /audit-logs/stream`: Menyiarkan event rekam jejak audit log (`log_created`) seketika saat aksi sistem terjadi.
 
-3. **Catatan Arsitektur: Mengapa SSE, Bukan WebSocket?**:
+3. **AMQP (RabbitMQ)**:
+   - Outbound event bus, bukan HTTP, tidak dipanggil client/browser.
+   - `error-service` mempublish event ke exchange `erad.events` (topic, durable) â†’ queue `erad.telegram.notify` (+ dead-letter queue `erad.telegram.notify.dlx`) â†’ consumer workflow n8n â†’ Bot API Telegram.
+   - Port 5672 (AMQP) dan 15672 (management UI).
+   - Aktif hanya bila env `RABBITMQ_URL` diisi; tanpa itu publish dilewati dengan warning.
+
+**Kontrak lengkap event + contoh payload:** `docs/webhook-telegram/README.md`; **panduan workflow n8n:** `docs/webhook-telegram/n8n-setup.md`.
+
+4. **Catatan Arsitektur: Mengapa SSE, Bukan WebSocket?**:
    - **Karakteristik Kebutuhan**: Kebutuhan data real-time pada dashboard monitoring after-sales adalah *server push* (server memberitahu dashboard jika ada tiket atau log baru dari bot/lapangan). Tidak diperlukan komunikasi *bidirectional* frekuensi tinggi seperti pada game multipemain atau video call.
    - **Keandalan & Reconnection Bawaan**: SSE didukung secara native oleh browser melalui antarmuka W3C standard `EventSource` dengan mekanisme *automatic reconnection* bawaan jika koneksi terputus tanpa memerlukan library pihak ketiga yang berat.
    - **Firewall & Corporate Proxy Friendly**: SSE berjalan murni di atas koneksi HTTP biasa (Port 80/443), sehingga tidak akan diblokir oleh firewall kantor atau reverse proxy yang kerap memutus koneksi protokol WebSocket (`ws://` / `wss://`).
@@ -30,7 +38,7 @@ Sistem ini menerapkan dua protokol komunikasi utama melalui HTTP standar:
 
 ---
 
-## 📋 Tabel Direktori Endpoint & Protokol (Master API Directory)
+## ðŸ“‹ Tabel Direktori Endpoint & Protokol (Master API Directory)
 
 Tabel berikut menyajikan seluruh endpoint yang tersedia pada sistem, metode HTTP, protokol yang digunakan, serta batasan izin peran (*role permissions*):
 
@@ -44,70 +52,72 @@ Tabel berikut menyajikan seluruh endpoint yang tersedia pada sistem, metode HTTP
 | 6 | **Auth** | REST API | `POST` | `/auth/logout` | Terautentikasi | Hapus cookie refresh token & cabut sesi |
 | 7 | **Auth** | REST API | `GET` | `/auth/me` | Terautentikasi | Ambil profil pengguna yang sedang login |
 | 8 | **Auth** | REST API | `POST`, `PATCH` | `/auth/change-password` | Terautentikasi | Ganti password akun sendiri (aktivasi akun invited) |
-| 9 | **Users** | REST API | `POST` | `/users` | `admin` | Buat akun pengguna baru (status awal: `invited`) |
-| 10 | **Users** | REST API | `GET` | `/users` | `admin`, `coordinator` | Ambil daftar seluruh pengguna dashboard (read-only coordinator) |
-| 11 | **Users** | REST API | `GET` | `/users/:id` | `admin`, `coordinator` | Ambil detail satu pengguna |
-| 12 | **Users** | REST API | `PATCH`, `PUT` | `/users/:id` | `admin` | Ubah data pengguna (status hanya `active`/`suspended`) |
-| 13 | **Users** | REST API | `DELETE` | `/users/:id` | `admin` | Hapus pengguna dashboard |
-| 14 | **Telegram** | REST API | `POST` | `/telegram-users` | `admin` | Tambah user Telegram ke whitelist bot |
-| 15 | **Telegram** | REST API | `GET` | `/telegram-users` | `admin`, `coordinator` | Daftar user Telegram yang di-whitelist (read-only coordinator) |
-| 16 | **Telegram** | REST API | `GET` | `/telegram-users/:id` | `admin`, `coordinator` | Detail user Telegram whitelist |
-| 17 | **Telegram** | REST API | `PATCH` | `/telegram-users/:id` | `admin` | Update status/username/divisi user Telegram |
-| 18 | **Telegram** | REST API | `DELETE` | `/telegram-users/:id` | `admin` | Hapus user Telegram dari whitelist |
-| 19 | **Master Client** | REST API | `GET` | `/clients` | Semua Role | Daftar client perusahaan |
-| 20 | **Master Client** | REST API | `POST` | `/clients` | Semua Role | Tambah data client baru |
-| 21 | **Master Client** | REST API | `GET` | `/clients/:id` | Semua Role | Detail client |
-| 22 | **Master Client** | REST API | `PATCH` | `/clients/:id` | Semua Role | Perbarui data client |
-| 23 | **Master Client** | REST API | `DELETE` | `/clients/:id` | Semua Role | Hapus data client |
-| 24 | **Master Lokasi** | REST API | `GET` | `/locations` | Semua Role | Daftar lokasi operasional site |
-| 25 | **Master Lokasi** | REST API | `POST` | `/locations` | Semua Role | Tambah lokasi baru |
-| 26 | **Master Lokasi** | REST API | `GET` | `/locations/:id` | Semua Role | Detail lokasi |
-| 27 | **Master Lokasi** | REST API | `PATCH` | `/locations/:id` | Semua Role | Perbarui data lokasi |
-| 28 | **Master Lokasi** | REST API | `DELETE` | `/locations/:id` | Semua Role | Hapus data lokasi |
-| 29 | **Master Komponen** | REST API | `GET` | `/components` | Semua Role | Daftar master komponen mesin/robot |
-| 30 | **Master Komponen** | REST API | `POST` | `/components` | Semua Role | Tambah komponen baru |
-| 31 | **Master Komponen** | REST API | `GET` | `/components/:id` | Semua Role | Detail komponen |
-| 32 | **Master Komponen** | REST API | `PATCH` | `/components/:id` | Semua Role | Perbarui data komponen |
-| 33 | **Master Komponen** | REST API | `DELETE` | `/components/:id` | Semua Role | Hapus data komponen |
-| 34 | **Master Failure** | REST API | `GET` | `/failure-codes` | Semua Role | Daftar failure code kerusakan |
-| 35 | **Master Failure** | REST API | `POST` | `/failure-codes` | Semua Role | Tambah failure code baru |
-| 36 | **Master Failure** | REST API | `GET` | `/failure-codes/:id` | Semua Role | Detail failure code |
-| 37 | **Master Failure** | REST API | `PATCH` | `/failure-codes/:id` | Semua Role | Perbarui data failure code |
-| 38 | **Master Failure** | REST API | `DELETE` | `/failure-codes/:id` | Semua Role | Hapus data failure code |
-| 39 | **Master Asset** | REST API | `GET` | `/assets` | Semua Role | Daftar unit Load Scanner |
-| 40 | **Master Asset** | REST API | `POST` | `/assets` | Semua Role | Tambah unit Load Scanner baru |
-| 41 | **Master Asset** | REST API | `GET` | `/assets/:id` | Semua Role | Detail unit Load Scanner |
-| 42 | **Master Asset** | REST API | `PATCH` | `/assets/:id` | Semua Role | Perbarui unit Load Scanner |
-| 43 | **Master Asset** | REST API | `DELETE` | `/assets/:id` | Semua Role | Hapus unit Load Scanner |
-| 44 | **Tiket** | **SSE Stream** | `GET` | `/tickets/stream` | Semua Role | Real-time live update stream tiket |
-| 45 | **Tiket** | REST API | `GET` | `/tickets` | Semua Role | Ambil daftar tiket dengan filter & paginasi |
-| 46 | **Tiket** | REST API | `GET` | `/tickets/:id` | Semua Role | Detail tiket lengkap riwayat & komentar |
-| 47 | **Tiket** | REST API | `POST` | `/tickets` | Semua Role | Buat tiket baru dari dashboard |
-| 48 | **Tiket** | REST API | `PATCH` | `/tickets/:id` | Semua Role | Update status tiket / penanganan |
-| 49 | **Tiket** | REST API | `POST` | `/tickets/:id/comments` | Semua Role | Tambah catatan penanganan ke tiket |
-| 50 | **Tiket** | REST API | `POST` | `/tickets/:id/claim` | Software / Admin | Klaim tiket oleh tim Software (klaim awal jadi Leader) |
-| 51 | **Tiket** | REST API | `GET` | `/tickets/:id/assignees` | Semua Role | Ambil daftar tim penanganan tiket |
-| 52 | **Tiket** | REST API | `POST` | `/tickets/:id/assignees` | Leader / Admin | Tambah anggota tim penanganan tiket |
-| 53 | **Tiket** | REST API | `PATCH`, `PUT` | `/tickets/:id/assignees/:assigneeId` | Leader / Admin | Ubah data anggota tim penanganan tiket |
-| 54 | **Tiket** | REST API | `PATCH` | `/tickets/:id/leader` | Leader / Admin | Alihkan kepemimpinan tiket ke anggota lain |
-| 55 | **Tiket** | REST API | `DELETE` | `/tickets/:id/assignees/:assigneeId` | Leader / Admin / Self | Hapus anggota dari tim penanganan tiket |
-| 56 | **Tiket** | REST API | `GET` | `/tickets/:id/history` | Semua Role | Linimasa riwayat versi tiket |
-| 57 | **Tiket** | REST API | `GET` | `/tickets/:id/history/:version` | Semua Role | Detail snapshot versi riwayat tiket tertentu |
-| 58 | **Manajemen Tiket** | REST API | `GET` | `/ticket-management` | `coordinator` | Ambil tiket khusus yang dikelola coordinator (Aftersales: open & dibuat dirinya; Software: escalated & assigned) |
-| 59 | **Manajemen Tiket** | REST API | `PATCH` | `/ticket-management/:id` | `coordinator` | Update status & tindakan tiket dari menu manajemen tiket |
-| 60 | **Manajemen Tiket** | REST API | `POST` | `/ticket-management/:id/assignees` | `coordinator` | Tambah anggota tim software ke `ticket_assignees` |
-| 61 | **Manajemen Tiket** | REST API | `DELETE` | `/ticket-management/:id/assignees/:assigneeId` | `coordinator` | Hapus anggota tim software dari `ticket_assignees` |
-| 62 | **Export** | REST API | `GET` | `/exports/excel`, `/tickets/export/excel` | Semua Role | Download rekapitulasi file Excel (`.xlsx`) |
-| 63 | **Export** | REST API | `GET` | `/exports/pdf`, `/tickets/export/pdf` | Semua Role | Download rekapitulasi file PDF (`.pdf`) |
-| 64 | **Audit Log** | **SSE Stream** | `GET` | `/audit-logs/stream` | Semua Role | Real-time live stream audit log |
-| 65 | **Audit Log** | REST API | `GET` | `/audit-logs` | Semua Role | Daftar rekam jejak audit log |
-| 66 | **Audit Log** | REST API | `GET` | `/audit-logs/:id` | Semua Role | Detail satu rekam jejak audit |
-| 67 | **Ringkasan** | REST API | `GET` | `/summary`, `/ringkasan` | Semua Role | KPI, tren bulanan, top ranking kerusakan |
-| 68 | **Analitik** | REST API | `GET` | `/error-analytics`, `/analytics` | Semua Role | Pareto, heatmap unit vs komponen, dsb. |
+| 9 | **Auth** | REST API | `POST` | `/auth/forgot-password` | Publik | Kirim OTP 6 digit ke Telegram untuk reset password (tidak membocorken existence email) |
+| 10 | **Auth** | REST API | `POST` | `/auth/reset-password` | Publik | Verifikasi OTP dan update password; hapus refresh token, reset lockout |
+| 11 | **Users** | REST API | `POST` | `/users` | `admin` | Buat akun pengguna baru (status awal: `invited`) |
+| 12 | **Users** | REST API | `GET` | `/users` | `admin`, `coordinator` | Ambil daftar seluruh pengguna dashboard (read-only coordinator) |
+| 13 | **Users** | REST API | `GET` | `/users/:id` | `admin`, `coordinator` | Ambil detail satu pengguna |
+| 14 | **Users** | REST API | `PATCH`, `PUT` | `/users/:id` | `admin` | Ubah data pengguna (status hanya `active`/`suspended`) |
+| 15 | **Users** | REST API | `DELETE` | `/users/:id` | `admin` | Hapus pengguna dashboard |
+| 16 | **Telegram** | REST API | `POST` | `/telegram-users` | `admin` | Tambah user Telegram ke whitelist bot |
+| 17 | **Telegram** | REST API | `GET` | `/telegram-users` | `admin`, `coordinator` | Daftar user Telegram yang di-whitelist (read-only coordinator) |
+| 18 | **Telegram** | REST API | `GET` | `/telegram-users/:id` | `admin`, `coordinator` | Detail user Telegram whitelist |
+| 19 | **Telegram** | REST API | `PATCH` | `/telegram-users/:id` | `admin` | Update status/username/divisi user Telegram |
+| 20 | **Telegram** | REST API | `DELETE` | `/telegram-users/:id` | `admin` | Hapus user Telegram dari whitelist |
+| 21 | **Master Client** | REST API | `GET` | `/clients` | Semua Role | Daftar client perusahaan |
+| 22 | **Master Client** | REST API | `POST` | `/clients` | Semua Role | Tambah data client baru |
+| 23 | **Master Client** | REST API | `GET` | `/clients/:id` | Semua Role | Detail client |
+| 24 | **Master Client** | REST API | `PATCH` | `/clients/:id` | Semua Role | Perbarui data client |
+| 25 | **Master Client** | REST API | `DELETE` | `/clients/:id` | Semua Role | Hapus data client |
+| 26 | **Master Lokasi** | REST API | `GET` | `/locations` | Semua Role | Daftar lokasi operasional site |
+| 27 | **Master Lokasi** | REST API | `POST` | `/locations` | Semua Role | Tambah lokasi baru |
+| 28 | **Master Lokasi** | REST API | `GET` | `/locations/:id` | Semua Role | Detail lokasi |
+| 29 | **Master Lokasi** | REST API | `PATCH` | `/locations/:id` | Semua Role | Perbarui data lokasi |
+| 30 | **Master Lokasi** | REST API | `DELETE` | `/locations/:id` | Semua Role | Hapus data lokasi |
+| 31 | **Master Komponen** | REST API | `GET` | `/components` | Semua Role | Daftar master komponen mesin/robot |
+| 32 | **Master Komponen** | REST API | `POST` | `/components` | Semua Role | Tambah komponen baru |
+| 33 | **Master Komponen** | REST API | `GET` | `/components/:id` | Semua Role | Detail komponen |
+| 34 | **Master Komponen** | REST API | `PATCH` | `/components/:id` | Semua Role | Perbarui data komponen |
+| 35 | **Master Komponen** | REST API | `DELETE` | `/components/:id` | Semua Role | Hapus data komponen |
+| 36 | **Master Failure** | REST API | `GET` | `/failure-codes` | Semua Role | Daftar failure code kerusakan |
+| 37 | **Master Failure** | REST API | `POST` | `/failure-codes` | Semua Role | Tambah failure code baru |
+| 38 | **Master Failure** | REST API | `GET` | `/failure-codes/:id` | Semua Role | Detail failure code |
+| 39 | **Master Failure** | REST API | `PATCH` | `/failure-codes/:id` | Semua Role | Perbarui data failure code |
+| 40 | **Master Failure** | REST API | `DELETE` | `/failure-codes/:id` | Semua Role | Hapus data failure code |
+| 41 | **Master Asset** | REST API | `GET` | `/assets` | Semua Role | Daftar unit Load Scanner |
+| 42 | **Master Asset** | REST API | `POST` | `/assets` | Semua Role | Tambah unit Load Scanner baru |
+| 43 | **Master Asset** | REST API | `GET` | `/assets/:id` | Semua Role | Detail unit Load Scanner |
+| 44 | **Master Asset** | REST API | `PATCH` | `/assets/:id` | Semua Role | Perbarui unit Load Scanner |
+| 45 | **Master Asset** | REST API | `DELETE` | `/assets/:id` | Semua Role | Hapus unit Load Scanner |
+| 46 | **Tiket** | **SSE Stream** | `GET` | `/tickets/stream` | Semua Role | Real-time live update stream tiket |
+| 47 | **Tiket** | REST API | `GET` | `/tickets` | Semua Role | Ambil daftar tiket dengan filter & paginasi |
+| 48 | **Tiket** | REST API | `GET` | `/tickets/:id` | Semua Role | Detail tiket lengkap riwayat & komentar |
+| 49 | **Tiket** | REST API | `POST` | `/tickets` | Semua Role | Buat tiket baru dari dashboard |
+| 50 | **Tiket** | REST API | `PATCH` | `/tickets/:id` | Semua Role | Update status tiket / penanganan |
+| 51 | **Tiket** | REST API | `POST` | `/tickets/:id/comments` | Semua Role | Tambah catatan penanganan ke tiket |
+| 52 | **Tiket** | REST API | `POST` | `/tickets/:id/claim` | Software / Admin | Klaim tiket oleh tim Software (klaim awal jadi Leader) |
+| 53 | **Tiket** | REST API | `GET` | `/tickets/:id/assignees` | Semua Role | Ambil daftar tim penanganan tiket |
+| 54 | **Tiket** | REST API | `POST` | `/tickets/:id/assignees` | Leader / Admin | Tambah anggota tim penanganan tiket |
+| 55 | **Tiket** | REST API | `PATCH`, `PUT` | `/tickets/:id/assignees/:assigneeId` | Leader / Admin | Ubah data anggota tim penanganan tiket |
+| 56 | **Tiket** | REST API | `PATCH` | `/tickets/:id/leader` | Leader / Admin | Alihkan kepemimpinan tiket ke anggota lain |
+| 57 | **Tiket** | REST API | `DELETE` | `/tickets/:id/assignees/:assigneeId` | Leader / Admin / Self | Hapus anggota dari tim penanganan tiket |
+| 58 | **Tiket** | REST API | `GET` | `/tickets/:id/history` | Semua Role | Linimasa riwayat versi tiket |
+| 59 | **Tiket** | REST API | `GET` | `/tickets/:id/history/:version` | Semua Role | Detail snapshot versi riwayat tiket tertentu |
+| 60 | **Manajemen Tiket** | REST API | `GET` | `/ticket-management` | `coordinator` | Ambil tiket khusus yang dikelola coordinator (Aftersales: open & dibuat dirinya; Software: escalated & assigned) |
+| 61 | **Manajemen Tiket** | REST API | `PATCH` | `/ticket-management/:id` | `coordinator` | Update status & tindakan tiket dari menu manajemen tiket |
+| 62 | **Manajemen Tiket** | REST API | `POST` | `/ticket-management/:id/assignees` | `coordinator` | Tambah anggota tim software ke `ticket_assignees` |
+| 63 | **Manajemen Tiket** | REST API | `DELETE` | `/ticket-management/:id/assignees/:assigneeId` | `coordinator` | Hapus anggota tim software dari `ticket_assignees` |
+| 64 | **Export** | REST API | `GET` | `/exports/excel`, `/tickets/export/excel` | Semua Role | Download rekapitulasi file Excel (`.xlsx`) |
+| 65 | **Export** | REST API | `GET` | `/exports/pdf`, `/tickets/export/pdf` | Semua Role | Download rekapitulasi file PDF (`.pdf`) |
+| 66 | **Audit Log** | **SSE Stream** | `GET` | `/audit-logs/stream` | Semua Role | Real-time live stream audit log |
+| 67 | **Audit Log** | REST API | `GET` | `/audit-logs` | Semua Role | Daftar rekam jejak audit log |
+| 68 | **Audit Log** | REST API | `GET` | `/audit-logs/:id` | Semua Role | Detail satu rekam jejak audit |
+| 69 | **Ringkasan** | REST API | `GET` | `/summary`, `/ringkasan` | Semua Role | KPI, tren bulanan, top ranking kerusakan |
+| 70 | **Analitik** | REST API | `GET` | `/error-analytics`, `/analytics` | Semua Role | Pareto, heatmap unit vs komponen, dsb. |
 
 ---
 
-## 🔒 Konvensi Umum & Struktur Error Response
+## ðŸ”’ Konvensi Umum & Struktur Error Response
 
 ### 1. Format Respons Sukses (Status Code `200` & `201`)
 ```json
@@ -220,7 +230,7 @@ Mendaftarkan pengguna baru secara mandiri.
 }
 ```
 
-#### ❌ Contoh Input Error & Response: `422 Unprocessable Entity`
+#### âŒ Contoh Input Error & Response: `422 Unprocessable Entity`
 Jika input email tidak valid dan password kurang dari 6 karakter:
 ```json
 // Request Body yang Salah:
@@ -252,7 +262,7 @@ Jika input email tidak valid dan password kurang dari 6 karakter:
 }
 ```
 
-#### ❌ Contoh Error Duplikasi Email: `409 Conflict`
+#### âŒ Contoh Error Duplikasi Email: `409 Conflict`
 Jika email yang didaftarkan sudah ada di sistem:
 ```json
 {
@@ -276,7 +286,7 @@ Jika email yang didaftarkan sudah ada di sistem:
 
 Autentikasi pengguna menggunakan email dan kata sandi. Menerbitkan Access Token (di response body) dan Refresh Token (di HttpOnly Cookie). Dilengkapi proteksi *Account Lockout* setelah 5 kali gagal berturut-turut.
 
-> ℹ️ **Catatan Mekanisme Pengguna Berstatus `invited`:**  
+> â„¹ï¸ **Catatan Mekanisme Pengguna Berstatus `invited`:**  
 > Pengguna yang baru dibuat oleh admin (status: `invited`) **dapat melakukan login** dengan password awal yang diberikan (`[email_prefix]12345`).  
 > Response login akan mengembalikan status akun `"invited"` dan flag `"mustChangePassword": true`. Di sisi frontend, hal ini memicu **dialog/modal paksa ubah password** yang memblokir akses ke fitur dashboard lainnya hingga pengguna berhasil mengganti kata sandi.
 
@@ -328,7 +338,7 @@ Autentikasi pengguna menggunakan email dan kata sandi. Menerbitkan Access Token 
 }
 ```
 
-#### ❌ Contoh Error Password Salah: `401 Unauthorized`
+#### âŒ Contoh Error Password Salah: `401 Unauthorized`
 Menampilkan sisa percobaan login sebelum akun terkunci:
 ```json
 {
@@ -338,7 +348,7 @@ Menampilkan sisa percobaan login sebelum akun terkunci:
 }
 ```
 
-#### ❌ Contoh Error Akun Terkunci (Account Lockout): `423 Locked`
+#### âŒ Contoh Error Akun Terkunci (Account Lockout): `423 Locked`
 Terjadi jika pengguna gagal memasukkan password sebanyak 5 kali berturut-turut:
 ```json
 {
@@ -348,7 +358,7 @@ Terjadi jika pengguna gagal memasukkan password sebanyak 5 kali berturut-turut:
 }
 ```
 
-#### ❌ Contoh Error Akun Dinonaktifkan: `403 Forbidden`
+#### âŒ Contoh Error Akun Dinonaktifkan: `403 Forbidden`
 ```json
 {
   "success": false,
@@ -391,7 +401,7 @@ Menerbitkan Access Token baru menggunakan cookie `refreshToken`. Mendukung pengg
 }
 ```
 
-#### ❌ Contoh Error Refresh Token Kedaluwarsa / Hilang: `401 Unauthorized`
+#### âŒ Contoh Error Refresh Token Kedaluwarsa / Hilang: `401 Unauthorized`
 ```json
 {
   "success": false,
@@ -413,7 +423,7 @@ Menerbitkan Access Token baru menggunakan cookie `refreshToken`. Mendukung pengg
 | **Role Izin** | Semua Pengguna Terautentikasi |
 
 Mengubah kata sandi akun pengguna yang sedang aktif.  
-> 💡 **Aktivasi Akun Otomatis:**  
+> ðŸ’¡ **Aktivasi Akun Otomatis:**  
 > Ketika user berstatus `invited` mengganti passwordnya melalui endpoint ini:
 > 1. Status akun pengguna otomatis diperbarui dari **`"invited"` $\rightarrow$ `"active"`**.
 > 2. Flag **`must_change_password`** disetel menjadi **`false`**.
@@ -451,7 +461,7 @@ Mengubah kata sandi akun pengguna yang sedang aktif.
 }
 ```
 
-#### ❌ Contoh Error Konfirmasi Tidak Cocok: `422 Unprocessable Entity`
+#### âŒ Contoh Error Konfirmasi Tidak Cocok: `422 Unprocessable Entity`
 ```json
 // Request Body yang Salah:
 {
@@ -474,12 +484,111 @@ Mengubah kata sandi akun pengguna yang sedang aktif.
 }
 ```
 
-#### ❌ Contoh Error Password Lama Salah: `400 Bad Request`
+#### âŒ Contoh Error Password Lama Salah: `400 Bad Request`
 ```json
 {
   "success": false,
   "statusCode": 400,
   "message": "Password saat ini tidak sesuai"
+}
+```
+
+---
+
+### `POST /auth/forgot-password`
+
+| Parameter | Spesifikasi |
+|:---|:---|
+| **Protokol** | **REST API** |
+| **HTTP Method** | `POST` |
+| **Endpoint Path** | `/auth/forgot-password` |
+| **Autentikasi** | Tidak perlu (Publik) |
+| **Role Izin** | Publik |
+
+Meminta OTP 6 digit untuk reset password. OTP dikirim via **DM Telegram** ke akun yang pernah di-link saat invite (field opsional `telegramId` di `POST /users`). Link akun↔telegram dan OTP disimpan **in-memory** di proses backend (hilang saat server restart — cukup minta OTP baru).
+
+> 💡 **Respons selalu generik:** endpoint ini merespons sama persis apakah email terdaftar atau tidak — tidak membocorkan keberadaan akun.
+
+#### Request Body Valid
+```json
+{
+  "email": "bruno@erad.id"
+}
+```
+
+#### Response Sukses: `200 OK`
+```json
+{
+  "success": true,
+  "message": "Jika terdaftar, OTP terkirim ke Telegram Anda."
+}
+```
+
+#### Catatan OTP
+- **TTL 5 menit**, maksimal **3 percobaan** verifikasi, dan **sekali pakai** (single-use).
+- Bila `RABBITMQ_URL` tidak dikonfigurasi atau link telegram tidak ada, OTP tidak terkirim — respons tetap generik.
+
+### `POST /auth/reset-password`
+
+| Parameter | Spesifikasi |
+|:---|:---|
+| **Protokol** | **REST API** |
+| **HTTP Method** | `POST` |
+| **Endpoint Path** | `/auth/reset-password` |
+| **Autentikasi** | Tidak perlu (Publik) |
+| **Role Izin** | Publik |
+
+Meriset password menggunakan OTP dari Telegram, **tanpa password lama**. Jika berhasil: `password_hash` diperbarui, `must_change_password` → `false`, lockout (`failed_login_attempts` / `locked_until`) direset, status diaktifkan bila masih `invited` (akun `suspended` tetap `suspended`), dan **semua refresh token dicabut** (paksa login ulang di semua perangkat).
+
+#### Request Body Valid
+```json
+{
+  "email": "bruno@erad.id",
+  "otp": "481920",
+  "newPassword": "passwordBaru123"
+}
+```
+
+#### Response Sukses: `200 OK`
+```json
+{
+  "success": true,
+  "message": "Password berhasil direset. Silakan login dengan password baru."
+}
+```
+
+#### ❌ Contoh Error OTP Salah / Terlalu Banyak Percobaan / Kedaluwarsa: `401 Unauthorized`
+```json
+{
+  "success": false,
+  "statusCode": 401,
+  "message": "OTP salah. Periksa kembali kode dari Telegram."
+}
+```
+> Pesan berbeda per kasus: `"Terlalu banyak percobaan. OTP dibatalkan, minta OTP baru."` dan `"OTP kedaluwarsa. Silakan minta OTP baru."`
+
+#### ❌ Contoh Error OTP Tidak Ditemukan / Sudah Dipakai: `400 Bad Request`
+```json
+{
+  "success": false,
+  "statusCode": 400,
+  "message": "OTP tidak valid atau sudah kedaluwarsa."
+}
+```
+
+#### ❌ Contoh Error Validasi: `422 Unprocessable Entity`
+```json
+// OTP bukan 6 digit angka ATAU newPassword < 6 karakter:
+{
+  "success": false,
+  "statusCode": 422,
+  "message": "Validation Error",
+  "details": [
+    {
+      "field": "otp",
+      "message": "OTP harus 6 digit angka"
+    }
+  ]
 }
 ```
 
@@ -502,14 +611,20 @@ Mendaftarkan akun pengguna dashboard baru.
 * **Password Awal:** Otomatis digenerate dengan pola **nama email sebelum `@` + `12345`** (contoh: `joko@gmail.com` $\rightarrow$ `joko12345`). Nilai `initialPassword` ini dikembalikan di respon agar admin dapat meneruskannya kepada pengguna.
 * **Audit Trail:** Pembuatan akun dicatat lengkap dengan data aktor pembuat di sistem `audit_logs`.
 
+* **telegramId** *(String, opsional, max 50)*: tujuan DM notifikasi invite, tidak disimpan di DB (hanya diverifikasi ringan ke whitelist username).
+* **username** *(String, opsional, max 100)*: tujuan DM notifikasi invite, tidak disimpan di DB, diverifikasi ringan ke whitelist.
+
 #### Request Body Valid
 ```json
 {
   "email": "joko@gmail.com",
   "name": "Joko Susilo",
   "role": "coordinator",
-  "division": "after_sales"
+  "division": "after_sales",
+  "telegramId": "123456789",
+  "username": "joko_d"
 }
+```
 ```
 
 #### Response Sukses: `201 Created`
@@ -533,7 +648,7 @@ Mendaftarkan akun pengguna dashboard baru.
 }
 ```
 
-#### ❌ Contoh Input Error & Response: `422 Unprocessable Entity`
+#### âŒ Contoh Input Error & Response: `422 Unprocessable Entity`
 Jika nama kosong atau role tidak valid:
 ```json
 // Request Body yang Salah:
@@ -565,7 +680,7 @@ Jika nama kosong atau role tidak valid:
 }
 ```
 
-#### ❌ Contoh Akses Ditolak untuk Viewer: `403 Forbidden`
+#### âŒ Contoh Akses Ditolak untuk Viewer: `403 Forbidden`
 Jika pengguna dengan peran `viewer` mencoba membuat akun:
 ```json
 {
@@ -603,7 +718,7 @@ Mengambil daftar seluruh pengguna dashboard dengan paginasi dan filter pencarian
 | **Autentikasi** | `Authorization: Bearer <access_token>` |
 | **Role Izin** | `admin`, `coordinator` (Viewer diblokir) |
 
-#### ❌ Contoh Error Data Tidak Ditemukan: `404 Not Found`
+#### âŒ Contoh Error Data Tidak Ditemukan: `404 Not Found`
 Jika ID pengguna tidak terdaftar:
 ```json
 {
@@ -626,7 +741,7 @@ Jika ID pengguna tidak terdaftar:
 | **Role Izin** | **Hanya `admin`** |
 
 Memperbarui data pengguna (nama, email, role, divisi, atau status akun).
-> ⚠️ **Batasan Nilai Status Akun:**  
+> âš ï¸ **Batasan Nilai Status Akun:**  
 > Status akun pengguna hanya dapat diubah ke opsi **`"active"`** atau **`"suspended"`**. Status pengguna tidak dapat diubah kembali menjadi `"invited"`.
 
 #### Request Body Valid
@@ -659,7 +774,7 @@ Memperbarui data pengguna (nama, email, role, divisi, atau status akun).
 }
 ```
 
-#### ❌ Contoh Error Status Ditolak Menjadi 'invited': `400 Bad Request`
+#### âŒ Contoh Error Status Ditolak Menjadi 'invited': `400 Bad Request`
 Jika mencoba mengirim `"status": "invited"`:
 ```json
 {
@@ -669,7 +784,7 @@ Jika mencoba mengirim `"status": "invited"`:
 }
 ```
 
-#### ❌ Contoh Error Modifikasi Akun Sendiri: `400 Bad Request`
+#### âŒ Contoh Error Modifikasi Akun Sendiri: `400 Bad Request`
 Jika admin/koordinator mencoba mendemosi role atau menonaktifkan status akunnya sendiri:
 ```json
 {
@@ -679,7 +794,7 @@ Jika admin/koordinator mencoba mendemosi role atau menonaktifkan status akunnya 
 }
 ```
 
-#### ❌ Contoh Error Body Kosong: `422 Unprocessable Entity`
+#### âŒ Contoh Error Body Kosong: `422 Unprocessable Entity`
 Jika mengirim body JSON `{}` tanpa perubahan field:
 ```json
 {
@@ -707,7 +822,7 @@ Jika mengirim body JSON `{}` tanpa perubahan field:
 | **Autentikasi** | `Authorization: Bearer <access_token>` |
 | **Role Izin** | **Hanya `admin`** |
 
-#### ❌ Contoh Error Hapus Akun Sendiri: `400 Bad Request`
+#### âŒ Contoh Error Hapus Akun Sendiri: `400 Bad Request`
 ```json
 {
   "success": false,
@@ -721,7 +836,7 @@ Jika mengirim body JSON `{}` tanpa perubahan field:
 ## 4. Telegram Whitelist Module (`/telegram-users`)
 
 Endpoint ini mengelola akun pengguna Telegram yang diizinkan berinteraksi dengan bot notifikasi tiket.  
-> 💡 **Path Alias**: Endpoint ini juga dapat diakses melalui alias path `/whitelist-telegram`.
+> ðŸ’¡ **Path Alias**: Endpoint ini juga dapat diakses melalui alias path `/whitelist-telegram`.
 
 ---
 
@@ -774,7 +889,7 @@ Menambahkan akun Telegram baru ke whitelist bot.
 }
 ```
 
-#### ❌ Contoh Error Validasi Input: `422 Unprocessable Entity`
+#### âŒ Contoh Error Validasi Input: `422 Unprocessable Entity`
 Jika `telegramId` kosong atau divisi tidak valid:
 ```json
 // Request Body yang Salah:
@@ -801,7 +916,7 @@ Jika `telegramId` kosong atau divisi tidak valid:
 }
 ```
 
-#### ❌ Contoh Error Duplikasi Telegram ID: `409 Conflict`
+#### âŒ Contoh Error Duplikasi Telegram ID: `409 Conflict`
 ```json
 {
   "success": false,
@@ -982,7 +1097,7 @@ Mengelola data pelanggan (Client / Mitra Perusahaan).
 | `PATCH` / `PUT` | `/clients/:id` | Edit data client | `{ "name": "PT Sumber Rejeki Baru", "isActive": false }` |
 | `DELETE` | `/clients/:id` | Hapus client | ID UUID |
 
-#### ❌ Contoh Error Foreign Key Constraint pada Penghapusan: `400 Bad Request`
+#### âŒ Contoh Error Foreign Key Constraint pada Penghapusan: `400 Bad Request`
 Jika menghapus client yang masih memiliki aset unit terhubung:
 ```json
 // Request:
@@ -1043,7 +1158,7 @@ Mengelola master kode kerusakan/kesalahan teknis spesifik pada suatu komponen.
 | `PATCH` / `PUT` | `/failure-codes/:id` | Edit failure code | `{ "code": "LID-01A", "description": "LiDAR disconnected", "isActive": true }` |
 | `DELETE` | `/failure-codes/:id` | Hapus failure code | ID UUID |
 
-#### ❌ Contoh Error Duplikasi Kode Failure: `409 Conflict`
+#### âŒ Contoh Error Duplikasi Kode Failure: `409 Conflict`
 ```json
 {
   "success": false,
@@ -1121,7 +1236,7 @@ Mengambil daftar tiket dengan filter multi-kriteria dan pagination.
 * **`sortBy`** *(Enum string, opsional, default `"createdAt"`)*: `"createdAt"`, `"id"`, atau `"ticketId"`.
 * **`sortOrder`** *(Enum string, opsional, default `"desc"`)*: `"asc"` atau `"desc"`.
 
-#### ❌ Contoh Error Query Parameter Input: `422 Unprocessable Entity`
+#### âŒ Contoh Error Query Parameter Input: `422 Unprocessable Entity`
 Jika mengirimkan parameter status yang tidak dikenal:
 ```http
 GET /tickets?status=unknown_status
@@ -1197,7 +1312,7 @@ Membuat tiket baru manual dari antarmuka dashboard.
 }
 ```
 
-#### ❌ Contoh Input Kurang Lengkap: `422 Unprocessable Entity`
+#### âŒ Contoh Input Kurang Lengkap: `422 Unprocessable Entity`
 Jika tidak menyertakan `unitCode` atau `failureCodeId`:
 ```json
 // Request Body yang Salah:
@@ -1237,7 +1352,7 @@ Jika tidak menyertakan `unitCode` atau `failureCodeId`:
 
 Mengambil data detail tiket berdasarkan ID tiket (termasuk unit, client, lokasi, riwayat terkini, leader assignee, dan daftar anggota tim software).
 
-#### ✅ Contoh Respons Sukses: `200 OK`
+#### âœ… Contoh Respons Sukses: `200 OK`
 ```json
 {
   "success": true,
@@ -1272,7 +1387,7 @@ Mengambil data detail tiket berdasarkan ID tiket (termasuk unit, client, lokasi,
 }
 ```
 
-#### ❌ Contoh Error Tiket Tidak Ditemukan: `404 Not Found`
+#### âŒ Contoh Error Tiket Tidak Ditemukan: `404 Not Found`
 ```json
 {
   "success": false,
@@ -1313,7 +1428,7 @@ Memperbarui status penanganan, severity, catatan, atau rincian analisis teknis t
 | **Software** (`division: software`) | **Hanya dapat mengupdate saat status tiket `escalated`** DAN **wajib terdaftar** di `ticket_assignees` tiket bersangkutan. |
 | **Admin** (`role: admin`) | Memiliki akses penuh memperbarui tiket pada kondisi apa pun. |
 
-#### ❌ Contoh Error Status Salah: `422 Unprocessable Entity`
+#### âŒ Contoh Error Status Salah: `422 Unprocessable Entity`
 ```json
 // Request Body yang Salah:
 {
@@ -1334,7 +1449,7 @@ Memperbarui status penanganan, severity, catatan, atau rincian analisis teknis t
 }
 ```
 
-#### ❌ Error Tim Software Saat Status Tiket Bukan 'escalated': `400 Bad Request` / `403 Forbidden`
+#### âŒ Error Tim Software Saat Status Tiket Bukan 'escalated': `400 Bad Request` / `403 Forbidden`
 ```json
 {
   "success": false,
@@ -1343,7 +1458,7 @@ Memperbarui status penanganan, severity, catatan, atau rincian analisis teknis t
 }
 ```
 
-#### ❌ Error Tim Software Belum Terdaftar di Assignees: `403 Forbidden`
+#### âŒ Error Tim Software Belum Terdaftar di Assignees: `403 Forbidden`
 ```json
 {
   "success": false,
@@ -1381,7 +1496,7 @@ Mengambil alih (klaim) tiket yang berstatus `escalated` oleh anggota tim softwar
 }
 ```
 
-#### ❌ Error Klaim Tiket yang Sudah Ber-leader: `409 Conflict`
+#### âŒ Error Klaim Tiket yang Sudah Ber-leader: `409 Conflict`
 ```json
 {
   "success": false,
@@ -1470,7 +1585,7 @@ Atau:
 }
 ```
 
-#### ❌ Contoh Error: Bukan Leader (`403 Forbidden`)
+#### âŒ Contoh Error: Bukan Leader (`403 Forbidden`)
 ```json
 {
   "success": false,
@@ -1545,7 +1660,7 @@ Menghapus keikutsertaan anggota dari tiket.
 
 Mengambil seluruh linimasa riwayat perubahan tiket (`ticket_history`) dari versi awal (v0) hingga versi terkini.
 
-#### ✅ Contoh Respons Sukses: `200 OK`
+#### âœ… Contoh Respons Sukses: `200 OK`
 ```json
 {
   "success": true,
@@ -1722,7 +1837,7 @@ Mengambil daftar tiket yang menjadi tanggung jawab koordinator yang sedang login
 }
 ```
 
-#### ❌ Contoh Akses Ditolak untuk Non-Coordinator: `403 Forbidden`
+#### âŒ Contoh Akses Ditolak untuk Non-Coordinator: `403 Forbidden`
 ```json
 {
   "success": false,
@@ -1837,7 +1952,7 @@ Menambahkan anggota tim software baru ke dalam tiket (`ticket_assignees`).
 }
 ```
 
-#### ❌ Contoh Anggota Sudah Terdaftar: `409 Conflict`
+#### âŒ Contoh Anggota Sudah Terdaftar: `409 Conflict`
 ```json
 {
   "success": false,
@@ -1846,7 +1961,7 @@ Menambahkan anggota tim software baru ke dalam tiket (`ticket_assignees`).
 }
 ```
 
-#### ❌ Contoh Tiket Belum Escalated: `403 Forbidden`
+#### âŒ Contoh Tiket Belum Escalated: `403 Forbidden`
 ```json
 {
   "success": false,
@@ -1935,7 +2050,7 @@ Menyediakan metrik agregasi untuk visualisasi statistik kartu dan grafik pada Da
 | **Autentikasi** | `Authorization: Bearer <access_token>` |
 | **Role Izin** | **Semua Role** (`admin`, `coordinator`, `viewer`) |
 
-#### ❌ Contoh Error Filter timeRange Tidak Valid: `422 Unprocessable Entity`
+#### âŒ Contoh Error Filter timeRange Tidak Valid: `422 Unprocessable Entity`
 Jika mengirim query filter `?timeRange=10tahun`:
 ```json
 {

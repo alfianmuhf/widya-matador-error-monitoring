@@ -3,7 +3,29 @@ import prisma from "../../../config/prisma.js";
 import * as ticketRepo from "../ticket.repository.js";
 import { ticketEvents } from "../ticket.events.js";
 import { recordLog } from "../../audit-log/audit-log.service.js";
+import { publish as publishWebhook } from "../../webhook/webhook.publisher.js";
 import { formatTicket } from "./ticket-format.service.js";
+
+/**
+ * Resolve tujuan grup Telegram untuk notifikasi tiket (klaim).
+ * Prioritas: grup client+location → location → client → null (fallback n8n).
+ */
+const resolveClaimGroup = async (ticket) => {
+  const clientId = ticket.asset?.client_id || ticket.asset?.client?.id || null;
+  const locationId = ticket.asset?.location_id || ticket.asset?.location?.id || null;
+
+  const findGroup = async (where) => {
+    const g = await prisma.telegram_groups.findFirst({ where: { is_active: true, ...where } });
+    return g?.chat_id || null;
+  };
+
+  let chatId = null;
+  if (clientId && locationId) chatId = await findGroup({ client_id: clientId, location_id: locationId });
+  if (!chatId && locationId) chatId = await findGroup({ location_id: locationId, client_id: null });
+  if (!chatId && clientId) chatId = await findGroup({ client_id: clientId, location_id: null });
+
+  return { chatId, clientId, locationId };
+};
 
 /**
  * Get all assignees of a ticket
@@ -185,6 +207,21 @@ export const claimTicket = async (ticketId, actor) => {
 
   ticketEvents.notifyTicketUpdated(formatted);
 
+  // Notifikasi grup: "tiket diklaim oleh X" (grup = client/location tiket)
+  const group = await resolveClaimGroup(ticket);
+  publishWebhook("ticket.claimed", {
+    actor: { userId: actorUser?.id || null, telegramId: actorTelegram?.telegram_id || null, name: actorName },
+    data: {
+      ticketId,
+      claimer: {
+        name: actorName,
+        userId: actorUser?.id || null,
+        telegramId: actorTelegram?.telegram_id || null,
+      },
+      group,
+    },
+  });
+
   return formatted;
 };
 
@@ -344,6 +381,23 @@ export const addAssignee = async (ticketId, data, actor) => {
   });
 
   ticketEvents.notifyTicketUpdated(formatted);
+
+  // Notifikasi DM ke anggota baru saja (tanpa pesan grup) — 409 duplikat
+  // sudah ditolak di atas, jadi event ini tidak pernah dobel per tiket.
+  publishWebhook("ticket.member_added", {
+    actor: { userId: actor.id || null, telegramId: actor.telegram_user_id || null, name: actorName },
+    data: {
+      ticketId,
+      addedBy: actorName,
+      addedMember: {
+        name: targetName,
+        userId: targetUser?.id || null,
+        telegram: targetTelegram
+          ? { telegramId: targetTelegram.telegram_id, username: targetTelegram.username || null }
+          : null,
+      },
+    },
+  });
 
   return {
     message: `Anggota tim software '${targetName}' berhasil ditambahkan ke tiket`,

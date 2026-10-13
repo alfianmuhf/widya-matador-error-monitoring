@@ -7,6 +7,8 @@ import {
   verifyRefreshToken,
   getTokenExpiryDate,
 } from "../../utils/jwt.js";
+import { publish as publishWebhook } from "../webhook/webhook.publisher.js";
+import { getTelegramLink, createOtp, verifyOtp } from "./otp.store.js";
 
 const MAX_FAILED_ATTEMPTS = 5;
 const LOCKOUT_DURATION_MINUTES = 15;
@@ -353,5 +355,53 @@ export const changePassword = async (userId, { currentPassword, newPassword }, m
     accessToken,
     refreshToken,
   };
+};
+
+/**
+ * Lupa password: kirim OTP 6 digit ke Telegram yang terlink (in-memory).
+ * Respons SELALU generik — tidak membocorkan apakah email terdaftar.
+ */
+export const forgotPassword = async ({ email }) => {
+  const link = getTelegramLink(email);
+  if (link?.telegramId) {
+    const otp = createOtp(email);
+    publishWebhook("otp.password_reset", {
+      data: {
+        telegram: link,
+        otp,
+        expiresInMinutes: 5,
+      },
+    });
+  }
+  return { message: "Jika terdaftar, OTP terkirim ke Telegram Anda." };
+};
+
+/**
+ * Reset password via OTP: verifikasi OTP sekali pakai → update hash →
+ * clear lockout → revoke semua refresh token (paksa login ulang).
+ */
+export const resetPassword = async ({ email, otp, newPassword }) => {
+  const check = verifyOtp(email, otp);
+  if (!check.ok) {
+    const errors = {
+      wrong: [401, "OTP salah. Periksa kembali kode dari Telegram."],
+      too_many: [401, "Terlalu banyak percobaan. OTP dibatalkan, minta OTP baru."],
+      expired: [401, "OTP kedaluwarsa. Silakan minta OTP baru."],
+      not_found: [400, "OTP tidak valid atau sudah kedaluwarsa."],
+    };
+    const [status, message] = errors[check.reason];
+    throw createError(status, message);
+  }
+
+  const user = await authRepository.findUserByEmail(email);
+  if (!user) {
+    throw createError(404, "Data pengguna tidak ditemukan");
+  }
+
+  const hashedPassword = await hashPassword(newPassword);
+  await authRepository.resetPasswordWithOtp(user.id, hashedPassword, user.status === "invited");
+  await authRepository.revokeAllUserTokens(user.id);
+
+  return { message: "Password berhasil direset. Silakan login dengan password baru." };
 };
 

@@ -1,14 +1,17 @@
 import createError from "http-errors";
 import * as userRepository from "./user.repository.js";
+import prisma from "../../config/prisma.js";
 import { hashPassword } from "../../utils/hash.js";
 import { recordLog } from "../audit-log/audit-log.service.js";
+import { publish as publishWebhook } from "../webhook/webhook.publisher.js";
+import { linkTelegram } from "../auth/otp.store.js";
 
 /**
  * Admin creates a new user with generated initial password:
  * Format: [email_prefix]12345 (nama email sebelum tanda @ diikuti '12345')
  * Example: joko@gmail.com -> joko12345
  */
-export const createUser = async ({ email, name, role, division }, adminUser = null) => {
+export const createUser = async ({ email, name, role, division, telegramId, username }, adminUser = null) => {
   const adminId = adminUser?.id || null;
 
   // 1. Check if email already registered
@@ -38,6 +41,27 @@ export const createUser = async ({ email, name, role, division }, adminUser = nu
     must_change_password: true,
   });
 
+  // 4b. Resolusi telegram (opsional) — verifikasi ringan ke whitelist bila ada
+  const teleId = telegramId ? String(telegramId).trim() : null;
+  const teleUsername = username ? String(username).replace(/^@/, "").trim() : null;
+  let telegram = null;
+  if (teleId || teleUsername) {
+    const whitelisted = await prisma.telegram_users.findFirst({
+      where: {
+        OR: [
+          ...(teleId ? [{ telegram_id: teleId }] : []),
+          ...(teleUsername ? [{ username: teleUsername }] : []),
+        ],
+      },
+    });
+    telegram = {
+      telegramId: whitelisted?.telegram_id || teleId,
+      username: whitelisted?.username || teleUsername || null,
+      whitelisted: Boolean(whitelisted),
+    };
+    linkTelegram(email, telegram); // link in-memory untuk reset password via OTP
+  }
+
   // 5. Track who created the account in audit log
   await recordLog({
     actor: adminUser?.email || adminUser?.name || "Sistem",
@@ -55,6 +79,23 @@ export const createUser = async ({ email, name, role, division }, adminUser = nu
       role: newUser.role,
       division: newUser.division,
       status: newUser.status,
+    },
+  });
+
+  // 6. Notifikasi invite via Telegram (DM ke yang diinvite; bila tidak ada,
+  //    n8n kirim fallback ke grup admin). Password awal TIDAK ikut dikirim.
+  publishWebhook("user.invited", {
+    actor: { id: adminId, email: adminUser?.email || null, name: adminUser?.name || null },
+    data: {
+      user: {
+        id: newUser.id,
+        email: newUser.email,
+        name: newUser.name,
+        role: newUser.role,
+        division: newUser.division,
+        status: newUser.status,
+      },
+      telegram,
     },
   });
 

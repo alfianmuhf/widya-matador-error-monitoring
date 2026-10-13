@@ -356,6 +356,73 @@ export default function TicketDetailDrawer({ ticket, onClose }) {
             </div>
           </div>
 
+          {/* CARD INFORMASI PENANGGUNG JAWAB AFTERSALES (JIKA TERSEDIA) */}
+          {ticket.aftersalesUser && (
+            <div
+              style={{
+                backgroundColor: "#eff6ff",
+                borderRadius: "12px",
+                border: "1px solid #bfdbfe",
+                padding: "14px 18px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: "12px",
+                boxShadow: "0 1px 2px rgba(37, 99, 235, 0.05)",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <div
+                  style={{
+                    width: "36px",
+                    height: "36px",
+                    borderRadius: "8px",
+                    backgroundColor: "#dbeafe",
+                    color: "#1d4ed8",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: "18px",
+                    flexShrink: 0,
+                  }}
+                >
+                  🛠️
+                </div>
+                <div>
+                  <div style={{ fontSize: "11px", fontWeight: 700, color: "#1d4ed8", textTransform: "uppercase" }}>
+                    Penanggung Jawab Aftersales
+                  </div>
+                  <div style={{ fontSize: "13.5px", fontWeight: 750, color: "#0f172a", marginTop: "1px" }}>
+                    {ticket.aftersalesUser.name}{" "}
+                    <span style={{ fontSize: "12px", color: "#64748b", fontWeight: 500 }}>
+                      ({ticket.aftersalesUser.email})
+                    </span>
+                  </div>
+                  {ticket.aftersalesUser.telegramUser?.username && (
+                    <div style={{ fontSize: "11.5px", color: "#0284c7", marginTop: "1px" }}>
+                      Telegram: @{ticket.aftersalesUser.telegramUser.username}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <span
+                style={{
+                  fontSize: "11px",
+                  fontWeight: 700,
+                  padding: "3px 8px",
+                  borderRadius: "6px",
+                  backgroundColor: "#dbeafe",
+                  color: "#1d4ed8",
+                  border: "1px solid #bfdbfe",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                Owner Open
+              </span>
+            </div>
+          )}
+
           {/* CARD 1: DETAIL UPDATE TERAKHIR TIKET */}
           <div
             style={{

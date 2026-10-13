@@ -76,3 +76,41 @@ export const removeManagedAssignee = async (req, res, next) => {
     next(error);
   }
 };
+
+/**
+ * Controller untuk mengalihkan penanggung jawab Aftersales
+ * PATCH /ticket-management/:id/aftersales-lead
+ */
+export const transferManagedAftersalesLead = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const result = await ticketManagementService.transferManagedAftersalesLead(id, req.body, req.user);
+    res.status(200).json({
+      success: true,
+      statusCode: 200,
+      message: "Penanggung jawab Aftersales berhasil dialihkan",
+      data: result,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Controller untuk mengalihkan leader tim software
+ * PATCH /ticket-management/:id/leader
+ */
+export const changeManagedLeader = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const result = await ticketManagementService.changeManagedLeader(id, req.body, req.user);
+    res.status(200).json({
+      success: true,
+      statusCode: 200,
+      message: "Leader tim software berhasil dialihkan",
+      data: result,
+    });
+  } catch (error) {
+    next(error);
+  }
+};

@@ -7,7 +7,6 @@ export default function UpdateTicketModal({ isOpen, onClose, ticket, onSuccess }
   const currentUser = user?.user || user;
   const userDivision = (currentUser?.division || "").toLowerCase();
   const userRole = (currentUser?.role || "").toLowerCase();
-  const isAdmin = userRole === "admin";
 
   const [status, setStatus] = useState("open");
   const [severity, setSeverity] = useState("sedang");

@@ -234,6 +234,23 @@ export const removeAssignee = async (req, res, next) => {
 };
 
 /**
+ * PATCH /tickets/:id/aftersales-lead
+ * Transfer aftersales responsibility to another aftersales user
+ */
+export const transferAftersalesLead = async (req, res, next) => {
+  try {
+    const ticket = await ticketService.transferAftersalesLead(req.params.id, req.body, req.user);
+    res.status(200).json({
+      success: true,
+      message: "Penanggung jawab Aftersales berhasil dialihkan",
+      data: ticket,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
  * GET /tickets/stream
  * Server-Sent Events (SSE) endpoint for real-time ticket updates and live open count
  */

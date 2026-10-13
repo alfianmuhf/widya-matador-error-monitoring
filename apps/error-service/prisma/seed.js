@@ -11,128 +11,56 @@ async function main() {
   console.log("==================================================\n");
 
   // =========================================================================
-  // 1. SEED USERS (1 Admin [active] + 3 Coordinator/Viewer [invited])
+  // 1. SEED TELEGRAM USERS (Whitelist Telegram)
   // =========================================================================
-  console.log("👤 [1/4] Seeding Users...");
-
-  const usersToSeed = [
-    // 1 Admin (Status Active)
-    {
-      email: process.env.ADMIN_EMAIL || "admin@widya.com",
-      name: process.env.ADMIN_NAME || "Super Admin",
-      role: "admin",
-      division: "none",
-      status: "active",
-      must_change_password: false,
-      rawPassword: adminPassword,
-    },
-    // 3 Coordinator / Viewer (Status Invited, Initial Password [prefix]12345)
-    {
-      email: "bruno@erad.id",
-      name: "Bruno Aftersales",
-      role: "coordinator",
-      division: "after_sales",
-      status: "invited",
-      must_change_password: true,
-      rawPassword: "bruno12345",
-    },
-    {
-      email: "siti@erad.id",
-      name: "Siti Software Leader",
-      role: "coordinator",
-      division: "software",
-      status: "invited",
-      must_change_password: true,
-      rawPassword: "siti12345",
-    },
-    {
-      email: "dimas@erad.id",
-      name: "Dimas Software Viewer",
-      role: "viewer",
-      division: "software",
-      status: "invited",
-      must_change_password: true,
-      rawPassword: "dimas12345",
-    },
-  ];
-
-  const seededUsers = [];
-  for (const u of usersToSeed) {
-    const passwordHash = await bcrypt.hash(u.rawPassword, saltRounds);
-
-    const userRecord = await prisma.users.upsert({
-      where: { email: u.email },
-      update: {
-        name: u.name,
-        role: u.role,
-        division: u.division,
-        status: u.status,
-        password_hash: passwordHash,
-        must_change_password: u.must_change_password,
-        failed_login_attempts: 0,
-        locked_until: null,
-      },
-      create: {
-        email: u.email,
-        name: u.name,
-        role: u.role,
-        division: u.division,
-        status: u.status,
-        password_hash: passwordHash,
-        must_change_password: u.must_change_password,
-        failed_login_attempts: 0,
-      },
-    });
-
-    seededUsers.push({ ...userRecord, rawPassword: u.rawPassword });
-    console.log(
-      `   ✓ [${userRecord.role.toUpperCase()}] ${userRecord.name} (${userRecord.email}) - status: ${userRecord.status}`
-    );
-  }
-
-  // =========================================================================
-  // 2. SEED TELEGRAM USERS (5 Akun [status active])
-  // =========================================================================
-  console.log("\n📱 [2/4] Seeding Telegram Whitelist Users (5 akun active)...");
+  console.log("📱 [1/4] Seeding Telegram Whitelist Users (6 akun active)...");
 
   const telegramUsersToSeed = [
     {
+      telegram_id: "123456789",
+      username: "super_admin",
+      full_name: "Super Admin",
+      division: "none",
+      is_active: true,
+    },
+    {
       telegram_id: "682910291",
-      username: "agus_santoso",
-      full_name: "Agus Santoso",
+      username: "bruno_aftersales",
+      full_name: "Bruno Aftersales 1",
       division: "after_sales",
       is_active: true,
     },
     {
       telegram_id: "719283741",
-      username: "budi_pratama",
-      full_name: "Budi Pratama",
+      username: "bayu_aftersales",
+      full_name: "Bayu Aftersales 2",
       division: "after_sales",
       is_active: true,
     },
     {
       telegram_id: "829104829",
-      username: "citra_dewi",
-      full_name: "Citra Dewi",
+      username: "siti_software",
+      full_name: "Siti Software 1",
       division: "software",
       is_active: true,
     },
     {
       telegram_id: "918273645",
-      username: "doni_kurniawan",
-      full_name: "Doni Kurniawan",
+      username: "surya_software",
+      full_name: "Surya Software 2",
       division: "software",
       is_active: true,
     },
     {
       telegram_id: "564738291",
-      username: "eko_prasetyo",
-      full_name: "Eko Prasetyo",
+      username: "dimas_viewer",
+      full_name: "Dimas Viewer",
       division: "none",
       is_active: true,
     },
   ];
 
+  const telegramMap = new Map();
   for (const tg of telegramUsersToSeed) {
     const tgRecord = await prisma.telegram_users.upsert({
       where: { telegram_id: tg.telegram_id },
@@ -150,8 +78,118 @@ async function main() {
         is_active: tg.is_active,
       },
     });
+    telegramMap.set(tg.username, tgRecord);
     console.log(
       `   ✓ [@${tgRecord.username}] ${tgRecord.full_name} (ID: ${tgRecord.telegram_id}) - status: active`
+    );
+  }
+
+  // =========================================================================
+  // 2. SEED USERS (1 Admin + 4 Coordinator + 1 Viewer, ditautkan ke Whitelist Telegram)
+  // =========================================================================
+  console.log("\n👤 [2/4] Seeding Users...");
+
+  const usersToSeed = [
+    // 1 Admin (Status Active)
+    {
+      email: process.env.ADMIN_EMAIL || "admin@widya.com",
+      name: process.env.ADMIN_NAME || "Super Admin",
+      role: "admin",
+      division: "none",
+      status: "active",
+      must_change_password: false,
+      rawPassword: adminPassword,
+      telegramUsername: "super_admin",
+    },
+    // Coordinator Aftersales (2 Akun)
+    {
+      email: "bruno@erad.id",
+      name: "Bruno Aftersales 1",
+      role: "coordinator",
+      division: "after_sales",
+      status: "invited",
+      must_change_password: true,
+      rawPassword: "bruno12345",
+      telegramUsername: "bruno_aftersales",
+    },
+    {
+      email: "bayu@erad.id",
+      name: "Bayu Aftersales 2",
+      role: "coordinator",
+      division: "after_sales",
+      status: "invited",
+      must_change_password: true,
+      rawPassword: "bayu12345",
+      telegramUsername: "bayu_aftersales",
+    },
+    // Coordinator Software (2 Akun)
+    {
+      email: "siti@erad.id",
+      name: "Siti Software 1",
+      role: "coordinator",
+      division: "software",
+      status: "invited",
+      must_change_password: true,
+      rawPassword: "siti12345",
+      telegramUsername: "siti_software",
+    },
+    {
+      email: "surya@erad.id",
+      name: "Surya Software 2",
+      role: "coordinator",
+      division: "software",
+      status: "invited",
+      must_change_password: true,
+      rawPassword: "surya12345",
+      telegramUsername: "surya_software",
+    },
+    // Viewer (1 Akun, divisi none karena aftersales & software hanya dari role coordinator)
+    {
+      email: "dimas@erad.id",
+      name: "Dimas Viewer",
+      role: "viewer",
+      division: "none",
+      status: "invited",
+      must_change_password: true,
+      rawPassword: "dimas12345",
+      telegramUsername: "dimas_viewer",
+    },
+  ];
+
+  const seededUsers = [];
+  for (const u of usersToSeed) {
+    const passwordHash = await bcrypt.hash(u.rawPassword, saltRounds);
+    const linkedTelegram = u.telegramUsername ? telegramMap.get(u.telegramUsername) : null;
+
+    const userRecord = await prisma.users.upsert({
+      where: { email: u.email },
+      update: {
+        name: u.name,
+        role: u.role,
+        division: u.division,
+        status: u.status,
+        password_hash: passwordHash,
+        must_change_password: u.must_change_password,
+        failed_login_attempts: 0,
+        locked_until: null,
+        telegram_user_id: linkedTelegram ? linkedTelegram.id : null,
+      },
+      create: {
+        email: u.email,
+        name: u.name,
+        role: u.role,
+        division: u.division,
+        status: u.status,
+        password_hash: passwordHash,
+        must_change_password: u.must_change_password,
+        failed_login_attempts: 0,
+        telegram_user_id: linkedTelegram ? linkedTelegram.id : null,
+      },
+    });
+
+    seededUsers.push({ ...userRecord, rawPassword: u.rawPassword });
+    console.log(
+      `   ✓ [${userRecord.role.toUpperCase()}] ${userRecord.name} (${userRecord.email}) - telegram: ${linkedTelegram ? `@${linkedTelegram.username}` : "-"} - status: ${userRecord.status}`
     );
   }
 
@@ -394,7 +432,9 @@ async function main() {
   for (const u of allUsers) userByEmail.set(u.email, u);
 
   const brunoUser = userByEmail.get("bruno@erad.id");
+  const bayuUser = userByEmail.get("bayu@erad.id");
   const sitiUser = userByEmail.get("siti@erad.id");
+  const suryaUser = userByEmail.get("surya@erad.id");
   const dimasUser = userByEmail.get("dimas@erad.id");
 
   // Map akun Telegram (Telegram Users)
@@ -402,10 +442,12 @@ async function main() {
   const allTeleUsers = await prisma.telegram_users.findMany();
   for (const tu of allTeleUsers) telegramByUsername.set(tu.username, tu);
 
-  const agusTele = telegramByUsername.get("agus_santoso");
-  const budiTele = telegramByUsername.get("budi_pratama");
-  const citraTele = telegramByUsername.get("citra_dewi");
-  const doniTele = telegramByUsername.get("doni_kurniawan");
+  const brunoTele = telegramByUsername.get("bruno_aftersales");
+  const bayuTele = telegramByUsername.get("bayu_aftersales");
+  const sitiTele = telegramByUsername.get("siti_software");
+  const suryaTele = telegramByUsername.get("surya_software");
+  const dimasTele = telegramByUsername.get("dimas_viewer");
+  const adminTele = telegramByUsername.get("super_admin");
 
   // =========================================================================
   // 4. SEED TICKETS (10 Tiket Beragam: Open dari Tele, History Campur Web & Tele)
@@ -413,7 +455,7 @@ async function main() {
   console.log("\n🎫 [4/5] Seeding 10 Tickets (Open via Telegram, History Campur Web & Tele)...");
 
   const ticketsDefinition = [
-    // 1. OPEN (v0) - Dilaporkan via Telegram oleh Agus Santoso
+    // 1. OPEN (v0) - Dilaporkan via Telegram oleh Bruno Aftersales 1
     {
       id: "ERR-20261009-0001",
       unitCode: "WLS-001",
@@ -424,7 +466,7 @@ async function main() {
           version: 0,
           status: "open",
           severity: "sedang",
-          telegramUser: agusTele,
+          telegramUser: brunoTele,
           action: "Tiket dilaporkan via Telegram Bot",
           notes: "Laporan otomatis dari bot Telegram teknisi lapangan",
           damageDescription: "Sensor LiDAR mengalami dropout titik point cloud saat dump truck melintas dengan kecepatan 15 km/jam.",
@@ -434,7 +476,7 @@ async function main() {
         },
       ],
     },
-    // 2. SOLVED (v1) - v0: Telegram (Budi) -> v1: Web Dashboard (Bruno Aftersales Solved langsung via Web)
+    // 2. OPEN (v1) - v0: Telegram (Bayu Aftersales 2) -> v1: Web Dashboard (Bruno Aftersales 1 update catatan penanganan)
     {
       id: "ERR-20261009-0002",
       unitCode: "WLS-002",
@@ -445,7 +487,7 @@ async function main() {
           version: 0,
           status: "open",
           severity: "tinggi",
-          telegramUser: budiTele,
+          telegramUser: bayuTele,
           action: "Tiket dilaporkan via Telegram Bot",
           notes: "Laporan anomali daya baterai dari bot Telegram",
           damageDescription: "Tegangan suplai baterai turun drastis ke 20.8V saat IPC dan LiDAR bekerja bersamaan.",
@@ -455,19 +497,19 @@ async function main() {
         },
         {
           version: 1,
-          status: "solved",
+          status: "open",
           severity: "tinggi",
           user: brunoUser,
-          action: "Diselesaikan via Web Dashboard oleh Tim Aftersales: Penggantian modul regulator DC-DC step-down.",
-          notes: "Diselesaikan via Web Dashboard oleh Tim Aftersales: Penggantian modul regulator DC-DC step-down.",
-          damageDescription: "Tegangan suplai baterai drop.",
-          actionTaken: "Penggantian modul regulator DC-DC step-down dan kalibrasi tegangan output stabil 24.0V.",
-          rootCause: "Kapasitor filtering pada modul regulator DC-DC mengalami degradasi panas",
-          changedAt: new Date(Date.now() - 3600000 * 2),
+          action: "Pemeriksaan lanjutan diinput via Web Dashboard oleh Bruno Aftersales 1.",
+          notes: "Pemeriksaan lanjutan diinput via Web Dashboard oleh Bruno Aftersales 1: Modul regulator DC-DC cadangan sedang disiapkan untuk penggantian.",
+          damageDescription: "Tegangan suplai baterai turun drastis saat beban penuh.",
+          actionTaken: "Pengujian bench test unit regulator pengganti dan monitoring tegangan.",
+          rootCause: "Degradasi termal kapasitor filtering pada modul regulator DC-DC",
+          changedAt: new Date(Date.now() - 3600000 * 6),
         },
       ],
     },
-    // 3. OPEN (v1) - v0: Telegram (Agus) -> v1: Telegram (Budi Pratama update via bot)
+    // 3. OPEN (v0) - Dilaporkan via Telegram oleh Bruno Aftersales 1
     {
       id: "ERR-20261009-0003",
       unitCode: "WLS-003",
@@ -478,29 +520,17 @@ async function main() {
           version: 0,
           status: "open",
           severity: "rendah",
-          telegramUser: agusTele,
+          telegramUser: brunoTele,
           action: "Tiket dilaporkan via Telegram Bot",
           notes: "Hasil capture kamera kanan overexposure pada siang hari terik.",
           damageDescription: "Kamera kanan overexposure saat terkena pantulan sinar matahari langsung.",
-          actionTaken: null,
+          actionTaken: "Pembersihan permukaan kaca pelindung kamera.",
           rootCause: null,
           changedAt: new Date(Date.now() - 3600000 * 18),
         },
-        {
-          version: 1,
-          status: "open",
-          severity: "rendah",
-          telegramUser: budiTele,
-          action: "Update catatan lapangan via Telegram Bot",
-          notes: "Pembersihan filter polarisasi lensa dan penyesuaian sudut hood kamera di lokasi.",
-          damageDescription: "Kamera kanan overexposure saat siang terik.",
-          actionTaken: "Filter polarisasi dipasang ulang dan penyesuaian sudut hood.",
-          rootCause: "Pantulan cahaya matahari tanpa filter penahan",
-          changedAt: new Date(Date.now() - 3600000 * 10),
-        },
       ],
     },
-    // 4. OPEN (v1) - v0: Telegram (Budi) -> v1: Web Dashboard (Bruno Aftersales update via Web)
+    // 4. OPEN (v1) - v0: Telegram (Bayu Aftersales 2) -> v1: Web Dashboard (Bayu Aftersales 2 update tindakan)
     {
       id: "ERR-20261009-0004",
       unitCode: "WLS-004",
@@ -511,7 +541,7 @@ async function main() {
           version: 0,
           status: "open",
           severity: "sedang",
-          telegramUser: budiTele,
+          telegramUser: bayuTele,
           action: "Tiket dilaporkan via Telegram Bot",
           notes: "Suhu prosesor IPC mencapai 88°C dan frekuensi clock tertahan.",
           damageDescription: "Suhu prosesor IPC melebihi 85°C dan menyebabkan delay pemrosesan.",
@@ -523,32 +553,66 @@ async function main() {
           version: 1,
           status: "open",
           severity: "sedang",
-          user: brunoUser,
+          user: bayuUser,
           action: "Instruksi pembersihan dan penggantian pasta thermal diinput via Web Dashboard.",
-          notes: "Pembersihan sirip heatsink dan penggantian pasta thermal prosesor.",
+          notes: "Pembersihan sirip heatsink dan persiapan re-paste thermal paste Arctic MX-4 oleh Bayu Aftersales 2.",
           damageDescription: "Suhu prosesor IPC panas saat siang hari.",
-          actionTaken: "Pembersihan debu blower dan re-paste thermal paste Arctic MX-4.",
-          rootCause: "Sirkulasi udara terhambat debu halus tambang",
+          actionTaken: "Pembersihan debu filter dan penggantian thermal paste pada IPC.",
+          rootCause: "Sirkulasi udara terhambat akumulasi debu tambang",
           changedAt: new Date(Date.now() - 3600000 * 8),
         },
       ],
     },
-    // 5. ESCALATED (v2) - v0: Telegram (Agus) -> v1: Web (Bruno eskalasi) -> v2: Web (Siti klaim)
+    // 5. OPEN (v1) - v0: Web Dashboard (Bruno Aftersales 1 buat tiket) -> v1: Telegram (Bayu Aftersales 2 update observasi)
     {
       id: "ERR-20261009-0005",
+      unitCode: "WLS-005",
+      failureCode: "NET-01",
+      severity: "rendah",
+      history: [
+        {
+          version: 0,
+          status: "open",
+          severity: "rendah",
+          user: brunoUser,
+          action: "Tiket dibuka via Web Dashboard oleh Bruno Aftersales 1",
+          notes: "Indikasi penurunan throughput transfer data berkala pada unit WLS-005.",
+          damageDescription: "Throughput transmisi data telemetri lambat pada saat shift malam.",
+          actionTaken: "Pengecekan sinyal operator seluler di site.",
+          rootCause: null,
+          changedAt: new Date(Date.now() - 3600000 * 14),
+        },
+        {
+          version: 1,
+          status: "open",
+          severity: "rendah",
+          telegramUser: bayuTele,
+          action: "Update catatan observasi lapangan via Telegram Bot",
+          notes: "Antena eksternal 4G diperiksa aman, latency ping rata-rata 110ms.",
+          damageDescription: "Throughput transmisi data telemetri lambat pada saat shift malam.",
+          actionTaken: "Pengujian swap SIM card modem sekunder.",
+          rootCause: "Kepadatan bandwidth base station BTS terdekat",
+          changedAt: new Date(Date.now() - 3600000 * 5),
+        },
+      ],
+    },
+    // 6. ESCALATED (v2) - v0: Tele (Bruno) -> v1: Web (Bruno eskalasi) -> v2: Web (Siti Software 1 Leader update)
+    // Assignees: Siti Software 1 (Web & Tele) sebagai Leader, Surya Software 2 (Web & Tele) sebagai Anggota
+    {
+      id: "ERR-20261009-0006",
       unitCode: "WLS-001",
       failureCode: "NET-01",
       severity: "tinggi",
       assignees: [
-        { user: sitiUser, isLeader: true },
-        { user: dimasUser, isLeader: false },
+        { user: sitiUser, telegramUser: sitiTele, isLeader: true },
+        { user: suryaUser, telegramUser: suryaTele, isLeader: false },
       ],
       history: [
         {
           version: 0,
           status: "open",
           severity: "tinggi",
-          telegramUser: agusTele,
+          telegramUser: brunoTele,
           action: "Tiket dilaporkan via Telegram Bot",
           notes: "Koneksi gateway telemetri 4G sering putus saat upload point cloud besar.",
           damageDescription: "Koneksi gateway telemetri 4G sering putus dan packet loss mencapai 22%.",
@@ -573,30 +637,31 @@ async function main() {
           status: "escalated",
           severity: "tinggi",
           user: sitiUser,
-          action: "Tiket diklaim oleh Siti Software Leader di Web Dashboard. Memulai analisis crash dump.",
-          notes: "Tiket diklaim oleh Siti Software Leader di Web Dashboard. Memulai analisis crash dump.",
+          action: "Tiket diklaim & ditangani oleh Siti Software 1 di Web Dashboard. Memulai analisis crash dump.",
+          notes: "Investigasi oleh tim Software: Ditemukan buffer overflow pada modul telemetri socket saat transfer payload di atas 50MB.",
           damageDescription: "Koneksi gateway telemetri sering putus.",
-          actionTaken: "Ekstraksi log syslog dan profiling queue buffer.",
+          actionTaken: "Ekstraksi log syslog, socket profiling, dan pembuatan hotfix queue buffer.",
           rootCause: "Memory leak pada thread uploader telemetri",
           changedAt: new Date(Date.now() - 3600000 * 5),
         },
       ],
     },
-    // 6. ESCALATED (v2) - v0: Telegram (Budi) -> v1: Telegram (Agus eskalasi via bot) -> v2: Web (Siti klaim)
+    // 7. ESCALATED (v2) - v0: Tele (Bayu) -> v1: Tele (Bruno eskalasi) -> v2: Web (Surya Software 2 update)
+    // Assignees: Surya Software 2 (Web & Tele) sebagai Leader
     {
-      id: "ERR-20261009-0006",
+      id: "ERR-20261009-0007",
       unitCode: "WLS-002",
       failureCode: "LDR-01",
       severity: "tinggi",
       assignees: [
-        { user: sitiUser, isLeader: true },
+        { user: suryaUser, telegramUser: suryaTele, isLeader: true },
       ],
       history: [
         {
           version: 0,
           status: "open",
           severity: "tinggi",
-          telegramUser: budiTele,
+          telegramUser: bayuTele,
           action: "Tiket dilaporkan via Telegram Bot",
           notes: "Stream point cloud berhenti tiba-tiba setelah 2 jam operasi.",
           damageDescription: "Stream point cloud berhenti tiba-tiba setelah 2 jam operasi.",
@@ -608,7 +673,7 @@ async function main() {
           version: 1,
           status: "escalated",
           severity: "tinggi",
-          telegramUser: agusTele,
+          telegramUser: brunoTele,
           action: "Eskalasi dikirim via Telegram Bot: driver LiDAR segfault di Linux kernel log.",
           notes: "Eskalasi dikirim via Telegram Bot: driver LiDAR segfault di Linux kernel log.",
           damageDescription: "Driver LiDAR segfault.",
@@ -620,29 +685,32 @@ async function main() {
           version: 2,
           status: "escalated",
           severity: "tinggi",
-          user: sitiUser,
-          action: "Tiket diklaim oleh Siti Software Leader di Web Dashboard. Menyiapkan modul kernel v2.1.",
-          notes: "Tiket diklaim oleh Siti Software Leader di Web Dashboard. Menyiapkan modul kernel v2.1.",
+          user: suryaUser,
+          action: "Ditangani oleh Surya Software 2 via Web Dashboard: Menyiapkan patch modul kernel v2.1.",
+          notes: "Update tim Software: Buffer driver tidak kompatibel dengan firmware LiDAR 3.8. Patch sedang dikompilasi.",
           damageDescription: "Driver LiDAR segfault.",
-          actionTaken: "Penyusunan patch kernel driver.",
+          actionTaken: "Penyusunan dan pengujian patch kernel driver di lab simulasi.",
           rootCause: "Inkompatibilitas buffer size driver dengan firmware versi 3.8",
           changedAt: new Date(Date.now() - 3600000 * 3),
         },
       ],
     },
-    // 7. ESCALATED (v1) - v0: Telegram (Agus) -> v1: Telegram (Budi eskalasi via bot, belum diklaim)
+    // 8. ESCALATED (v2) - v0: Tele (Bruno) -> v1: Web (Bayu Aftersales eskalasi) -> v2: Tele (Siti Software 1 update via Bot)
+    // Assignees: Siti Software 1 (Web & Tele)
     {
-      id: "ERR-20261009-0007",
-      unitCode: "WLS-005",
+      id: "ERR-20261009-0008",
+      unitCode: "WLS-003",
       failureCode: "CAM-01",
       severity: "sedang",
-      assignees: [], // Belum diklaim
+      assignees: [
+        { user: sitiUser, telegramUser: sitiTele, isLeader: true },
+      ],
       history: [
         {
           version: 0,
           status: "open",
           severity: "sedang",
-          telegramUser: agusTele,
+          telegramUser: brunoTele,
           action: "Tiket dilaporkan via Telegram Bot",
           notes: "Frame rate kamera turun drastis saat kondisi mendung berawan.",
           damageDescription: "Frame rate kamera turun drastis saat kondisi mendung berawan.",
@@ -654,65 +722,45 @@ async function main() {
           version: 1,
           status: "escalated",
           severity: "sedang",
-          telegramUser: budiTele,
-          action: "Dieskalasi via Telegram Bot untuk kalibrasi algoritma auto-exposure ISP.",
-          notes: "Dieskalasi via Telegram Bot untuk kalibrasi algoritma auto-exposure ISP.",
+          user: bayuUser,
+          action: "Dieskalasi ke tim Software via Web Dashboard untuk tuning ISP exposure.",
+          notes: "Dieskalasi ke tim Software via Web Dashboard untuk tuning ISP exposure.",
           damageDescription: "Frame rate kamera drop saat cuaca mendung.",
-          actionTaken: "Eskalasi ke tim Software (menunggu klaim).",
+          actionTaken: "Eskalasi ke tim software.",
           rootCause: null,
           changedAt: new Date(Date.now() - 3600000 * 6),
         },
-      ],
-    },
-    // 8. SOLVED (v1) - v0: Telegram (Budi) -> v1: Telegram (Budi selesaikan langsung via bot)
-    {
-      id: "ERR-20261009-0008",
-      unitCode: "WLS-003",
-      failureCode: "PWR-01",
-      severity: "rendah",
-      history: [
         {
-          version: 0,
-          status: "open",
-          severity: "rendah",
-          telegramUser: budiTele,
-          action: "Tiket dilaporkan via Telegram Bot",
-          notes: "Konektor power supply 24V longgar akibat getaran lintasan truk.",
-          damageDescription: "Konektor power supply 24V longgar akibat getaran lintasan truk.",
-          actionTaken: "Pemeriksaan konektor fisik terminal.",
-          rootCause: null,
-          changedAt: new Date(Date.now() - 3600000 * 48),
-        },
-        {
-          version: 1,
-          status: "solved",
-          severity: "rendah",
-          telegramUser: budiTele,
-          action: "Penyelesaian dikonfirmasi via Telegram Bot: konektor diganti screw-lock dan tegangan normal 24.1V.",
-          notes: "Penyelesaian dikonfirmasi via Telegram Bot: konektor diganti screw-lock dan tegangan normal 24.1V.",
-          damageDescription: "Konektor kendor.",
-          actionTaken: "Penggantian konektor screw-lock dan pengencangan baut braket.",
-          rootCause: "Konektor tipe clip plastik longgar karena vibrasi tinggi",
-          changedAt: new Date(Date.now() - 3600000 * 36),
+          version: 2,
+          status: "escalated",
+          severity: "sedang",
+          telegramUser: sitiTele,
+          action: "Update penanganan via Telegram Bot oleh Siti Software 1",
+          notes: "Tuning algoritma auto-exposure matrix kamera sedang dijalankan via SSH remote session.",
+          damageDescription: "Frame rate kamera drop saat cuaca mendung.",
+          actionTaken: "Remote profiling OpenCV pipeline dan update konfigurasi ISP parameter.",
+          rootCause: "Algoritma exposure looping tanpa timeout batas atas",
+          changedAt: new Date(Date.now() - 3600000 * 2),
         },
       ],
     },
-    // 9. SOLVED (v3) - v0: Telegram (Agus) -> v1: Web (Bruno) -> v2: Web (Siti) -> v3: Web (Siti Solved)
+    // 9. ESCALATED (v2) - v0: Tele (Bayu) -> v1: Web (Bruno Aftersales eskalasi) -> v2: Web (Surya Software 2 update)
+    // Assignees: Siti Software 1 (Web & Tele), Surya Software 2 (Web & Tele)
     {
       id: "ERR-20261009-0009",
       unitCode: "WLS-004",
       failureCode: "CMP-01",
       severity: "tinggi",
       assignees: [
-        { user: sitiUser, isLeader: true },
-        { user: dimasUser, isLeader: false },
+        { user: sitiUser, telegramUser: sitiTele, isLeader: true },
+        { user: suryaUser, telegramUser: suryaTele, isLeader: false },
       ],
       history: [
         {
           version: 0,
           status: "open",
           severity: "tinggi",
-          telegramUser: agusTele,
+          telegramUser: bayuTele,
           action: "Tiket dilaporkan via Telegram Bot",
           notes: "Layanan kalkulasi volume muatan crash saat memindai truk bertonase panjang.",
           damageDescription: "Layanan kalkulasi volume muatan crash saat memindai truk tronton ekstra panjang.",
@@ -736,72 +784,61 @@ async function main() {
           version: 2,
           status: "escalated",
           severity: "tinggi",
-          user: sitiUser,
-          action: "Siti Software Leader klaim & unggah hotfix-volume-bounds via Web Dashboard.",
-          notes: "Siti Software Leader klaim & unggah hotfix-volume-bounds via Web Dashboard.",
-          damageDescription: "Crash algoritma volume.",
-          actionTaken: "Debugging dan fix array boundary check.",
+          user: suryaUser,
+          action: "Penanganan oleh Surya Software 2: Analisis alokasi voxel grid array.",
+          notes: "Penyebab teridentifikasi pada batasan buffer point cloud voxel 3D. Binary patch v1.4.2 sedang dirilis.",
+          damageDescription: "Crash algoritma volume saat truk tronton ekstra panjang.",
+          actionTaken: "Debugging array boundary check dan memory buffer resizing.",
           rootCause: "Array boundary check melebihi alokasi memori buffer 3D",
-          changedAt: new Date(Date.now() - 3600000 * 40),
-        },
-        {
-          version: 3,
-          status: "solved",
-          severity: "tinggi",
-          user: sitiUser,
-          action: "Patch v1.4.2 di-deploy via Web. Pengujian 50 pemindaian truk sukses tanpa crash.",
-          notes: "Patch v1.4.2 di-deploy via Web. Pengujian 50 pemindaian truk sukses tanpa crash.",
-          damageDescription: "Crash algoritma volume.",
-          actionTaken: "Deploy binary patch dan validasi real test.",
-          rootCause: "Index out of bounds pada array voxel grid",
-          changedAt: new Date(Date.now() - 3600000 * 12),
+          changedAt: new Date(Date.now() - 3600000 * 18),
         },
       ],
     },
-    // 10. SOLVED (v2) - v0: Telegram (Budi) -> v1: Web (Bruno eskalasi) -> v2: Telegram (Citra Dewi Software Solved via Bot)
+    // 10. ESCALATED (v2) - v0: Tele (Bayu) -> v1: Web (Bayu Aftersales eskalasi) -> v2: Tele (Surya Software 2 update via Bot)
+    // Assignees: Surya Software 2 (Web & Tele)
     {
       id: "ERR-20261009-0010",
-      unitCode: "WLS-001",
-      failureCode: "NET-01",
-      severity: "sedang",
+      unitCode: "WLS-005",
+      failureCode: "PWR-01",
+      severity: "tinggi",
       assignees: [
-        { telegramUser: citraTele, isLeader: true },
+        { user: suryaUser, telegramUser: suryaTele, isLeader: true },
       ],
       history: [
         {
           version: 0,
           status: "open",
-          severity: "sedang",
-          telegramUser: budiTele,
+          severity: "tinggi",
+          telegramUser: bayuTele,
           action: "Tiket dilaporkan via Telegram Bot",
-          notes: "Koneksi VPN tunnel putus secara periodik setiap 15 menit.",
-          damageDescription: "Koneksi VPN tunnel putus secara periodik setiap 15 menit.",
-          actionTaken: "Restart router gateway 4G.",
+          notes: "Daemon sensor baterai memicu false alarm overheat secara berulang.",
+          damageDescription: "Sensor BMS melaporkan suhu 95°C padahal temperatur fisik sel baterai hanya 32°C.",
+          actionTaken: "Pengecekan fisik modul sensor termal normal.",
           rootCause: null,
-          changedAt: new Date(Date.now() - 3600000 * 50),
+          changedAt: new Date(Date.now() - 3600000 * 40),
         },
         {
           version: 1,
           status: "escalated",
-          severity: "sedang",
-          user: brunoUser,
-          action: "Dieskalasi ke tim Software via Web Dashboard untuk tuning VPN keepalive.",
-          notes: "Dieskalasi ke tim Software via Web Dashboard untuk tuning VPN keepalive.",
-          damageDescription: "Koneksi VPN putus periodik.",
-          actionTaken: "Eskalasi ke software.",
+          severity: "tinggi",
+          user: bayuUser,
+          action: "Dieskalasi ke tim Software via Web Dashboard: Indikasi bug parsing CAN-bus daemon.",
+          notes: "Dieskalasi ke tim Software via Web Dashboard: Indikasi bug parsing CAN-bus daemon.",
+          damageDescription: "False alarm suhu baterai pada daemon.",
+          actionTaken: "Eskalasi ke tim software.",
           rootCause: null,
-          changedAt: new Date(Date.now() - 3600000 * 30),
+          changedAt: new Date(Date.now() - 3600000 * 25),
         },
         {
           version: 2,
-          status: "solved",
-          severity: "sedang",
-          telegramUser: citraTele,
-          action: "Penyelesaian diselesaikan via Telegram Bot: Citra Dewi kirim remote config keepalive 25s dan MTU 1420.",
-          notes: "Penyelesaian diselesaikan via Telegram Bot: Citra Dewi kirim remote config keepalive 25s dan MTU 1420.",
-          damageDescription: "Koneksi VPN putus periodik.",
-          actionTaken: "Update konfigurasi keepalive interval dan persistensi route remote via bot.",
-          rootCause: "NAT timeout pada provider seluler menutup koneksi sebelum keepalive",
+          status: "escalated",
+          severity: "tinggi",
+          telegramUser: suryaTele,
+          action: "Update penanganan via Telegram Bot oleh Surya Software 2",
+          notes: "Dikonfirmasi bit masking pada frame CAN ID 0x18F salah offset 2 bit. Patch service bms-daemon sedang diuji.",
+          damageDescription: "False alarm suhu baterai pada daemon.",
+          actionTaken: "Analisis log frame CAN-bus dan perbaikan bitwise offset parser.",
+          rootCause: "Offset parsing bitwise salah pada firmware daemon v1.1",
           changedAt: new Date(Date.now() - 3600000 * 4),
         },
       ],
@@ -822,6 +859,7 @@ async function main() {
       update: {
         asset_id: asset.id,
         failure_code_id: failureCode.id,
+        aftersales_user_id: td.aftersalesUserId || brunoUser.id,
         current_version: latestHistory.version,
         created_at: initialHistory.changedAt,
       },
@@ -829,6 +867,7 @@ async function main() {
         id: td.id,
         asset_id: asset.id,
         failure_code_id: failureCode.id,
+        aftersales_user_id: td.aftersalesUserId || brunoUser.id,
         current_version: latestHistory.version,
         created_at: initialHistory.changedAt,
       },
@@ -866,11 +905,11 @@ async function main() {
     let leaderAssigneeId = null;
     if (td.assignees && td.assignees.length > 0) {
       for (const a of td.assignees) {
+        const assignedUserId = a.user?.id || (a.telegramUser?.username?.includes("software") ? sitiUser.id : brunoUser.id);
         const assigneeRecord = await prisma.ticket_assignees.create({
           data: {
             ticket_id: td.id,
-            user_id: a.user ? a.user.id : null,
-            telegram_user_id: a.telegramUser ? a.telegramUser.id : null,
+            user_id: assignedUserId,
           },
         });
         if (a.isLeader) {
@@ -899,10 +938,12 @@ async function main() {
   console.log("==================================================");
   console.log("🔑 KREDENSIAL PENGGUNA UNTUK LOGIN & PENGUJIAN:");
   console.log("--------------------------------------------------");
-  console.log(`1. Admin (Active)        : ${seededUsers[0].email} / ${seededUsers[0].rawPassword}`);
-  console.log(`2. Coordinator (Invited) : ${seededUsers[1].email} / ${seededUsers[1].rawPassword}`);
-  console.log(`3. Coordinator (Invited) : ${seededUsers[2].email} / ${seededUsers[2].rawPassword}`);
-  console.log(`4. Viewer (Invited)      : ${seededUsers[3].email} / ${seededUsers[3].rawPassword}`);
+  console.log(`1. Admin (Active)                  : ${seededUsers[0].email} / ${seededUsers[0].rawPassword}`);
+  console.log(`2. Coordinator Aftersales 1 (Invited) : ${seededUsers[1].email} / ${seededUsers[1].rawPassword}`);
+  console.log(`3. Coordinator Aftersales 2 (Invited) : ${seededUsers[2].email} / ${seededUsers[2].rawPassword}`);
+  console.log(`4. Coordinator Software 1 (Invited)   : ${seededUsers[3].email} / ${seededUsers[3].rawPassword}`);
+  console.log(`5. Coordinator Software 2 (Invited)   : ${seededUsers[4].email} / ${seededUsers[4].rawPassword}`);
+  console.log(`6. Viewer (Invited)                   : ${seededUsers[5].email} / ${seededUsers[5].rawPassword}`);
   console.log("--------------------------------------------------");
   console.log("ℹ️  User berstatus 'invited' otomatis memicu form paksa ganti password saat login.");
   console.log("==================================================\n");

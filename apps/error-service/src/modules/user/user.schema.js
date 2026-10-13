@@ -27,7 +27,18 @@ export const createUserSchema = z.object({
     .optional()
     .nullable()
     .transform((val) => (val ? val.toLowerCase() : null)),
-  // Opsional: tujuan DM notifikasi invite via Telegram (tanpa migrasi — tidak disimpan di DB)
+  // ID Akun Telegram dari tabel telegram_users (Whitelist)
+  telegramUserId: z
+    .string()
+    .uuid("Format ID Telegram tidak valid")
+    .optional()
+    .nullable(),
+  telegram_user_id: z
+    .string()
+    .uuid("Format ID Telegram tidak valid")
+    .optional()
+    .nullable(),
+  // Opsional: tujuan DM notifikasi invite via Telegram (fallback/kompatibilitas)
   telegramId: z
     .string()
     .trim()
@@ -82,6 +93,16 @@ export const updateUserSchema = z
       })
       .optional()
       .transform((val) => (val ? val.toLowerCase() : undefined)),
+    telegramUserId: z
+      .string()
+      .uuid("Format ID Telegram tidak valid")
+      .optional()
+      .nullable(),
+    telegram_user_id: z
+      .string()
+      .uuid("Format ID Telegram tidak valid")
+      .optional()
+      .nullable(),
   })
   .refine((data) => Object.keys(data).length > 0, {
     message: "Minimal satu field harus disertakan untuk pembaruan data",

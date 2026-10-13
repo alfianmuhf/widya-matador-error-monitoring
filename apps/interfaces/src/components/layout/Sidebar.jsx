@@ -11,12 +11,13 @@ export default function Sidebar() {
   const isAdmin = userRole === "admin";
   const isCoordinator = userRole === "coordinator";
   const isViewer = userRole === "viewer";
+  const canManageTickets = isAdmin || isCoordinator;
 
   const [openTicketsCount, setOpenTicketsCount] = useState(0);
   const [manageTicketsCount, setManageTicketsCount] = useState(0);
 
   const fetchManagedTicketsCount = () => {
-    if (!isCoordinator) return;
+    if (!canManageTickets) return;
     api.get("/ticket-management")
       .then((res) => {
         const count = res.data?.data?.length ?? 0;
@@ -40,7 +41,7 @@ export default function Sidebar() {
       })
       .catch(() => {});
 
-    if (isCoordinator) {
+    if (canManageTickets) {
       fetchManagedTicketsCount();
     }
 
@@ -64,7 +65,7 @@ export default function Sidebar() {
         })
         .catch(() => {});
 
-      if (isCoordinator) {
+      if (canManageTickets) {
         fetchManagedTicketsCount();
       }
     };
@@ -75,7 +76,7 @@ export default function Sidebar() {
     return () => {
       eventSource.close();
     };
-  }, [accessToken, isCoordinator]);
+  }, [accessToken, canManageTickets]);
 
   const navItems = [
     {
@@ -116,8 +117,8 @@ export default function Sidebar() {
         </svg>
       ),
     },
-    // Menu Manajemen Tiket HANYA untuk role COORDINATOR (Aftersales & Software)
-    ...(isCoordinator
+    // Menu Manajemen Tiket untuk role COORDINATOR (Aftersales & Software) & ADMIN
+    ...(canManageTickets
       ? [
           {
             to: "/manajemen-tiket",

@@ -31,6 +31,24 @@ export const ticketIncludes = {
       },
     },
   },
+  aftersales_user: {
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      role: true,
+      division: true,
+      telegram_user: {
+        select: {
+          id: true,
+          telegram_id: true,
+          username: true,
+          full_name: true,
+          division: true,
+        },
+      },
+    },
+  },
   leader_assignee: {
     include: {
       user: {
@@ -40,15 +58,15 @@ export const ticketIncludes = {
           email: true,
           role: true,
           division: true,
-        },
-      },
-      telegram_user: {
-        select: {
-          id: true,
-          telegram_id: true,
-          username: true,
-          full_name: true,
-          division: true,
+          telegram_user: {
+            select: {
+              id: true,
+              telegram_id: true,
+              username: true,
+              full_name: true,
+              division: true,
+            },
+          },
         },
       },
     },
@@ -62,15 +80,15 @@ export const ticketIncludes = {
           email: true,
           role: true,
           division: true,
-        },
-      },
-      telegram_user: {
-        select: {
-          id: true,
-          telegram_id: true,
-          username: true,
-          full_name: true,
-          division: true,
+          telegram_user: {
+            select: {
+              id: true,
+              telegram_id: true,
+              username: true,
+              full_name: true,
+              division: true,
+            },
+          },
         },
       },
     },
@@ -337,15 +355,15 @@ export const findAssigneesByTicketId = async (ticketId) => {
           email: true,
           role: true,
           division: true,
-        },
-      },
-      telegram_user: {
-        select: {
-          id: true,
-          telegram_id: true,
-          username: true,
-          full_name: true,
-          division: true,
+          telegram_user: {
+            select: {
+              id: true,
+              telegram_id: true,
+              username: true,
+              full_name: true,
+              division: true,
+            },
+          },
         },
       },
     },
@@ -368,15 +386,15 @@ export const findAssigneeById = async (assigneeId) => {
           name: true,
           email: true,
           division: true,
-        },
-      },
-      telegram_user: {
-        select: {
-          id: true,
-          telegram_id: true,
-          username: true,
-          full_name: true,
-          division: true,
+          telegram_user: {
+            select: {
+              id: true,
+              telegram_id: true,
+              username: true,
+              full_name: true,
+              division: true,
+            },
+          },
         },
       },
     },
@@ -384,22 +402,22 @@ export const findAssigneeById = async (assigneeId) => {
 };
 
 /**
- * Check if a user / telegram user is already assigned to a ticket
+ * Check if a user is already assigned to a ticket
  */
-export const findAssigneeByTicketAndMember = async (ticketId, { userId, telegramUserId }) => {
-  const conditions = [];
-  if (userId) conditions.push({ user_id: userId });
-  if (telegramUserId) conditions.push({ telegram_user_id: telegramUserId });
-  if (conditions.length === 0) return null;
+export const findAssigneeByTicketAndMember = async (ticketId, { userId }) => {
+  if (!userId) return null;
 
   return prisma.ticket_assignees.findFirst({
     where: {
       ticket_id: ticketId,
-      OR: conditions,
+      user_id: userId,
     },
     include: {
-      user: true,
-      telegram_user: true,
+      user: {
+        include: {
+          telegram_user: true,
+        },
+      },
     },
   });
 };
@@ -407,13 +425,12 @@ export const findAssigneeByTicketAndMember = async (ticketId, { userId, telegram
 /**
  * Add member to ticket_assignees and optionally set as leader
  */
-export const addAssigneeToTicket = async (ticketId, { userId, telegramUserId, isLeader = false }) => {
+export const addAssigneeToTicket = async (ticketId, { userId, isLeader = false }) => {
   return prisma.$transaction(async (tx) => {
     const assignee = await tx.ticket_assignees.create({
       data: {
         ticket_id: ticketId,
-        user_id: userId || null,
-        telegram_user_id: telegramUserId || null,
+        user_id: userId,
       },
       include: {
         user: {
@@ -422,15 +439,15 @@ export const addAssigneeToTicket = async (ticketId, { userId, telegramUserId, is
             name: true,
             email: true,
             division: true,
-          },
-        },
-        telegram_user: {
-          select: {
-            id: true,
-            telegram_id: true,
-            username: true,
-            full_name: true,
-            division: true,
+            telegram_user: {
+              select: {
+                id: true,
+                telegram_id: true,
+                username: true,
+                full_name: true,
+                division: true,
+              },
+            },
           },
         },
       },
@@ -444,6 +461,17 @@ export const addAssigneeToTicket = async (ticketId, { userId, telegramUserId, is
     }
 
     return assignee;
+  });
+};
+
+/**
+ * Update aftersales responsible user on ticket
+ */
+export const updateAftersalesLead = async (ticketId, aftersalesUserId) => {
+  return prisma.tickets.update({
+    where: { id: ticketId },
+    data: { aftersales_user_id: aftersalesUserId },
+    include: ticketIncludes,
   });
 };
 

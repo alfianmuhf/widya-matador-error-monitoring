@@ -10,6 +10,7 @@ import {
   addAssigneeSchema,
   updateAssigneeSchema,
   changeLeaderSchema,
+  transferAftersalesSchema,
   queryHistorySchema,
 } from "./ticket.schema.js";
 
@@ -90,12 +91,12 @@ router.post(
 
 /**
  * POST /tickets/:id/assignees
- * Add team member to ticket
+ * Add software team member to ticket (Leader tim software atau Admin)
  */
 router.post(
   "/:id/assignees",
   authenticate,
-  authorize("COORDINATOR"),
+  authorize("ADMIN", "COORDINATOR"),
   validate(addAssigneeSchema, "body"),
   ticketController.addAssignee
 );
@@ -103,33 +104,45 @@ router.post(
 /**
  * PATCH /tickets/:id/assignees/:assigneeId
  * PUT /tickets/:id/assignees/:assigneeId
- * Update / edit team member in ticket (strictly allowed for Leader only)
+ * Update / edit team member in ticket
  */
 router.patch(
   "/:id/assignees/:assigneeId",
   authenticate,
-  authorize("COORDINATOR"),
+  authorize("ADMIN", "COORDINATOR"),
   validate(updateAssigneeSchema, "body"),
   ticketController.updateAssignee
 );
 router.put(
   "/:id/assignees/:assigneeId",
   authenticate,
-  authorize("COORDINATOR"),
+  authorize("ADMIN", "COORDINATOR"),
   validate(updateAssigneeSchema, "body"),
   ticketController.updateAssignee
 );
 
 /**
  * PATCH /tickets/:id/leader
- * Transfer ticket leadership to another assignee
+ * Transfer ticket leadership to another software assignee (Leader software atau Admin)
  */
 router.patch(
   "/:id/leader",
   authenticate,
-  authorize("COORDINATOR"),
+  authorize("ADMIN", "COORDINATOR"),
   validate(changeLeaderSchema, "body"),
   ticketController.changeLeader
+);
+
+/**
+ * PATCH /tickets/:id/aftersales-lead
+ * Transfer aftersales responsibility to another aftersales user (Aftersales PJ saat ini atau Admin)
+ */
+router.patch(
+  "/:id/aftersales-lead",
+  authenticate,
+  authorize("ADMIN", "COORDINATOR"),
+  validate(transferAftersalesSchema, "body"),
+  ticketController.transferAftersalesLead
 );
 
 /**
@@ -139,7 +152,7 @@ router.patch(
 router.delete(
   "/:id/assignees/:assigneeId",
   authenticate,
-  authorize("COORDINATOR"),
+  authorize("ADMIN", "COORDINATOR"),
   ticketController.removeAssignee
 );
 
@@ -152,7 +165,6 @@ router.get("/:id", authenticate, ticketController.getTicketById);
 /**
  * PATCH /tickets/:id
  * Update status, handling note, or other ticket data
- * (Khusus COORDINATOR: Aftersales & Software sesuai tiket yang dihandle)
  */
 router.patch(
   "/:id",
@@ -176,7 +188,7 @@ router.post(
 
 /**
  * POST /tickets
- * Create new ticket from dashboard (Khusus COORDINATOR)
+ * Create new ticket from dashboard (Khusus Aftersales Coordinator)
  */
 router.post(
   "/",

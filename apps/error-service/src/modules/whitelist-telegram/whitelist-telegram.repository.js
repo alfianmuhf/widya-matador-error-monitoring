@@ -61,6 +61,15 @@ export const findTelegramUsers = async ({ skip = 0, take = 10, search, division,
       skip,
       take,
       orderBy: { created_at: "desc" },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+      },
     }),
     prisma.telegram_users.count({ where }),
   ]);

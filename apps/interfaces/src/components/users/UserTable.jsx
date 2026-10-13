@@ -67,19 +67,22 @@ export default function UserTable({
         <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
           <thead>
             <tr style={{ borderBottom: "1px solid var(--border-light)" }}>
-              <th style={{ padding: "12px 14px", fontSize: "13px", fontWeight: 600, color: "var(--text-muted)", width: canManageUsers ? "24%" : "26%" }}>
+              <th style={{ padding: "12px 14px", fontSize: "13px", fontWeight: 600, color: "var(--text-muted)", width: canManageUsers ? "20%" : "22%" }}>
                 Nama
               </th>
-              <th style={{ padding: "12px 14px", fontSize: "13px", fontWeight: 600, color: "var(--text-muted)", width: canManageUsers ? "24%" : "26%" }}>
+              <th style={{ padding: "12px 14px", fontSize: "13px", fontWeight: 600, color: "var(--text-muted)", width: canManageUsers ? "20%" : "22%" }}>
                 Email
               </th>
               <th style={{ padding: "12px 14px", fontSize: "13px", fontWeight: 600, color: "var(--text-muted)", width: canManageUsers ? "16%" : "18%" }}>
+                Telegram
+              </th>
+              <th style={{ padding: "12px 14px", fontSize: "13px", fontWeight: 600, color: "var(--text-muted)", width: canManageUsers ? "13%" : "14%" }}>
                 Peran
               </th>
-              <th style={{ padding: "12px 14px", fontSize: "13px", fontWeight: 600, color: "var(--text-muted)", width: canManageUsers ? "16%" : "18%" }}>
+              <th style={{ padding: "12px 14px", fontSize: "13px", fontWeight: 600, color: "var(--text-muted)", width: canManageUsers ? "13%" : "14%" }}>
                 Divisi
               </th>
-              <th style={{ padding: "12px 14px", fontSize: "13px", fontWeight: 600, color: "var(--text-muted)", width: "12%" }}>
+              <th style={{ padding: "12px 14px", fontSize: "13px", fontWeight: 600, color: "var(--text-muted)", width: "10%" }}>
                 Status
               </th>
               {canManageUsers && (
@@ -92,13 +95,13 @@ export default function UserTable({
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={canManageUsers ? 6 : 5} style={{ padding: "40px", textAlign: "center", color: "var(--text-muted)" }}>
+                <td colSpan={canManageUsers ? 7 : 6} style={{ padding: "40px", textAlign: "center", color: "var(--text-muted)" }}>
                   Memuat data pengguna...
                 </td>
               </tr>
             ) : users.length === 0 ? (
               <tr>
-                <td colSpan={canManageUsers ? 6 : 5} style={{ padding: "40px", textAlign: "center", color: "var(--text-muted)" }}>
+                <td colSpan={canManageUsers ? 7 : 6} style={{ padding: "40px", textAlign: "center", color: "var(--text-muted)" }}>
                   Belum ada data pengguna dashboard.
                 </td>
               </tr>
@@ -147,6 +150,32 @@ export default function UserTable({
                     </td>
                     <td style={{ padding: "16px 14px", color: "var(--text-muted)", fontSize: "var(--text-sm)" }}>
                       {item.email}
+                    </td>
+                    <td style={{ padding: "16px 14px", fontSize: "var(--text-sm)" }}>
+                      {item.telegram_user ? (
+                        <span
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "5px",
+                            backgroundColor: "#f0fdfa",
+                            color: "var(--primary-teal)",
+                            border: "1px solid #ccfbf1",
+                            padding: "3px 9px",
+                            borderRadius: "6px",
+                            fontWeight: 600,
+                            fontSize: "12px",
+                          }}
+                        >
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                            <path d="m22 2-7 20-4-9-9-4Z" />
+                            <path d="M22 2 11 13" />
+                          </svg>
+                          {item.telegram_user.username ? `@${item.telegram_user.username}` : item.telegram_user.telegram_id || "Terkait"}
+                        </span>
+                      ) : (
+                        <span style={{ color: "var(--text-muted)", fontSize: "13px" }}>-</span>
+                      )}
                     </td>
                     <td style={{ padding: "16px 14px" }}>
                       <span

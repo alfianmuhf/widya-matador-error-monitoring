@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Modal from "../common/Modal.jsx";
 import api from "../../lib/api.js";
 import { createUserSchema, updateUserSchema } from "../../lib/validators.js";
@@ -13,10 +13,35 @@ function UserModalContent({ onClose, user, onSuccess }) {
     role: (user?.role || "viewer").toLowerCase(),
     division: (user?.division || "none").toLowerCase(),
     status: originalStatus || "active",
+    telegram_user_id: user?.telegram_user_id || user?.telegram_user?.id || "",
   }));
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
   const [createdInfo, setCreatedInfo] = useState(null);
+  const [telegramList, setTelegramList] = useState([]);
+  const [loadingTelegram, setLoadingTelegram] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    const fetchTelegramUsers = async () => {
+      try {
+        setLoadingTelegram(true);
+        const res = await api.get("/telegram-users?limit=100");
+        const list = res.data?.data?.telegramUsers || [];
+        if (mounted) {
+          setTelegramList(list);
+        }
+      } catch (err) {
+        console.error("Gagal mengambil data whitelist telegram:", err);
+      } finally {
+        if (mounted) setLoadingTelegram(false);
+      }
+    };
+    fetchTelegramUsers();
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -38,6 +63,7 @@ function UserModalContent({ onClose, user, onSuccess }) {
           email: formData.email,
           role: (formData.role || "viewer").toLowerCase(),
           division: (formData.division || "none").toLowerCase(),
+          telegram_user_id: formData.telegram_user_id ? formData.telegram_user_id : null,
         };
 
         // HANYA kirim status jika status bukan 'invited' (misal dipilih active atau suspended)
@@ -68,6 +94,7 @@ function UserModalContent({ onClose, user, onSuccess }) {
           email: formData.email,
           role: (formData.role || "viewer").toLowerCase(),
           division: (formData.division || "none").toLowerCase(),
+          telegram_user_id: formData.telegram_user_id ? formData.telegram_user_id : null,
         };
 
         const parsed = createUserSchema.safeParse(payload);
@@ -293,6 +320,50 @@ function UserModalContent({ onClose, user, onSuccess }) {
           <option value="software">Software</option>
         </select>
         {errors.division && <span style={{ color: "#ef4444", fontSize: "12px", marginTop: "4px", display: "block" }}>{errors.division}</span>}
+      </div>
+
+      {/* Tautkan Akun Telegram (Whitelist) */}
+      <div>
+        <label style={{ display: "block", fontSize: "var(--text-sm)", fontWeight: 600, marginBottom: "6px" }}>
+          Tautkan Akun Telegram (Whitelist)
+        </label>
+        <select
+          name="telegram_user_id"
+          value={formData.telegram_user_id}
+          onChange={handleChange}
+          disabled={loadingTelegram}
+          style={{
+            width: "100%",
+            padding: "9px 12px",
+            borderRadius: "8px",
+            border: `1px solid ${errors.telegram_user_id ? "#ef4444" : "var(--border-light)"}`,
+            backgroundColor: "#ffffff",
+            fontSize: "var(--text-sm)",
+            outline: "none",
+          }}
+        >
+          <option value="">-- Tidak Ditautkan (Opsional) --</option>
+          {telegramList.map((tg) => {
+            const isCurrentlySelected = tg.id === formData.telegram_user_id;
+            const isLinkedToOther = tg.user && tg.user.id !== user?.id;
+            const tgUsername = tg.username ? `@${tg.username}` : "(tanpa username)";
+            const tgName = tg.full_name ? ` - ${tg.full_name}` : "";
+            const linkedInfo = isLinkedToOther ? ` [Sudah dipakai: ${tg.user.name}]` : "";
+            return (
+              <option key={tg.id} value={tg.id} disabled={isLinkedToOther && !isCurrentlySelected}>
+                {tgUsername}{tgName} (ID: {tg.telegram_id || "-"}){linkedInfo}
+              </option>
+            );
+          })}
+        </select>
+        <small style={{ color: "var(--text-muted)", fontSize: "12px", marginTop: "4px", display: "block" }}>
+          💡 Catatan: Akun Telegram harus didaftarkan di menu <strong>Whitelist Telegram</strong> terlebih dahulu sebelum dapat ditautkan ke pengguna.
+        </small>
+        {errors.telegram_user_id && (
+          <span style={{ color: "#ef4444", fontSize: "12px", marginTop: "4px", display: "block" }}>
+            {errors.telegram_user_id}
+          </span>
+        )}
       </div>
 
       {/* Status (Khusus Edit) */}

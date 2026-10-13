@@ -45,13 +45,13 @@ export default function App() {
             {/* Menu Daftar Tiket */}
             <Route path="daftar-tiket" element={<DaftarTiket />} />
 
-            {/* Menu Manajemen & Update Tiket khusus COORDINATOR (Aftersales & Software) */}
+            {/* Menu Manajemen Tiket — COORDINATOR (update & kelola) & ADMIN (kelola akses & tim) */}
             <Route
               path="manajemen-tiket"
               element={
-                <CoordinatorRoute>
+                <ProtectedRoute allowedRoles={["ADMIN", "COORDINATOR"]}>
                   <ManajemenTiket />
-                </CoordinatorRoute>
+                </ProtectedRoute>
               }
             />
 

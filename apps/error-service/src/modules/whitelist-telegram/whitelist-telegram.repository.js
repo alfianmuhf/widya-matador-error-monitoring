@@ -21,6 +21,20 @@ export const findTelegramUserByTelegramId = async (telegramId) => {
 };
 
 /**
+ * Find single Telegram user by their username
+ * @param {string} username
+ */
+export const findTelegramUserByUsername = async (username) => {
+  if (!username) return null;
+  const clean = String(username).replace(/^@/, "").trim();
+  return prisma.telegram_users.findFirst({
+    where: {
+      username: { equals: clean, mode: "insensitive" },
+    },
+  });
+};
+
+/**
  * Add a new Telegram user to whitelist
  * @param {object} data
  */

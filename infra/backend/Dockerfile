@@ -26,5 +26,5 @@ COPY apps/error-service/src ./src/
 # Expose port backend
 EXPOSE 3000
 
-# Jalankan migrasi database ke perubahan terbaru saat deploy, lalu start server
-CMD ["sh", "-c", "npx prisma migrate deploy && node src/server.js"]
+# Reset database dari schema.prisma terbaru, jalankan seeder, lalu start server
+CMD ["sh", "-c", "npx prisma db push --force-reset && node prisma/seed.js && node src/server.js"]

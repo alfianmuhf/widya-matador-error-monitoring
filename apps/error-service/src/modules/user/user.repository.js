@@ -31,6 +31,17 @@ export const findUserById = async (id) => {
       password_changed_at: true,
       created_at: true,
       updated_at: true,
+      telegram_user_id: true,
+      telegram_user: {
+        select: {
+          id: true,
+          telegram_id: true,
+          username: true,
+          full_name: true,
+          division: true,
+          is_active: true,
+        },
+      },
     },
   });
 };
@@ -49,6 +60,7 @@ export const createUser = async (data) => {
       password_hash: data.password_hash || data.passwordHash,
       status: data.status || "active",
       must_change_password: data.must_change_password ?? data.mustChangePassword ?? true,
+      telegram_user_id: data.telegram_user_id ?? data.telegramUserId ?? null,
     },
     select: {
       id: true,
@@ -59,6 +71,17 @@ export const createUser = async (data) => {
       status: true,
       must_change_password: true,
       created_at: true,
+      telegram_user_id: true,
+      telegram_user: {
+        select: {
+          id: true,
+          telegram_id: true,
+          username: true,
+          full_name: true,
+          division: true,
+          is_active: true,
+        },
+      },
     },
   });
 };
@@ -101,6 +124,17 @@ export const findUsers = async ({ skip = 0, take = 10, search, role, division, s
         last_login_at: true,
         created_at: true,
         updated_at: true,
+        telegram_user_id: true,
+        telegram_user: {
+          select: {
+            id: true,
+            telegram_id: true,
+            username: true,
+            full_name: true,
+            division: true,
+            is_active: true,
+          },
+        },
       },
     }),
     prisma.users.count({ where }),
@@ -132,6 +166,17 @@ export const updateUser = async (id, data) => {
       password_changed_at: true,
       created_at: true,
       updated_at: true,
+      telegram_user_id: true,
+      telegram_user: {
+        select: {
+          id: true,
+          telegram_id: true,
+          username: true,
+          full_name: true,
+          division: true,
+          is_active: true,
+        },
+      },
     },
   });
 };

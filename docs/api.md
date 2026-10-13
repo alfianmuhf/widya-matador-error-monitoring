@@ -92,28 +92,31 @@ Tabel berikut menyajikan seluruh endpoint yang tersedia pada sistem, metode HTTP
 | 46 | **Tiket** | **SSE Stream** | `GET` | `/tickets/stream` | Semua Role | Real-time live update stream tiket |
 | 47 | **Tiket** | REST API | `GET` | `/tickets` | Semua Role | Ambil daftar tiket dengan filter & paginasi |
 | 48 | **Tiket** | REST API | `GET` | `/tickets/:id` | Semua Role | Detail tiket lengkap riwayat & komentar |
-| 49 | **Tiket** | REST API | `POST` | `/tickets` | Semua Role | Buat tiket baru dari dashboard |
-| 50 | **Tiket** | REST API | `PATCH` | `/tickets/:id` | Semua Role | Update status tiket / penanganan |
-| 51 | **Tiket** | REST API | `POST` | `/tickets/:id/comments` | Semua Role | Tambah catatan penanganan ke tiket |
+| 49 | **Tiket** | REST API | `POST` | `/tickets` | `coordinator` (Aftersales) | Buat tiket baru dari dashboard (khusus Divisi Aftersales) |
+| 50 | **Tiket** | REST API | `PATCH` | `/tickets/:id` | `coordinator` | Update status tiket / penanganan (sesuai status & divisi) |
+| 51 | **Tiket** | REST API | `POST` | `/tickets/:id/comments` | `coordinator` | Tambah catatan penanganan ke tiket |
 | 52 | **Tiket** | REST API | `POST` | `/tickets/:id/claim` | Software / Admin | Klaim tiket oleh tim Software (klaim awal jadi Leader) |
 | 53 | **Tiket** | REST API | `GET` | `/tickets/:id/assignees` | Semua Role | Ambil daftar tim penanganan tiket |
 | 54 | **Tiket** | REST API | `POST` | `/tickets/:id/assignees` | Leader / Admin | Tambah anggota tim penanganan tiket |
 | 55 | **Tiket** | REST API | `PATCH`, `PUT` | `/tickets/:id/assignees/:assigneeId` | Leader / Admin | Ubah data anggota tim penanganan tiket |
-| 56 | **Tiket** | REST API | `PATCH` | `/tickets/:id/leader` | Leader / Admin | Alihkan kepemimpinan tiket ke anggota lain |
-| 57 | **Tiket** | REST API | `DELETE` | `/tickets/:id/assignees/:assigneeId` | Leader / Admin / Self | Hapus anggota dari tim penanganan tiket |
-| 58 | **Tiket** | REST API | `GET` | `/tickets/:id/history` | Semua Role | Linimasa riwayat versi tiket |
-| 59 | **Tiket** | REST API | `GET` | `/tickets/:id/history/:version` | Semua Role | Detail snapshot versi riwayat tiket tertentu |
-| 60 | **Manajemen Tiket** | REST API | `GET` | `/ticket-management` | `coordinator` | Ambil tiket khusus yang dikelola coordinator (Aftersales: open & dibuat dirinya; Software: escalated & assigned) |
-| 61 | **Manajemen Tiket** | REST API | `PATCH` | `/ticket-management/:id` | `coordinator` | Update status & tindakan tiket dari menu manajemen tiket |
-| 62 | **Manajemen Tiket** | REST API | `POST` | `/ticket-management/:id/assignees` | `coordinator` | Tambah anggota tim software ke `ticket_assignees` |
-| 63 | **Manajemen Tiket** | REST API | `DELETE` | `/ticket-management/:id/assignees/:assigneeId` | `coordinator` | Hapus anggota tim software dari `ticket_assignees` |
-| 64 | **Export** | REST API | `GET` | `/exports/excel`, `/tickets/export/excel` | Semua Role | Download rekapitulasi file Excel (`.xlsx`) |
-| 65 | **Export** | REST API | `GET` | `/exports/pdf`, `/tickets/export/pdf` | Semua Role | Download rekapitulasi file PDF (`.pdf`) |
-| 66 | **Audit Log** | **SSE Stream** | `GET` | `/audit-logs/stream` | Semua Role | Real-time live stream audit log |
-| 67 | **Audit Log** | REST API | `GET` | `/audit-logs` | Semua Role | Daftar rekam jejak audit log |
-| 68 | **Audit Log** | REST API | `GET` | `/audit-logs/:id` | Semua Role | Detail satu rekam jejak audit |
-| 69 | **Ringkasan** | REST API | `GET` | `/summary`, `/ringkasan` | Semua Role | KPI, tren bulanan, top ranking kerusakan |
-| 70 | **Analitik** | REST API | `GET` | `/error-analytics`, `/analytics` | Semua Role | Pareto, heatmap unit vs komponen, dsb. |
+| 56 | **Tiket** | REST API | `PATCH` | `/tickets/:id/leader` | Leader / Admin | Alihkan kepemimpinan tiket ke anggota software lain (status escalated) |
+| 57 | **Tiket** | REST API | `PATCH` | `/tickets/:id/aftersales-lead` | Aftersales PJ / Admin | Alihkan penanggung jawab Aftersales tiket (status open) |
+| 58 | **Tiket** | REST API | `DELETE` | `/tickets/:id/assignees/:assigneeId` | Leader / Admin / Self | Hapus anggota dari tim tiket (Leader dilarang dihapus langsung) |
+| 59 | **Tiket** | REST API | `GET` | `/tickets/:id/history` | Semua Role | Linimasa riwayat versi tiket |
+| 60 | **Tiket** | REST API | `GET` | `/tickets/:id/history/:version` | Semua Role | Detail snapshot versi riwayat tiket tertentu |
+| 61 | **Manajemen Tiket** | REST API | `GET` | `/ticket-management` | `coordinator`, `admin` | Ambil tiket yang dikelola (Aftersales: open & miliknya; Software: escalated & assigned; Admin: semua belum solved) |
+| 62 | **Manajemen Tiket** | REST API | `PATCH` | `/ticket-management/:id` | `coordinator` | Update status & tindakan tiket dari manajemen tiket (Admin dilarang update langsung) |
+| 63 | **Manajemen Tiket** | REST API | `PATCH` | `/ticket-management/:id/aftersales-lead` | Aftersales PJ / Admin | Alihkan penanggung jawab Aftersales saat tiket status open |
+| 64 | **Manajemen Tiket** | REST API | `POST` | `/ticket-management/:id/assignees` | Software Leader / Admin | Tambah anggota tim software ke `ticket_assignees` |
+| 65 | **Manajemen Tiket** | REST API | `PATCH` | `/ticket-management/:id/leader` | Software Leader / Admin | Alihkan kepemimpinan Leader software ke anggota lain (status escalated) |
+| 66 | **Manajemen Tiket** | REST API | `DELETE` | `/ticket-management/:id/assignees/:assigneeId` | Software Leader / Admin / Self | Hapus anggota tim software (Leader dilarang dihapus langsung) |
+| 67 | **Export** | REST API | `GET` | `/exports/excel`, `/tickets/export/excel` | Semua Role | Download rekapitulasi file Excel (`.xlsx`) |
+| 68 | **Export** | REST API | `GET` | `/exports/pdf`, `/tickets/export/pdf` | Semua Role | Download rekapitulasi file PDF (`.pdf`) |
+| 69 | **Audit Log** | **SSE Stream** | `GET` | `/audit-logs/stream` | Semua Role | Real-time live stream audit log |
+| 70 | **Audit Log** | REST API | `GET` | `/audit-logs` | Semua Role | Daftar rekam jejak audit log |
+| 71 | **Audit Log** | REST API | `GET` | `/audit-logs/:id` | Semua Role | Detail satu rekam jejak audit |
+| 72 | **Ringkasan** | REST API | `GET` | `/summary`, `/ringkasan` | Semua Role | KPI, tren bulanan, top ranking kerusakan |
+| 73 | **Analitik** | REST API | `GET` | `/error-analytics`, `/analytics` | Semua Role | Pareto, heatmap unit vs komponen, dsb. |
 
 ---
 
@@ -611,8 +614,11 @@ Mendaftarkan akun pengguna dashboard baru.
 * **Password Awal:** Otomatis digenerate dengan pola **nama email sebelum `@` + `12345`** (contoh: `joko@gmail.com` $\rightarrow$ `joko12345`). Nilai `initialPassword` ini dikembalikan di respon agar admin dapat meneruskannya kepada pengguna.
 * **Audit Trail:** Pembuatan akun dicatat lengkap dengan data aktor pembuat di sistem `audit_logs`.
 
-* **telegramId** *(String, opsional, max 50)*: tujuan DM notifikasi invite, tidak disimpan di DB (hanya diverifikasi ringan ke whitelist username).
-* **username** *(String, opsional, max 100)*: tujuan DM notifikasi invite, tidak disimpan di DB, diverifikasi ringan ke whitelist.
+* **telegramUserId** / **telegram_user_id** *(UUID string, opsional)*: ID akun dari Whitelist Telegram (`telegram_users.id`) untuk menautkan pengguna dashboard dengan akun Telegram (relasi 1-to-1). Jika diisi:
+  * Akun Telegram harus terdaftar terlebih dahulu di whitelist (jika tidak ditemukan $\rightarrow$ `404 Not Found`).
+  * Akun Telegram tidak boleh sudah tertaut dengan akun pengguna dashboard lain (jika sudah tertaut $\rightarrow$ `409 Conflict`).
+* **telegramId** *(String, opsional, max 50)*: ID telegram numerik tujuan notifikasi invite/OTP legacy.
+* **username** *(String, opsional, max 100)*: Username telegram tujuan notifikasi invite/OTP legacy.
 
 #### Request Body Valid
 ```json
@@ -621,10 +627,8 @@ Mendaftarkan akun pengguna dashboard baru.
   "name": "Joko Susilo",
   "role": "coordinator",
   "division": "after_sales",
-  "telegramId": "123456789",
-  "username": "joko_d"
+  "telegramUserId": "c3da5963-8482-4537-b3b0-10ee93126284"
 }
-```
 ```
 
 #### Response Sukses: `201 Created`
@@ -640,11 +644,30 @@ Mendaftarkan akun pengguna dashboard baru.
       "role": "coordinator",
       "division": "after_sales",
       "status": "invited",
+      "telegram_user_id": "c3da5963-8482-4537-b3b0-10ee93126284",
       "must_change_password": true,
       "created_at": "2026-10-09T05:30:00.000Z"
     },
     "initialPassword": "joko12345"
   }
+}
+```
+
+#### ❌ Contoh Akun Telegram Belum di Whitelist: `404 Not Found`
+```json
+{
+  "success": false,
+  "statusCode": 404,
+  "message": "Akun Telegram tidak ditemukan di Whitelist Telegram. Harap masukkan ke Whitelist Telegram terlebih dahulu."
+}
+```
+
+#### ❌ Contoh Akun Telegram Sudah Tertaut: `409 Conflict`
+```json
+{
+  "success": false,
+  "statusCode": 409,
+  "message": "Akun Telegram ini sudah ditautkan ke pengguna lain."
 }
 ```
 
@@ -750,9 +773,11 @@ Memperbarui data pengguna (nama, email, role, divisi, atau status akun).
   "name": "Joko Susilo, S.T.",
   "role": "coordinator",
   "division": "software",
-  "status": "active"
+  "status": "active",
+  "telegramUserId": "c3da5963-8482-4537-b3b0-10ee93126284"
 }
 ```
+* **telegramUserId** / **telegram_user_id** *(UUID string, opsional)*: UUID dari whitelist Telegram untuk menautkan akun, atau `null` untuk membatalkan tautan.
 
 #### Response Sukses: `200 OK`
 ```json
@@ -1266,9 +1291,12 @@ GET /tickets?status=unknown_status
 | **HTTP Method** | `POST` |
 | **Endpoint Path** | `/tickets` |
 | **Autentikasi** | `Authorization: Bearer <access_token>` |
-| **Role Izin** | **Semua Role** (`admin`, `coordinator`, `viewer`) |
+| **Role Izin** | **Hanya `coordinator` (Divisi Aftersales)** |
 
 Membuat tiket baru manual dari antarmuka dashboard.
+* **Otorisasi Khusus:** Pembuatan tiket baru dibatasi hanya untuk pengguna dengan role `coordinator` dan divisi `after_sales`. Pengguna dengan peran `admin`, `viewer`, atau koordinator divisi lain akan ditolak (`403 Forbidden`).
+* **Penanggung Jawab Awal:** Akun koordinator pembuat tiket otomatis dicatat sebagai penanggung jawab Aftersales (`aftersales_user_id`) pada tiket.
+* **Audit Trail:** Penambahan tiket dicatat ke `audit_logs` dengan entitas `Ticket` dan menyiarkan event SSE `ticket_created`.
 
 #### Request Body Valid
 ```json
@@ -1306,9 +1334,19 @@ Membuat tiket baru manual dari antarmuka dashboard.
       "status": "open",
       "severity": "sedang",
       "unitCode": "UN-10023",
+      "aftersalesUserId": "981ba263-8103-4c76-a7ed-f241297e8b27",
       "createdAt": "2026-10-09T08:30:00.000Z"
     }
   }
+}
+```
+
+#### ❌ Contoh Akses Ditolak untuk Non-Aftersales Coordinator: `403 Forbidden`
+```json
+{
+  "success": false,
+  "statusCode": 403,
+  "message": "Akses ditolak: Fitur penambahan tiket baru hanya dapat dilakukan oleh Koordinator divisi Aftersales."
 }
 ```
 
@@ -1424,9 +1462,10 @@ Memperbarui status penanganan, severity, catatan, atau rincian analisis teknis t
 
 | Divisi / Peran | Persyaratan Izin Update |
 |:---|:---|
-| **Aftersales** (`division: after_sales`) | **Bebas mengupdate** pada semua status (`open`, `escalated`, `solved`) tanpa perlu terdaftar di `ticket_assignees`. |
-| **Software** (`division: software`) | **Hanya dapat mengupdate saat status tiket `escalated`** DAN **wajib terdaftar** di `ticket_assignees` tiket bersangkutan. |
-| **Admin** (`role: admin`) | Memiliki akses penuh memperbarui tiket pada kondisi apa pun. |
+| **Aftersales Coordinator** (`division: after_sales`) | **Hanya dapat mengupdate saat status tiket `open`** DAN **merupakan penanggung jawab Aftersales** (`aftersales_user_id`) tiket tersebut. |
+| **Software Coordinator** (`division: software`) | **Hanya dapat mengupdate saat status tiket `escalated`** DAN **wajib terdaftar** di `ticket_assignees` tiket bersangkutan. |
+| **Admin** (`role: admin`) | **Ditolak (`403 Forbidden`)**. Admin hanya dapat mengelola akses, mengalihkan penanggung jawab/leader, dan mengelola anggota tim, bukan memperbarui penanganan tiket. |
+| **Viewer** (`role: viewer`) | **Ditolak (`403 Forbidden`)**. Hanya memiliki hak baca (read-only). |
 
 #### âŒ Contoh Error Status Salah: `422 Unprocessable Entity`
 ```json
@@ -1628,6 +1667,66 @@ Mengalihkan peran kepemimpinan (Leader) tiket ke anggota tim software lain yang 
   "assigneeId": "550e8400-e29b-41d4-a716-446655440002"
 }
 ```
+Atau:
+```json
+{
+  "userId": "96f93896-044f-4a3f-8f11-df90fd9a7612"
+}
+```
+
+---
+
+### `PATCH /tickets/:id/aftersales-lead`
+
+| Parameter | Spesifikasi |
+|:---|:---|
+| **Protokol** | **REST API** |
+| **HTTP Method** | `PATCH` |
+| **Endpoint Path** | `/tickets/:id/aftersales-lead` |
+| **Autentikasi** | `Authorization: Bearer <access_token>` |
+| **Hak Akses** | **Penanggung Jawab Aftersales Tiket Saat Ini** atau **Admin** |
+
+Mengalihkan penanggung jawab Aftersales tiket (`aftersales_user_id`) ke pengguna Aftersales lain.
+* **Syarat Status:** Tiket harus berstatus **`open`**. Jika tiket sudah `escalated` atau `solved`, request ditolak (`403 Forbidden`).
+* **Validasi Pengguna:** Pengguna target (`aftersalesUserId`) harus terdaftar dan memiliki divisi **`after_sales`**.
+* **Audit & Linimasa:** Tindakan ini menaikkan versi tiket (`currentVersion + 1`), mencatat riwayat ke `ticket_history`, mencatat entri audit log dengan entitas `TicketAftersalesLead`, dan menyiarkan event SSE `ticket_updated`.
+
+#### Request Body
+```json
+{
+  "aftersalesUserId": "981ba263-8103-4c76-a7ed-f241297e8b27"
+}
+```
+
+#### Response Sukses: `200 OK`
+```json
+{
+  "success": true,
+  "statusCode": 200,
+  "message": "Penanggung jawab Aftersales berhasil dialihkan",
+  "data": {
+    "id": "ERR-20261009-0001",
+    "currentVersion": 2,
+    "status": "Open",
+    "aftersalesUserId": "981ba263-8103-4c76-a7ed-f241297e8b27",
+    "aftersalesUser": {
+      "id": "981ba263-8103-4c76-a7ed-f241297e8b27",
+      "name": "Budi Aftersales Baru",
+      "email": "budi.new@erad.id",
+      "division": "after_sales"
+    }
+  }
+}
+```
+
+#### ❌ Contoh Tiket Bukan Berstatus Open: `403 Forbidden`
+```json
+{
+  "success": false,
+  "statusCode": 403,
+  "message": "Akses ditolak: Pengalihan penanggung jawab Aftersales hanya dapat dilakukan ketika tiket berstatus 'open' (status saat ini: 'escalated')."
+}
+```
 
 ---
 
@@ -1639,11 +1738,21 @@ Mengalihkan peran kepemimpinan (Leader) tiket ke anggota tim software lain yang 
 | **HTTP Method** | `DELETE` |
 | **Endpoint Path** | `/tickets/:id/assignees/:assigneeId` |
 | **Autentikasi** | `Authorization: Bearer <access_token>` |
-| **Hak Akses** | **Leader Tiket**, Admin, atau Anggota bersangkutan |
+| **Hak Akses** | **Leader Tiket**, Admin, atau Anggota bersangkutan (Self) |
 
-Menghapus keikutsertaan anggota dari tiket.
-* **Keamanan Data**: Riwayat perubahan yang pernah dicatat oleh anggota ini di `ticket_history` **tetap aman dan ter-record** lengkap dengan nama dan ID penulis aslinya.
-* **Aturan Leader**: Jika Leader ingin keluar/dihapus dan masih ada anggota lain di tiket, Leader wajib mengalihkan kepemimpinan terlebih dahulu via `PATCH /tickets/:id/leader`.
+Menghapus keikutsertaan anggota tim dari tiket.
+* **Proteksi Leader Tim (PENTING):** Leader tim **tidak boleh langsung dihapus**. Jika mencoba menghapus leader secara langsung, request ditolak dengan kode **`400 Bad Request`**. Untuk menghapus leader, peran kepemimpinan harus dialihkan terlebih dahulu ke anggota lain via `PATCH /tickets/:id/leader`. Setelah statusnya menjadi anggota biasa, barulah akun tersebut dapat dihapus dari tim.
+* **Keamanan Data**: Riwayat perubahan yang pernah dicatat oleh anggota ini di `ticket_history` **tetap aman dan ter-record** lengkap dengan nama dan identitas aslinya.
+* **Audit Trail**: Dicatat di audit log dengan entitas `TicketAssignee` dan tindakan `delete`.
+
+#### ❌ Contoh Error Mencoba Hapus Leader Langsung: `400 Bad Request`
+```json
+{
+  "success": false,
+  "statusCode": 400,
+  "message": "Leader tim tidak dapat langsung dihapus dari tim. Silakan alihkan tanggung jawab Leader ke anggota lain terlebih dahulu sebelum menghapus."
+}
+```
 
 ---
 
@@ -1763,12 +1872,13 @@ Koneksi streaming waktu nyata (real-time) yang memancarkan event saat tiket dibu
 
 ---
 
-## 7. Coordinator Ticket Management Module (`/ticket-management`)
+## 7. Ticket Management Module (`/ticket-management`)
 
-Modul operasional khusus untuk pengguna dengan peran **`coordinator`** untuk mengelola tiket penanganan sesuai tanggung jawab divisi masing-masing:
-* **Divisi Aftersales (`division: "after_sales"`)**: Hanya menampilkan dan mengelola tiket berstatus **`open`** yang dibuat oleh dirinya sendiri (diverifikasi secara historis melalui `ticket_history` versi awal v0/v1).
-* **Divisi Software (`division: "software"`)**: Hanya menampilkan dan mengelola tiket berstatus **`escalated`** di mana dirinya terdaftar aktif dalam daftar **`ticket_assignees`**.
-* **Proteksi Akses**: Peran `admin` dan `viewer` dilarang mengakses modul ini (`403 Forbidden`).
+Modul operasional untuk mengelola alur penanganan tiket sesuai tanggung jawab peran dan divisi:
+* **Divisi Aftersales (`division: "after_sales"`)**: Menampilkan dan mengelola tiket berstatus **`open`** di mana dirinya tercatat sebagai penanggung jawab (`aftersales_user_id`).
+* **Divisi Software (`division: "software"`)**: Menampilkan dan mengelola tiket berstatus **`escalated`** di mana dirinya terdaftar aktif dalam daftar **`ticket_assignees`**.
+* **Admin (`role: "admin"`)**: Memiliki akses ke modul ini untuk melihat seluruh tiket yang belum terselesaikan (status **`open`** & **`escalated`**). Admin bertugas mengelola penugasan tim, mengalihkan penanggung jawab Aftersales, mengalihkan Leader Software, dan mengelola akses penugasan. Admin **dilarang memperbarui status/tindakan tiket secara langsung** (`PATCH /ticket-management/:id` hanya untuk `coordinator`).
+* **Proteksi Akses**: Pengguna dengan peran `viewer` dilarang mengakses modul ini (`403 Forbidden`).
 
 ---
 
@@ -1781,14 +1891,17 @@ Modul operasional khusus untuk pengguna dengan peran **`coordinator`** untuk men
 | **Endpoint Path** | `/ticket-management` |
 | **Query Params** | `?search=&severity=` |
 | **Autentikasi** | `Authorization: Bearer <access_token>` |
-| **Role Izin** | **Hanya `coordinator`** (`after_sales` & `software`) |
+| **Role Izin** | **`coordinator`** dan **`admin`** |
 
-Mengambil daftar tiket yang menjadi tanggung jawab koordinator yang sedang login beserta KPI ringkasan dan metadata koordinator.
+Mengambil daftar tiket yang dikelola beserta ringkasan KPI dan metadata:
+* **Jika Coordinator Aftersales:** Tiket berstatus `open` yang menjadi tanggung jawabnya.
+* **Jika Coordinator Software:** Tiket berstatus `escalated` yang ditugaskan kepadanya.
+* **Jika Admin:** Seluruh tiket aktif belum selesai (status `open` & `escalated`).
 
 * **`search`** *(String, opsional)*: Pencarian teks bebas pada ID tiket, unit, modul komponen, client, atau deskripsi kerusakan.
 * **`severity`** *(String enum, opsional)*: `"rendah"`, `"sedang"`, atau `"tinggi"`.
 
-#### Response Sukses: `200 OK`
+#### Response Sukses: `200 OK` (Contoh Akun Coordinator Software)
 ```json
 {
   "success": true,
@@ -1826,6 +1939,7 @@ Mengambil daftar tiket yang menjadi tanggung jawab koordinator yang sedang login
   "meta": {
     "total": 1,
     "division": "software",
+    "role": "coordinator",
     "coordinatorName": "Siti Software Leader",
     "coordinatorEmail": "siti@erad.id"
   },
@@ -1837,12 +1951,34 @@ Mengambil daftar tiket yang menjadi tanggung jawab koordinator yang sedang login
 }
 ```
 
-#### âŒ Contoh Akses Ditolak untuk Non-Coordinator: `403 Forbidden`
+#### Response Sukses: `200 OK` (Contoh Akun Admin)
+```json
+{
+  "success": true,
+  "statusCode": 200,
+  "message": "Berhasil mengambil tiket yang dikelola coordinator",
+  "data": [ ... ],
+  "meta": {
+    "total": 12,
+    "division": "admin",
+    "role": "admin",
+    "coordinatorName": "Super Administrator",
+    "coordinatorEmail": "admin@erad.id"
+  },
+  "kpi": {
+    "total": 12,
+    "highSeverityCount": 4,
+    "targetDivision": "Semua Tiket Belum Solved (Status Open & Escalated)"
+  }
+}
+```
+
+#### ❌ Contoh Akses Ditolak untuk Viewer: `403 Forbidden`
 ```json
 {
   "success": false,
   "statusCode": 403,
-  "message": "Akses ditolak: Menu manajemen tiket hanya dapat diakses oleh peran Coordinator."
+  "message": "Akses ditolak: Menu manajemen tiket hanya dapat diakses oleh peran Coordinator dan Admin."
 }
 ```
 
@@ -1856,9 +1992,12 @@ Mengambil daftar tiket yang menjadi tanggung jawab koordinator yang sedang login
 | **HTTP Method** | `PATCH` |
 | **Endpoint Path** | `/ticket-management/:id` |
 | **Autentikasi** | `Authorization: Bearer <access_token>` |
-| **Role Izin** | **Hanya `coordinator`** |
+| **Role Izin** | **Hanya `coordinator`** (sesuai status & divisi) |
 
-Memperbarui status, penanganan, atau catatan tiket yang sedang dikelola. Aksi ini secara otomatis menaikkan versi tiket (`version + 1`), mencatat entri baru ke `ticket_history`, dan mencatat riwayat audit log.
+Memperbarui status, penanganan, atau catatan tiket dari menu manajemen tiket. Aksi ini secara otomatis menaikkan versi tiket (`version + 1`), mencatat entri baru ke `ticket_history`, dan mencatat riwayat audit log.
+* **Aftersales:** Hanya dapat memperbarui saat status tiket `open`.
+* **Software:** Hanya dapat memperbarui saat status tiket `escalated` dan terdaftar di tim tiket.
+* **Admin:** Ditolak (`403 Forbidden`). Admin tidak dapat melakukan pembaruan tiket teknis secara langsung.
 
 #### Request Body
 ```json
@@ -1890,6 +2029,53 @@ Memperbarui status, penanganan, atau catatan tiket yang sedang dikelola. Aksi in
 }
 ```
 
+#### ❌ Contoh Error Admin Mencoba Update Tiket: `403 Forbidden`
+```json
+{
+  "success": false,
+  "statusCode": 403,
+  "message": "Akses ditolak: Admin tidak memiliki akses untuk update tiket. Pembaruan tiket hanya dapat dilakukan oleh Koordinator sesuai divisi dan status tiket."
+}
+```
+
+---
+
+### `PATCH /ticket-management/:id/aftersales-lead`
+
+| Parameter | Spesifikasi |
+|:---|:---|
+| **Protokol** | **REST API** |
+| **HTTP Method** | `PATCH` |
+| **Endpoint Path** | `/ticket-management/:id/aftersales-lead` |
+| **Autentikasi** | `Authorization: Bearer <access_token>` |
+| **Role Izin** | **Penanggung Jawab Aftersales Tiket Saat Ini** atau **Admin** |
+
+Mengalihkan penanggung jawab Aftersales tiket (`aftersales_user_id`) ke koordinator Aftersales lain dari menu manajemen tiket.
+* **Syarat:** Tiket harus berstatus **`open`**.
+* **Target:** `aftersalesUserId` wajib terdaftar di sistem dengan `division: "after_sales"`.
+
+#### Request Body
+```json
+{
+  "aftersalesUserId": "981ba263-8103-4c76-a7ed-f241297e8b27"
+}
+```
+
+#### Response Sukses: `200 OK`
+```json
+{
+  "success": true,
+  "statusCode": 200,
+  "message": "Penanggung jawab Aftersales berhasil dialihkan",
+  "data": {
+    "id": "ERR-20261009-0001",
+    "currentVersion": 2,
+    "status": "Open",
+    "aftersalesUserId": "981ba263-8103-4c76-a7ed-f241297e8b27"
+  }
+}
+```
+
 ---
 
 ### `POST /ticket-management/:id/assignees`
@@ -1900,19 +2086,14 @@ Memperbarui status, penanganan, atau catatan tiket yang sedang dikelola. Aksi in
 | **HTTP Method** | `POST` |
 | **Endpoint Path** | `/ticket-management/:id/assignees` |
 | **Autentikasi** | `Authorization: Bearer <access_token>` |
-| **Role Izin** | **`coordinator`** (Leader tim Software atau Koordinator) |
+| **Role Izin** | **Software Leader Tiket** atau **Admin** |
 
 Menambahkan anggota tim software baru ke dalam tiket (`ticket_assignees`).
+* Tiket harus berada pada status **`escalated`**.
+* Anggota yang ditambahkan harus berasal dari divisi software.
+* Mendukung penugasan via `userId` (akun dashboard) atau `telegramUserId` (whitelist telegram).
 
-**Aturan Bisnis & Validasi:**
-1. Tiket harus berada pada status **`escalated`**.
-2. Anggota yang ditambahkan harus berasal dari **divisi software** (atau admin/coordinator).
-3. Mendukung penugasan anggota dari akun **Web Dashboard** (`userId` / `email`) maupun akun **Telegram Whitelist** (`telegramUserId` / `telegramId`).
-4. Anggota yang sudah terdaftar tidak dapat ditambahkan ulang (duplikasi ditolak dengan status `409 Conflict`).
-5. Jika `isLeader: true` dipilih, peran kepemimpinan tiket (`leader_assignee_id`) akan dialihkan ke anggota baru tersebut.
-6. Aksi ini menaikkan versi tiket (`version + 1`), mencatat nama anggota yang ditambahkan ke `ticket_history`, dan menyiarkan event SSE `ticket_updated`.
-
-#### Request Body (Pilihan 1: Menambahkan Akun Web Dashboard)
+#### Request Body (Akun Dashboard)
 ```json
 {
   "userId": "96f93896-044f-4a3f-8f11-df90fd9a7612",
@@ -1920,7 +2101,7 @@ Menambahkan anggota tim software baru ke dalam tiket (`ticket_assignees`).
 }
 ```
 
-#### Request Body (Pilihan 2: Menambahkan Pengguna Telegram Whitelist)
+#### Request Body (Whitelist Telegram)
 ```json
 {
   "telegramUserId": "c3da5963-8482-4537-b3b0-10ee93126284",
@@ -1935,13 +2116,10 @@ Menambahkan anggota tim software baru ke dalam tiket (`ticket_assignees`).
   "statusCode": 201,
   "message": "Anggota tim software 'Doni Kurniawan' berhasil ditambahkan ke tiket",
   "data": {
-    "message": "Anggota tim software 'Doni Kurniawan' berhasil ditambahkan ke tiket",
     "assignee": {
       "id": "e2f1a0b3-1122-4455-8899-aabbccddeeff",
       "ticketId": "ERR-20261009-0005",
-      "userId": null,
-      "telegramUserId": "c3da5963-8482-4537-b3b0-10ee93126284",
-      "createdAt": "2026-10-09T08:40:00.000Z"
+      "userId": "96f93896-044f-4a3f-8f11-df90fd9a7612"
     },
     "ticket": {
       "id": "ERR-20261009-0005",
@@ -1952,21 +2130,41 @@ Menambahkan anggota tim software baru ke dalam tiket (`ticket_assignees`).
 }
 ```
 
-#### âŒ Contoh Anggota Sudah Terdaftar: `409 Conflict`
+---
+
+### `PATCH /ticket-management/:id/leader`
+
+| Parameter | Spesifikasi |
+|:---|:---|
+| **Protokol** | **REST API** |
+| **HTTP Method** | `PATCH` |
+| **Endpoint Path** | `/ticket-management/:id/leader` |
+| **Autentikasi** | `Authorization: Bearer <access_token>` |
+| **Role Izin** | **Software Leader Tiket Saat Ini** atau **Admin** |
+
+Mengalihkan peran Leader tim Software ke anggota tim software lain yang sudah terdaftar di `ticket_assignees` tiket bersangkutan.
+* Tiket harus berada pada status **`escalated`**.
+* Target assignee wajib sudah terdaftar dalam penugasan tiket ini.
+
+#### Request Body
 ```json
 {
-  "success": false,
-  "statusCode": 409,
-  "message": "Anggota tersebut sudah terdaftar dalam ticket assignees tiket ini."
+  "assigneeId": "ca2823c5-d250-47de-9238-991d33afb896"
 }
 ```
 
-#### âŒ Contoh Tiket Belum Escalated: `403 Forbidden`
+#### Response Sukses: `200 OK`
 ```json
 {
-  "success": false,
-  "statusCode": 403,
-  "message": "Akses ditolak: Penambahan anggota tim software hanya dapat dilakukan ketika tiket berstatus 'escalated' (status saat ini: 'open')."
+  "success": true,
+  "statusCode": 200,
+  "message": "Leader tim software berhasil dialihkan",
+  "data": {
+    "id": "ERR-20261009-0005",
+    "currentVersion": 4,
+    "status": "Escalated",
+    "leaderAssigneeId": "ca2823c5-d250-47de-9238-991d33afb896"
+  }
 }
 ```
 
@@ -1980,10 +2178,11 @@ Menambahkan anggota tim software baru ke dalam tiket (`ticket_assignees`).
 | **HTTP Method** | `DELETE` |
 | **Endpoint Path** | `/ticket-management/:id/assignees/:assigneeId` |
 | **Autentikasi** | `Authorization: Bearer <access_token>` |
-| **Role Izin** | **`coordinator`** (Leader tiket, Koordinator, atau Anggota bersangkutan) |
+| **Role Izin** | **Software Leader Tiket**, **Admin**, atau **Anggota bersangkutan (Self)** |
 
-Menghapus penugasan anggota tim software dari tiket.
-* Jika anggota yang dihapus merupakan Leader saat ini, kepemimpinan tiket secara otomatis dialihkan ke anggota berikutnya yang terdaftar.
+Menghapus anggota tim software dari penugasan tiket.
+* **Proteksi Leader Tim (PENTING):** Leader tim **tidak dapat langsung dihapus dari tim**. Jika mencoba menghapus leader secara langsung, request ditolak dengan kode **`400 Bad Request`**.
+* **Prosedur Hapus Leader:** Alihkan tanggung jawab Leader ke anggota lain terlebih dahulu via `PATCH /ticket-management/:id/leader`. Setelah statusnya menjadi anggota biasa, barulah akun tersebut dapat dihapus dari tim.
 * Rekam jejak di `ticket_history` tetap utuh dan mencatat riwayat penghapusan keanggotaan tiket.
 
 #### Response Sukses: `200 OK`
@@ -1996,10 +2195,19 @@ Menghapus penugasan anggota tim software dari tiket.
     "message": "Anggota 'Doni Kurniawan' berhasil dihapus dari tiket",
     "ticket": {
       "id": "ERR-20261009-0005",
-      "currentVersion": 4,
+      "currentVersion": 5,
       "status": "Escalated"
     }
   }
+}
+```
+
+#### ❌ Contoh Error Mencoba Hapus Leader Langsung: `400 Bad Request`
+```json
+{
+  "success": false,
+  "statusCode": 400,
+  "message": "Leader tim tidak dapat langsung dihapus dari tim. Silakan alihkan tanggung jawab Leader ke anggota lain terlebih dahulu sebelum menghapus."
 }
 ```
 
@@ -2023,7 +2231,13 @@ Modul untuk mengunduh rekapitulasi data tiket dalam bentuk dokumen Excel (.xlsx)
 
 ## 9. Audit Log Module (`/audit-logs`)
 
-Mencatat seluruh rekam jejak aktivitas penting pengguna dan bot (tambah akun, edit role, ubah status tiket, login).
+Mencatat seluruh rekam jejak aktivitas penting pengguna dan sistem secara otomatis pada setiap mutasi data (CREATE, UPDATE, DELETE/SOFT DELETE):
+* **`Ticket`**: Pembuatan tiket baru, eskalasi, perubahan status penanganan, penyelesaian masalah (`solved`).
+* **`TicketAftersalesLead`**: Pengalihan tanggung jawab koordinator Aftersales pada tiket berstatus `open`.
+* **`TicketLeader`**: Pengalihan peran Software Leader tiket pada tiket berstatus `escalated`.
+* **`TicketAssignee`**: Penambahan anggota tim software, pembaruan anggota, dan penghapusan anggota dari penugasan tiket.
+* **`User`**: Registrasi pengguna baru (`register`), pembuatan akun oleh Admin, pembaruan profil/role, perubahan kata sandi (`change-password`), dan reset kata sandi akun via OTP Telegram (`reset-password`).
+* **`Master Data`**: Penambahan, modifikasi, dan penghapusan data Client, Lokasi, Komponen, Failure Code, serta Unit Asset Load Scanner.
 
 | Method | Endpoint | Deskripsi | Query Params |
 |:---|:---|:---|:---|
@@ -2032,6 +2246,38 @@ Mencatat seluruh rekam jejak aktivitas penting pengguna dan bot (tambah akun, ed
 | `GET` | `/audit-logs/stream` | Real-time SSE streaming aktivitas audit | `?token=<access_token>` atau Bearer header |
 
 * **Role Izin**: Semua Role (`admin`, `coordinator`, `viewer`).
+
+#### Contoh Respons: `200 OK` (`GET /audit-logs`)
+```json
+{
+  "success": true,
+  "statusCode": 200,
+  "data": [
+    {
+      "id": "e84f09d2-995c-4217-a065-27a1197e411b",
+      "actor": "admin@erad.id",
+      "actorUserId": "3c847b2b-4277-4c4c-81ba-4b2e88a3e7ef",
+      "action": "update",
+      "entityType": "TicketAftersalesLead",
+      "entityId": "ERR-20261009-0001",
+      "details": {
+        "identifier": "ERR-20261009-0001",
+        "changeSummary": "Penanggung jawab Aftersales dialihkan ke 'Budi Aftersales Baru'",
+        "ticketId": "ERR-20261009-0001",
+        "oldAftersalesUserId": "981ba263-8103-4c76-a7ed-f241297e8b27",
+        "newAftersalesUserId": "550e8400-e29b-41d4-a716-446655440001"
+      },
+      "createdAt": "2026-10-13T10:15:00.000Z"
+    }
+  ],
+  "pagination": {
+    "total": 142,
+    "page": 1,
+    "limit": 10,
+    "totalPages": 15
+  }
+}
+```
 
 ---
 
@@ -2072,7 +2318,7 @@ Jika mengirim query filter `?timeRange=10tahun`:
 
 | Status Code | Label Standar | Penyebab & Skenario Error | Contoh Respons JSON |
 |:---:|:---|:---|:---|
-| `400` | **Bad Request** | Sintaks request salah, mencoba mengubah status user menjadi `invited`, atau foreign key constraint melarang operasi. | `{"success":false,"statusCode":400,"message":"Status tidak dapat diubah ke 'invited'. Opsi status hanya 'active' atau 'suspended'."}` |
+| `400` | **Bad Request** | Sintaks request salah, mencoba mengubah status user menjadi `invited`, menghapus Leader tim secara langsung, atau foreign key constraint melarang operasi. | `{"success":false,"statusCode":400,"message":"Leader tim tidak dapat langsung dihapus dari tim. Silakan alihkan tanggung jawab Leader ke anggota lain terlebih dahulu sebelum menghapus."}` |
 | `401` | **Unauthorized** | Token tidak dikirim, token expired, atau kata sandi login salah. | `{"success":false,"statusCode":401,"message":"Email atau password salah. Sisa kesempatan login: 3 kali."}` |
 | `403` | **Forbidden** | Akun dinonaktifkan (`suspended`), peran pengguna tidak memiliki izin (misal Viewer mencoba tambah user atau akses manajemen tiket), atau tim software mencoba edit tiket non-escalated. | `{"success":false,"statusCode":403,"message":"Akses dilarang: Peran tidak memiliki izin yang cukup"}` |
 | `404` | **Not Found** | ID data atau endpoint URL tidak ditemukan. | `{"success":false,"statusCode":404,"message":"Tiket dengan ID tersebut tidak ditemukan"}` |

@@ -32,6 +32,7 @@ export const createUserSchema = z.object({
     .enum(["none", "after_sales", "software", "NONE", "AFTER_SALES", "SOFTWARE"])
     .optional()
     .default("none"),
+  telegram_user_id: z.string().nullable().optional(),
 });
 
 export const updateUserSchema = z.object({
@@ -55,6 +56,7 @@ export const updateUserSchema = z.object({
   status: z
     .enum(["ACTIVE", "SUSPENDED", "active", "suspended"])
     .optional(),
+  telegram_user_id: z.string().nullable().optional(),
 });
 
 // sync with apps/error-service/src/modules/telegram/telegram.schema.js

@@ -6,29 +6,38 @@ import { ticketIncludes } from "../ticket/ticket.repository.js";
  * - Divisi 'after_sales': Tiket status saat ini 'open' DAN dibuat oleh coordinator tersebut (dicek dari ticket_history version 1 atau version 0)
  * - Divisi 'software': Tiket status saat ini 'escalated' DAN coordinator tersebut masuk dalam ticket_assignees
  */
-export const findManagedTicketIds = async ({ userId, division }) => {
+export const findManagedTicketIds = async ({ userId, division, role }) => {
+  const userRole = (role || "").toLowerCase();
+
+  if (userRole === "admin") {
+    // Admin mengelola tiket yang belum solved (open atau escalated)
+    const rows = await prisma.$queryRaw`
+      SELECT DISTINCT t.id FROM tickets t
+      JOIN ticket_history th_current ON th_current.ticket_id = t.id AND th_current.version = t.current_version
+      WHERE th_current.status IN ('open'::ticket_status, 'escalated'::ticket_status)
+    `;
+    return rows.map((r) => r.id);
+  }
+
   if (!userId || !division) return [];
 
   const div = division.toLowerCase();
 
   if (div === "after_sales") {
     // 1. Aftersales Coordinator:
-    // Status terkini = 'open'
-    // Pembuat = mengecek ticket_history version 1 (atau version 0 jika dibuat langsung di v0) dengan changed_by_user_id = userId
+    // Status terkini = 'open' DAN ditugaskan pada aftersales_user_id = userId
     const rows = await prisma.$queryRaw`
       SELECT DISTINCT t.id FROM tickets t
       JOIN ticket_history th_current ON th_current.ticket_id = t.id AND th_current.version = t.current_version
-      JOIN ticket_history th_creator ON th_creator.ticket_id = t.id AND (th_creator.version = 1 OR th_creator.version = 0)
       WHERE th_current.status = 'open'::ticket_status
-        AND th_creator.changed_by_user_id = ${userId}::uuid
+        AND t.aftersales_user_id = ${userId}::uuid
     `;
     return rows.map((r) => r.id);
   }
 
   if (div === "software") {
     // 2. Software Coordinator:
-    // Status terkini = 'escalated'
-    // Masuk sebagai anggota ticket_assignees
+    // Status terkini = 'escalated' DAN masuk sebagai anggota ticket_assignees
     const rows = await prisma.$queryRaw`
       SELECT DISTINCT t.id FROM tickets t
       JOIN ticket_history th_current ON th_current.ticket_id = t.id AND th_current.version = t.current_version

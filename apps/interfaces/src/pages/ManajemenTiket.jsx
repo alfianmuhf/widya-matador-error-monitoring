@@ -1,35 +1,43 @@
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import api, { API_BASE_URL } from "../lib/api.js";
 import { useAuth } from "../context/AuthContext.jsx";
 import UpdateTicketModal from "../components/tickets/UpdateTicketModal.jsx";
 import TicketDetailDrawer from "../components/tickets/TicketDetailDrawer.jsx";
 import AddAssigneeModal from "../components/tickets/AddAssigneeModal.jsx";
+import TransferAftersalesModal from "../components/tickets/TransferAftersalesModal.jsx";
+import CreateTicketModal from "../components/tickets/CreateTicketModal.jsx";
 
 export default function ManajemenTiket() {
-  const { accessToken, user } = useAuth();
+  const { user, accessToken } = useAuth();
   const currentUser = user?.user || user;
-  const userDivision = (currentUser?.division || "").toLowerCase();
   const userRole = (currentUser?.role || "").toLowerCase();
+  const userDivision = (currentUser?.division || "").toLowerCase();
+
+  const isAdmin = userRole === "admin";
+  const isCoordinator = userRole === "coordinator";
+  const isAftersalesCoordinator = isCoordinator && userDivision === "after_sales";
+  const canCreateTicket = isAftersalesCoordinator;
 
   const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [metaInfo, setMetaInfo] = useState(null);
-  const [kpiInfo, setKpiInfo] = useState(null);
 
-  const [searchTerm, setSearchTerm] = useState("");
-  const [selectedSeverity, setSelectedSeverity] = useState("all"); // "all" | "rendah" | "sedang" | "tinggi"
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
 
-  // Modal State
+  // Modals State
   const [editingTicket, setEditingTicket] = useState(null);
   const [detailTicket, setDetailTicket] = useState(null);
   const [assigneeTicket, setAssigneeTicket] = useState(null);
+  const [transferAftersalesTicket, setTransferAftersalesTicket] = useState(null);
+  const [isCreateTicketOpen, setIsCreateTicketOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState(null);
 
   const showToast = (msg) => {
     setToastMessage(msg);
     setTimeout(() => {
       setToastMessage(null);
-    }, 4000);
+    }, 3500);
   };
 
   // Helper normalize assignee
@@ -44,18 +52,17 @@ export default function ManajemenTiket() {
       isLead: Boolean(a.isLeader || a.isLead),
       isLeader: Boolean(a.isLeader || a.isLead),
       userId: a.userId || a.user_id,
-      telegramUserId: a.telegramUserId || a.telegram_user_id,
+      user: a.user || null,
+      telegramUser: a.telegramUser || a.user?.telegram_user || null,
     };
   }, []);
 
-  // Fetch managed tickets from Dedicated Coordinator Backend API (/ticket-management)
+  // Fetch managed tickets from /ticket-management
   const fetchManagedTickets = useCallback(async () => {
     try {
       setLoading(true);
       const res = await api.get("/ticket-management");
       const list = res.data?.data || [];
-      const meta = res.data?.meta || {};
-      const kpi = res.data?.kpi || {};
 
       const formatted = list.map((t) => {
         const backendAssignees = (t.assignees || []).map(normalizeAssignee).filter(Boolean);
@@ -67,10 +74,8 @@ export default function ManajemenTiket() {
       });
 
       setTickets(formatted);
-      setMetaInfo(meta);
-      setKpiInfo(kpi);
     } catch (err) {
-      console.error("Gagal memuat tiket yang dikelola coordinator:", err);
+      console.error("Gagal memuat tiket yang dikelola:", err);
       const msg = err.response?.data?.message || "Gagal memuat data tiket dari server.";
       showToast(msg);
     } finally {
@@ -102,37 +107,14 @@ export default function ManajemenTiket() {
     };
   }, [accessToken, fetchManagedTickets]);
 
-  const activeDivision = (metaInfo?.division || userDivision).toLowerCase();
-  const isAfterSales = activeDivision === "after_sales";
-  const isSoftware = activeDivision === "software";
+  // Pagination calculation
+  const totalPages = Math.max(1, Math.ceil(tickets.length / itemsPerPage));
+  const paginatedTickets = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    return tickets.slice(start, start + itemsPerPage);
+  }, [tickets, currentPage]);
 
-  // Filter Search & Severity
-  const filteredTickets = useMemo(() => {
-    return tickets.filter((t) => {
-      const sev = (t.rawSeverity || t.severity || "").toLowerCase();
-
-      // Filter Severity
-      if (selectedSeverity !== "all" && sev !== selectedSeverity) return false;
-
-      // Filter Search
-      if (searchTerm) {
-        const query = searchTerm.toLowerCase();
-        const matchId = t.id?.toLowerCase().includes(query);
-        const matchUnit = t.unit?.toLowerCase().includes(query);
-        const matchClient = t.client?.toLowerCase().includes(query);
-        const matchComp = t.component?.toLowerCase().includes(query);
-        const matchCode = t.failureCode?.toLowerCase().includes(query);
-        const matchDesc = (t.damageDescription || t.description || "")?.toLowerCase().includes(query);
-        if (!matchId && !matchUnit && !matchClient && !matchComp && !matchCode && !matchDesc) {
-          return false;
-        }
-      }
-
-      return true;
-    });
-  }, [tickets, selectedSeverity, searchTerm]);
-
-  // Helper badge status
+  // Helper badge status (clean text, no dot icon)
   const getStatusBadge = (statusStr) => {
     const s = (statusStr || "").toLowerCase();
     if (s === "open") {
@@ -141,7 +123,6 @@ export default function ManajemenTiket() {
         bg: "rgba(59, 130, 246, 0.12)",
         color: "#2563eb",
         border: "rgba(59, 130, 246, 0.25)",
-        dot: "#3b82f6",
       };
     }
     if (s === "escalated") {
@@ -150,7 +131,6 @@ export default function ManajemenTiket() {
         bg: "rgba(245, 158, 11, 0.12)",
         color: "#d97706",
         border: "rgba(245, 158, 11, 0.3)",
-        dot: "#f59e0b",
       };
     }
     return {
@@ -158,20 +138,7 @@ export default function ManajemenTiket() {
       bg: "rgba(16, 185, 129, 0.12)",
       color: "#059669",
       border: "rgba(16, 185, 129, 0.25)",
-      dot: "#10b981",
     };
-  };
-
-  // Helper badge severity
-  const getSeverityBadge = (sevStr) => {
-    const s = (sevStr || "").toLowerCase();
-    if (s === "tinggi") {
-      return { label: "Tinggi", bg: "#fef2f2", color: "#dc2626", border: "#fecaca" };
-    }
-    if (s === "sedang") {
-      return { label: "Sedang", bg: "#fffbeb", color: "#d97706", border: "#fde68a" };
-    }
-    return { label: "Rendah", bg: "#f0fdf4", color: "#16a34a", border: "#bbf7d0" };
   };
 
   const handleUpdateSuccess = (updated) => {
@@ -179,226 +146,113 @@ export default function ManajemenTiket() {
     fetchManagedTickets();
   };
 
-  const handleAssigneeSuccess = (updated) => {
-    showToast(`Daftar anggota tim software berhasil diperbarui!`);
+  const handleAssigneeSuccess = () => {
+    showToast("Daftar tim software & leader berhasil diperbarui!");
+    fetchManagedTickets();
+  };
+
+  const handleTransferAftersalesSuccess = (updated) => {
+    showToast(`Penanggung jawab Aftersales tiket ${updated.id} berhasil dialihkan!`);
+    fetchManagedTickets();
+  };
+
+  const handleCreateTicketSuccess = (created) => {
+    showToast(`Tiket baru ${created.id} berhasil dibuat!`);
     fetchManagedTickets();
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+    <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "18px" }}>
       {/* TOAST NOTIFICATION */}
       {toastMessage && (
         <div
           style={{
             position: "fixed",
-            top: "24px",
+            bottom: "24px",
             right: "24px",
-            zIndex: 10000,
-            backgroundColor: "#0b1e27",
+            zIndex: 99999,
+            backgroundColor: "#11222c",
             color: "#ffffff",
-            padding: "14px 20px",
-            borderRadius: "10px",
-            boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.3)",
-            display: "flex",
-            alignItems: "center",
-            gap: "10px",
-            fontSize: "13.5px",
+            padding: "12px 20px",
+            borderRadius: "8px",
+            boxShadow: "0 10px 25px rgba(0,0,0,0.2)",
+            fontSize: "13px",
             fontWeight: 600,
-            borderLeft: "4px solid #10b981",
             animation: "fadeIn 0.2s ease",
           }}
         >
-          <span style={{ color: "#34d399", fontSize: "16px" }}>✓</span>
-          <span>{toastMessage}</span>
+          {toastMessage}
         </div>
       )}
 
-      {/* HEADER BANNER KHUSUS COORDINATOR */}
-      <div
-        style={{
-          backgroundColor: isAfterSales ? "#eff6ff" : "#fffbeb",
-          border: isAfterSales ? "1.5px solid #bfdbfe" : "1.5px solid #fde68a",
-          borderRadius: "12px",
-          padding: "18px 22px",
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          flexWrap: "wrap",
-          gap: "14px",
-        }}
-      >
-        <div>
-          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <span
-              style={{
-                fontSize: "11px",
-                fontWeight: 750,
-                textTransform: "uppercase",
-                letterSpacing: "0.06em",
-                color: isAfterSales ? "#1d4ed8" : "#b45309",
-                backgroundColor: isAfterSales ? "rgba(37, 99, 235, 0.15)" : "rgba(217, 119, 6, 0.15)",
-                padding: "3px 8px",
-                borderRadius: "5px",
-              }}
-            >
-              Akses Khusus Coordinator {isAfterSales ? "Aftersales" : "Software"}
-            </span>
-            <span style={{ fontSize: "12px", color: "var(--text-muted)" }}>
-              Login: <b>{metaInfo?.coordinatorName || currentUser?.name}</b> ({currentUser?.email})
-            </span>
-          </div>
-
-          <h2 style={{ fontSize: "18px", fontWeight: 750, color: "var(--text-dark)", marginTop: "6px" }}>
-            {isAfterSales
-              ? "📋 Tiket Open dalam Tanggung Jawab Aftersales"
-              : "💻 Tiket Escalated yang Ditugaskan ke Tim Software"}
-          </h2>
-          <p style={{ fontSize: "13px", color: "#475569", marginTop: "3px" }}>
-            {isAfterSales
-              ? "Menampilkan tiket yang berstatus 'Open' dan dibuat/ditangani oleh Anda (berdasarkan riwayat version 1 / awal)."
-              : "Menampilkan tiket yang berstatus 'Escalated' di mana Anda terdaftar aktif dalam daftar ticket_assignees."}
-          </p>
-        </div>
-
-        <div style={{ display: "flex", gap: "10px" }}>
-          <div
+      {/* HEADER AKSI: TOMBOL TAMBAH TIKET (KHUSUS COORDINATOR AFTERSALES) */}
+      {canCreateTicket && (
+        <div style={{ display: "flex", justifyContent: "flex-end" }}>
+          <button
+            type="button"
+            onClick={() => setIsCreateTicketOpen(true)}
             style={{
-              backgroundColor: "#ffffff",
-              padding: "10px 16px",
-              borderRadius: "10px",
-              border: "1px solid rgba(0,0,0,0.06)",
-              textAlign: "center",
-            }}
-          >
-            <div style={{ fontSize: "11px", color: "var(--text-muted)", fontWeight: 650, textTransform: "uppercase" }}>
-              Total Tiket
-            </div>
-            <div style={{ fontSize: "20px", fontWeight: 800, color: "var(--text-dark)" }}>
-              {kpiInfo?.total ?? tickets.length}
-            </div>
-          </div>
-
-          <div
-            style={{
-              backgroundColor: "#ffffff",
-              padding: "10px 16px",
-              borderRadius: "10px",
-              border: "1px solid rgba(0,0,0,0.06)",
-              textAlign: "center",
-            }}
-          >
-            <div style={{ fontSize: "11px", color: "#dc2626", fontWeight: 650, textTransform: "uppercase" }}>
-              Severity Tinggi
-            </div>
-            <div style={{ fontSize: "20px", fontWeight: 800, color: "#dc2626" }}>
-              {kpiInfo?.highSeverityCount ?? tickets.filter((t) => (t.rawSeverity || t.severity || "").toLowerCase() === "tinggi").length}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* FILTER & SEARCH BAR */}
-      <div
-        style={{
-          backgroundColor: "#ffffff",
-          borderRadius: "12px",
-          border: "1px solid var(--border-light)",
-          padding: "16px 20px",
-          boxShadow: "0 1px 3px rgba(0,0,0,0.02)",
-          display: "flex",
-          gap: "12px",
-          alignItems: "center",
-          justifyContent: "space-between",
-          flexWrap: "wrap",
-        }}
-      >
-        {/* Search Bar */}
-        <div style={{ flex: "1 1 320px", position: "relative" }}>
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="#94a3b8"
-            strokeWidth="2"
-            style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)" }}
-          >
-            <circle cx="11" cy="11" r="8" />
-            <line x1="21" y1="21" x2="16.65" y2="16.65" />
-          </svg>
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Cari ID tiket, unit, modul, klien, atau gejala..."
-            style={{
-              width: "100%",
-              padding: "8px 12px 8px 36px",
-              borderRadius: "8px",
-              border: "1px solid #cbd5e1",
+              padding: "8px 16px",
+              borderRadius: "6px",
               fontSize: "13px",
-              outline: "none",
-              backgroundColor: "#f8fafc",
+              fontWeight: 700,
+              border: "none",
+              backgroundColor: "#0e8587",
+              color: "#ffffff",
+              cursor: "pointer",
+              transition: "background-color 0.15s ease",
             }}
-            onFocus={(e) => (e.target.style.borderColor = "#0e8587")}
-            onBlur={(e) => (e.target.style.borderColor = "#cbd5e1")}
-          />
+            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#0b7173")}
+            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#0e8587")}
+          >
+            + Tambah Tiket
+          </button>
         </div>
+      )}
 
-        {/* Severity Filter */}
-        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-          <span style={{ fontSize: "12px", fontWeight: 650, color: "var(--text-muted)" }}>Severity:</span>
-          {["all", "tinggi", "sedang", "rendah"].map((sev) => {
-            const isSelected = selectedSeverity === sev;
-            return (
-              <button
-                key={sev}
-                type="button"
-                onClick={() => setSelectedSeverity(sev)}
-                style={{
-                  padding: "6px 12px",
-                  borderRadius: "6px",
-                  fontSize: "12px",
-                  fontWeight: 650,
-                  textTransform: "capitalize",
-                  cursor: "pointer",
-                  border: isSelected ? "1px solid #0e8587" : "1px solid #e2e8f0",
-                  backgroundColor: isSelected ? "#e8f7f6" : "#ffffff",
-                  color: isSelected ? "#0e8587" : "#64748b",
-                }}
-              >
-                {sev === "all" ? "Semua" : sev}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* TABLE DAFTAR TIKET */}
+      {/* TABLE TIKET */}
       <div
         style={{
           backgroundColor: "#ffffff",
-          borderRadius: "12px",
+          borderRadius: "10px",
           border: "1px solid var(--border-light)",
-          boxShadow: "0 1px 3px rgba(0,0,0,0.02)",
+          boxShadow: "0 1px 2px rgba(0,0,0,0.02)",
           overflow: "hidden",
         }}
       >
-        {loading ? (
-          <div style={{ textAlign: "center", padding: "48px 0", color: "var(--text-muted)", fontSize: "14px" }}>
-            <div style={{ marginBottom: "8px" }}>⏳</div>
-            Memuat daftar tiket manajemen coordinator...
+        {/* Table Subheader Count */}
+        <div
+          style={{
+            padding: "12px 18px",
+            borderBottom: "1px solid #edf2f7",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            fontSize: "13px",
+            color: "var(--text-secondary)",
+          }}
+        >
+          <div>
+            Menampilkan <b>{tickets.length}</b> tiket
           </div>
-        ) : filteredTickets.length === 0 ? (
-          <div style={{ textAlign: "center", padding: "48px 20px", color: "var(--text-muted)" }}>
-            <div style={{ fontSize: "28px", marginBottom: "8px" }}>✨</div>
-            <div style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-dark)" }}>
-              Tidak ada tiket yang perlu dikelola saat ini
+          {totalPages > 1 && (
+            <div style={{ fontSize: "12px", color: "var(--text-muted)" }}>
+              Halaman {currentPage} dari {totalPages}
             </div>
-            <p style={{ fontSize: "13px", marginTop: "4px" }}>
-              {isAfterSales
-                ? "Tidak ada tiket berstatus 'Open' yang tercatat dibuat oleh Anda."
-                : "Tidak ada tiket berstatus 'Escalated' yang menugaskan Anda dalam tim software."}
+          )}
+        </div>
+
+        {loading ? (
+          <div style={{ textAlign: "center", padding: "40px 0", color: "var(--text-muted)", fontSize: "13.5px" }}>
+            Memuat daftar tiket...
+          </div>
+        ) : tickets.length === 0 ? (
+          <div style={{ textAlign: "center", padding: "40px 20px", color: "var(--text-muted)" }}>
+            <div style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-dark)" }}>
+              Tidak ada tiket yang ditemukan
+            </div>
+            <p style={{ fontSize: "12.5px", marginTop: "4px" }}>
+              Tidak ada tiket yang dikelola saat ini.
             </p>
           </div>
         ) : (
@@ -406,94 +260,95 @@ export default function ManajemenTiket() {
             <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: "13px" }}>
               <thead>
                 <tr style={{ backgroundColor: "#f8fafc", borderBottom: "1.5px solid #edf2f7" }}>
-                  <th style={{ padding: "14px 16px", fontWeight: 700, color: "#475569" }}>ID Tiket & Versi</th>
-                  <th style={{ padding: "14px 16px", fontWeight: 700, color: "#475569" }}>Unit & Lokasi</th>
-                  <th style={{ padding: "14px 16px", fontWeight: 700, color: "#475569" }}>Modul & Kode</th>
-                  <th style={{ padding: "14px 16px", fontWeight: 700, color: "#475569" }}>Status & Severity</th>
-                  <th style={{ padding: "14px 16px", fontWeight: 700, color: "#475569" }}>Gejala & Tindakan Terakhir</th>
-                  <th style={{ padding: "14px 16px", fontWeight: 700, color: "#475569", textAlign: "right" }}>Aksi</th>
+                  <th style={{ padding: "12px 16px", fontWeight: 700, color: "#475569" }}>ID Tiket</th>
+                  <th style={{ padding: "12px 16px", fontWeight: 700, color: "#475569" }}>Unit</th>
+                  <th style={{ padding: "12px 16px", fontWeight: 700, color: "#475569" }}>Modul & Failure Code</th>
+                  <th style={{ padding: "12px 16px", fontWeight: 700, color: "#475569" }}>Status</th>
+                  <th style={{ padding: "12px 16px", fontWeight: 700, color: "#475569", textAlign: "right" }}>Aksi</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredTickets.map((t) => {
-                  const statusBadge = getStatusBadge(t.rawStatus || t.status);
-                  const severityBadge = getSeverityBadge(t.rawSeverity || t.severity);
+                {paginatedTickets.map((t) => {
+                  const statusStr = (t.rawStatus || t.status || "").toLowerCase();
+                  const statusBadge = getStatusBadge(statusStr);
+
+                  // Ownership and Permissions evaluation:
+                  // Update tiket HANYA boleh dilakukan oleh KOORDINATOR sesuai peran dan status (Admin TIDAK BISA update tiket)
+                  const isCurrentAftersalesOwner =
+                    (t.aftersales_user_id && t.aftersales_user_id === currentUser.id) ||
+                    (t.aftersalesUserId && t.aftersalesUserId === currentUser.id);
+
+                  const isSoftwareAssignee = (t.assignees || []).some((a) => a.userId === currentUser.id);
+                  const isSoftwareLeader = (t.assignees || []).some(
+                    (a) => a.userId === currentUser.id && a.isLeader
+                  );
+
+                  // Open status:
+                  // - Update: HANYA koordinator Aftersales penanggung jawab (Admin TIDAK BISA update tiket)
+                  // - Alihkan PJ: koordinator Aftersales penanggung jawab ATAU Admin (kelola akses PJ)
+                  const canUpdateOpen = statusStr === "open" && isCoordinator && isCurrentAftersalesOwner;
+                  const canTransferAftersales = statusStr === "open" && (isAdmin || (isCoordinator && isCurrentAftersalesOwner));
+
+                  // Escalated status:
+                  // - Update: HANYA koordinator Software yang ditugaskan (Admin TIDAK BISA update tiket)
+                  // - Kelola Tim Software: koordinator Software leader ATAU Admin (kelola akses & tim)
+                  const canUpdateEscalated = statusStr === "escalated" && isCoordinator && isSoftwareAssignee;
+                  const canManageSoftwareTeam = statusStr === "escalated" && (isAdmin || (isCoordinator && isSoftwareLeader));
+
+                  const currentVersionNum = t.currentVersion ?? t.current_version ?? 0;
 
                   return (
                     <tr
                       key={t.id}
+                      onClick={() => setDetailTicket(t)}
                       style={{
                         borderBottom: "1px solid #edf2f7",
                         transition: "background-color 0.15s ease",
+                        cursor: "pointer",
                       }}
                       onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#f8fafc")}
                       onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
+                      title="Klik untuk melihat detail & riwayat tiket"
                     >
-                      {/* ID Tiket & Versi */}
-                      <td style={{ padding: "14px 16px", verticalAlign: "top" }}>
+                      {/* 1. ID Tiket (Isi list ditambahkan versi) */}
+                      <td style={{ padding: "12px 16px", verticalAlign: "middle" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                           <span style={{ fontWeight: 750, color: "#0f172a", fontFamily: "monospace", fontSize: "13.5px" }}>
                             {t.id}
                           </span>
-                        </div>
-                        <div style={{ marginTop: "4px" }}>
                           <span
                             style={{
                               fontSize: "11px",
                               fontWeight: 700,
-                              padding: "2px 7px",
-                              borderRadius: "9999px",
+                              padding: "2px 6px",
+                              borderRadius: "4px",
                               backgroundColor: "#e2e8f0",
                               color: "#334155",
                             }}
                           >
-                            v{t.currentVersion ?? t.current_version ?? 0}
-                          </span>
-                          <span style={{ fontSize: "11px", color: "var(--text-muted)", marginLeft: "6px" }}>
-                            {t.createdAt ? new Date(t.createdAt).toLocaleDateString("id-ID") : "-"}
+                            v{currentVersionNum}
                           </span>
                         </div>
-                        {t.assignees && t.assignees.length > 0 && (
-                          <div style={{ marginTop: "5px" }}>
-                            <span
-                              style={{
-                                fontSize: "11px",
-                                fontWeight: 700,
-                                padding: "2px 6px",
-                                borderRadius: "4px",
-                                backgroundColor: "#e8f7f6",
-                                color: "#0e8587",
-                                border: "1px solid #ccfbf1",
-                                display: "inline-flex",
-                                alignItems: "center",
-                                gap: "3px",
-                              }}
-                            >
-                              👥 {t.assignees.length} Software {t.assignees.some((a) => a.isLeader) ? "👑" : ""}
-                            </span>
+                      </td>
+
+                      {/* 2. Unit */}
+                      <td style={{ padding: "12px 16px", verticalAlign: "middle" }}>
+                        <div style={{ fontWeight: 700, color: "var(--text-dark)", fontFamily: "monospace" }}>
+                          {t.unit}
+                        </div>
+                        {(t.client || t.location) && (
+                          <div style={{ fontSize: "11.5px", color: "var(--text-muted)", marginTop: "2px" }}>
+                            {t.client ? `${t.client} ` : ""}{t.location ? `(${t.location})` : ""}
                           </div>
                         )}
                       </td>
 
-                      {/* Unit & Lokasi */}
-                      <td style={{ padding: "14px 16px", verticalAlign: "top" }}>
-                        <div style={{ fontWeight: 700, color: "var(--text-dark)", fontFamily: "monospace" }}>
-                          {t.unit}
-                        </div>
-                        <div style={{ fontSize: "12px", color: "var(--text-muted)", marginTop: "2px" }}>
-                          {t.client || "-"}
-                        </div>
-                        <div style={{ fontSize: "11.5px", color: "#64748b", marginTop: "2px" }}>
-                          📍 {t.location || "-"}
-                        </div>
-                      </td>
-
-                      {/* Komponen & Failure Code */}
-                      <td style={{ padding: "14px 16px", verticalAlign: "top" }}>
+                      {/* 3. Modul Komponen dan Failure Code */}
+                      <td style={{ padding: "12px 16px", verticalAlign: "middle" }}>
                         <div style={{ fontWeight: 650, color: "var(--text-dark)" }}>
                           {t.component}
                         </div>
-                        <div style={{ marginTop: "3px" }}>
+                        <div style={{ marginTop: "2px" }}>
                           <span
                             style={{
                               fontSize: "11.5px",
@@ -510,175 +365,160 @@ export default function ManajemenTiket() {
                         </div>
                       </td>
 
-                      {/* Status & Severity */}
-                      <td style={{ padding: "14px 16px", verticalAlign: "top" }}>
-                        <div style={{ display: "flex", flexDirection: "column", gap: "6px", alignItems: "flex-start" }}>
-                          <span
-                            style={{
-                              display: "inline-flex",
-                              alignItems: "center",
-                              gap: "5px",
-                              padding: "3px 8px",
-                              borderRadius: "6px",
-                              fontSize: "11.5px",
-                              fontWeight: 700,
-                              backgroundColor: statusBadge.bg,
-                              color: statusBadge.color,
-                              border: `1px solid ${statusBadge.border}`,
-                            }}
-                          >
-                            <span style={{ width: "6px", height: "6px", borderRadius: "50%", backgroundColor: statusBadge.dot }} />
-                            {statusBadge.label}
-                          </span>
-
-                          <span
-                            style={{
-                              fontSize: "11px",
-                              fontWeight: 650,
-                              padding: "2px 6px",
-                              borderRadius: "4px",
-                              backgroundColor: severityBadge.bg,
-                              color: severityBadge.color,
-                              border: `1px solid ${severityBadge.border}`,
-                            }}
-                          >
-                            sev: {severityBadge.label}
-                          </span>
-                        </div>
-                      </td>
-
-                      {/* Gejala & Tindakan Terakhir */}
-                      <td style={{ padding: "14px 16px", verticalAlign: "top", maxWidth: "300px" }}>
-                        <div
+                      {/* 4. Status (Clean text, no dot icon) */}
+                      <td style={{ padding: "12px 16px", verticalAlign: "middle" }}>
+                        <span
                           style={{
-                            fontSize: "12.5px",
-                            color: "var(--text-dark)",
-                            lineHeight: 1.4,
-                            whiteSpace: "nowrap",
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                          }}
-                          title={t.damageDescription || t.description || "-"}
-                        >
-                          <b>Gejala:</b> {t.damageDescription || t.description || "-"}
-                        </div>
-
-                        <div
-                          style={{
+                            display: "inline-block",
+                            padding: "3px 9px",
+                            borderRadius: "5px",
                             fontSize: "12px",
-                            color: "#059669",
-                            marginTop: "4px",
-                            lineHeight: 1.4,
-                            whiteSpace: "nowrap",
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
+                            fontWeight: 700,
+                            backgroundColor: statusBadge.bg,
+                            color: statusBadge.color,
+                            border: `1px solid ${statusBadge.border}`,
+                            textTransform: "capitalize",
                           }}
-                          title={t.actionTaken || t.handling || "-"}
                         >
-                          <b>Tindakan:</b> {t.actionTaken || t.handling || "Belum ada tindakan dicatat"}
-                        </div>
+                          {statusBadge.label}
+                        </span>
                       </td>
 
-                      {/* Tombol Aksi */}
-                      <td style={{ padding: "14px 16px", verticalAlign: "top", textAlign: "right" }}>
-                        <div style={{ display: "inline-flex", gap: "8px", alignItems: "center" }}>
-                          {/* Tombol Tambah Anggota (Khusus Tiket Escalated / Tim Software) */}
-                          {((t.rawStatus || t.status || "").toLowerCase() === "escalated" || isSoftware) && (
-                            <button
-                              type="button"
-                              onClick={() => setAssigneeTicket(t)}
-                              style={{
-                                padding: "6px 12px",
-                                borderRadius: "7px",
-                                fontSize: "12px",
-                                fontWeight: 700,
-                                border: "1px solid #0e8587",
-                                backgroundColor: "#e8f7f6",
-                                color: "#0e8587",
-                                cursor: "pointer",
-                                display: "inline-flex",
-                                alignItems: "center",
-                                gap: "5px",
-                                boxShadow: "0 1px 2px rgba(14, 133, 135, 0.1)",
-                                transition: "all 0.15s ease",
-                              }}
-                              onMouseEnter={(e) => {
-                                e.currentTarget.style.backgroundColor = "#0e8587";
-                                e.currentTarget.style.color = "#ffffff";
-                              }}
-                              onMouseLeave={(e) => {
-                                e.currentTarget.style.backgroundColor = "#e8f7f6";
-                                e.currentTarget.style.color = "#0e8587";
-                              }}
-                              title="Tambah / Kelola anggota tim Software untuk tiket ini"
-                            >
-                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                                <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-                                <circle cx="8.5" cy="7" r="4" />
-                                <line x1="20" y1="8" x2="20" y2="14" />
-                                <line x1="23" y1="11" x2="17" y2="11" />
-                              </svg>
-                              + Anggota
-                            </button>
+                      {/* 5. Aksi (Tanpa Ikon / Emoji) */}
+                      <td
+                        style={{ padding: "12px 16px", verticalAlign: "middle", textAlign: "right" }}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <div style={{ display: "inline-flex", gap: "6px", alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end" }}>
+                          {/* Aksi Status Open */}
+                          {statusStr === "open" && (
+                            <>
+                              {canTransferAftersales && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setTransferAftersalesTicket(t);
+                                  }}
+                                  style={{
+                                    padding: "5px 10px",
+                                    borderRadius: "6px",
+                                    fontSize: "12px",
+                                    fontWeight: 650,
+                                    border: "1px solid #bfdbfe",
+                                    backgroundColor: "#eff6ff",
+                                    color: "#1d4ed8",
+                                    cursor: "pointer",
+                                  }}
+                                  title="Alihkan penanggung jawab Aftersales tiket ini"
+                                >
+                                  Alihkan PJ
+                                </button>
+                              )}
+
+                              {canUpdateOpen && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setEditingTicket(t);
+                                  }}
+                                  style={{
+                                    padding: "5px 11px",
+                                    borderRadius: "6px",
+                                    fontSize: "12px",
+                                    fontWeight: 700,
+                                    border: "none",
+                                    backgroundColor: "#0e8587",
+                                    color: "#ffffff",
+                                    cursor: "pointer",
+                                  }}
+                                >
+                                  Update
+                                </button>
+                              )}
+
+                              {!canTransferAftersales && !canUpdateOpen && (
+                                <span
+                                  style={{
+                                    fontSize: "11px",
+                                    color: "#64748b",
+                                    backgroundColor: "#f1f5f9",
+                                    padding: "3px 7px",
+                                    borderRadius: "4px",
+                                    border: "1px solid #e2e8f0",
+                                  }}
+                                >
+                                  Hanya PJ
+                                </span>
+                              )}
+                            </>
                           )}
 
-                          {/* Tombol Update Tiket */}
-                          <button
-                            type="button"
-                            onClick={() => setEditingTicket(t)}
-                            style={{
-                              padding: "6px 14px",
-                              borderRadius: "7px",
-                              fontSize: "12.5px",
-                              fontWeight: 700,
-                              border: "none",
-                              backgroundColor: "#0e8587",
-                              color: "#ffffff",
-                              cursor: "pointer",
-                              display: "inline-flex",
-                              alignItems: "center",
-                              gap: "5px",
-                              boxShadow: "0 1px 2px rgba(14, 133, 135, 0.2)",
-                              transition: "all 0.15s ease",
-                            }}
-                            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#0b7173")}
-                            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#0e8587")}
-                          >
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-                              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                            </svg>
-                            Update
-                          </button>
+                          {/* Aksi Status Escalated */}
+                          {statusStr === "escalated" && (
+                            <>
+                              {canManageSoftwareTeam && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setAssigneeTicket(t);
+                                  }}
+                                  style={{
+                                    padding: "5px 10px",
+                                    borderRadius: "6px",
+                                    fontSize: "12px",
+                                    fontWeight: 650,
+                                    border: "1px solid #fde68a",
+                                    backgroundColor: "#fffbeb",
+                                    color: "#b45309",
+                                    cursor: "pointer",
+                                  }}
+                                  title="Kelola anggota dan leader tim software"
+                                >
+                                  Kelola Tim
+                                </button>
+                              )}
 
-                          {/* Tombol Detail & Riwayat */}
-                          <button
-                            type="button"
-                            onClick={() => setDetailTicket(t)}
-                            style={{
-                              padding: "6px 10px",
-                              borderRadius: "7px",
-                              fontSize: "12px",
-                              fontWeight: 650,
-                              border: "1px solid #cbd5e1",
-                              backgroundColor: "#ffffff",
-                              color: "#475569",
-                              cursor: "pointer",
-                              display: "inline-flex",
-                              alignItems: "center",
-                              gap: "4px",
-                              transition: "all 0.15s ease",
-                            }}
-                            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#f1f5f9")}
-                            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#ffffff")}
-                            title="Lihat detail dan riwayat linimasa tiket"
-                          >
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                              <circle cx="12" cy="12" r="3" />
-                            </svg>
-                            Riwayat
-                          </button>
+                              {canUpdateEscalated && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setEditingTicket(t);
+                                  }}
+                                  style={{
+                                    padding: "5px 11px",
+                                    borderRadius: "6px",
+                                    fontSize: "12px",
+                                    fontWeight: 700,
+                                    border: "none",
+                                    backgroundColor: "#0e8587",
+                                    color: "#ffffff",
+                                    cursor: "pointer",
+                                  }}
+                                >
+                                  Update
+                                </button>
+                              )}
+
+                              {!canManageSoftwareTeam && !canUpdateEscalated && (
+                                <span
+                                  style={{
+                                    fontSize: "11px",
+                                    color: "#64748b",
+                                    backgroundColor: "#f1f5f9",
+                                    padding: "3px 7px",
+                                    borderRadius: "4px",
+                                    border: "1px solid #e2e8f0",
+                                  }}
+                                >
+                                  Khusus Tim
+                                </span>
+                              )}
+                            </>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -688,14 +528,88 @@ export default function ManajemenTiket() {
             </table>
           </div>
         )}
+
+        {/* Pagination Bar */}
+        {totalPages > 1 && (
+          <div
+            style={{
+              padding: "12px 18px",
+              borderTop: "1px solid #edf2f7",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              backgroundColor: "#f8fafc",
+            }}
+          >
+            <div style={{ fontSize: "12px", color: "var(--text-muted)" }}>
+              Menampilkan {Math.min(tickets.length, (currentPage - 1) * itemsPerPage + 1)}-
+              {Math.min(tickets.length, currentPage * itemsPerPage)} dari {tickets.length} tiket
+            </div>
+            <div style={{ display: "flex", gap: "6px" }}>
+              <button
+                type="button"
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                style={{
+                  padding: "4px 10px",
+                  borderRadius: "5px",
+                  fontSize: "12px",
+                  fontWeight: 650,
+                  border: "1px solid #cbd5e1",
+                  backgroundColor: currentPage === 1 ? "#f1f5f9" : "#ffffff",
+                  color: currentPage === 1 ? "#94a3b8" : "#334155",
+                  cursor: currentPage === 1 ? "not-allowed" : "pointer",
+                }}
+              >
+                Sebelumnya
+              </button>
+              <button
+                type="button"
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                style={{
+                  padding: "4px 10px",
+                  borderRadius: "5px",
+                  fontSize: "12px",
+                  fontWeight: 650,
+                  border: "1px solid #cbd5e1",
+                  backgroundColor: currentPage === totalPages ? "#f1f5f9" : "#ffffff",
+                  color: currentPage === totalPages ? "#94a3b8" : "#334155",
+                  cursor: currentPage === totalPages ? "not-allowed" : "pointer",
+                }}
+              >
+                Selanjutnya
+              </button>
+            </div>
+          </div>
+        )}
       </div>
+
+      {/* MODAL BUAT TIKET BARU (KHUSUS COORDINATOR AFTERSALES) */}
+      {isCreateTicketOpen && (
+        <CreateTicketModal
+          isOpen={isCreateTicketOpen}
+          onClose={() => setIsCreateTicketOpen(false)}
+          onSuccess={handleCreateTicketSuccess}
+        />
+      )}
+
+      {/* MODAL ALIH TANGGUNG JAWAB AFTERSALES (STATUS OPEN) */}
+      {transferAftersalesTicket && (
+        <TransferAftersalesModal
+          isOpen={Boolean(transferAftersalesTicket)}
+          onClose={() => setTransferAftersalesTicket(null)}
+          ticket={transferAftersalesTicket}
+          onSuccess={handleTransferAftersalesSuccess}
+        />
+      )}
 
       {/* MODAL UPDATE TIKET */}
       {editingTicket && (
         <UpdateTicketModal
+          ticket={editingTicket}
           isOpen={Boolean(editingTicket)}
           onClose={() => setEditingTicket(null)}
-          ticket={editingTicket}
           onSuccess={handleUpdateSuccess}
         />
       )}
@@ -710,7 +624,7 @@ export default function ManajemenTiket() {
         />
       )}
 
-      {/* MODAL TAMBAH ANGGOTA TIM SOFTWARE */}
+      {/* MODAL KELOLA TIM SOFTWARE & LEADER (STATUS ESCALATED) */}
       {assigneeTicket && (
         <AddAssigneeModal
           isOpen={Boolean(assigneeTicket)}

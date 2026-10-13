@@ -89,6 +89,7 @@ enum severity {
 
 model users {
   id                    String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  telegram_user_id      String?     @unique @db.Uuid
   email                 String      @unique @db.VarChar(100)
   name                  String      @db.VarChar(100)
   password_hash         String
@@ -103,16 +104,18 @@ model users {
   created_at            DateTime    @default(now()) @db.Timestamptz
   updated_at            DateTime    @default(now()) @updatedAt @db.Timestamptz
 
+  telegram_user    telegram_users?    @relation(fields: [telegram_user_id], references: [id], onDelete: SetNull)
   refresh_tokens   refresh_tokens[]
   export_jobs      export_jobs[]
   audit_logs       audit_logs[]
   ticket_history   ticket_history[]
   ticket_assignees ticket_assignees[]
+  created_tickets  tickets[]          @relation("ticket_aftersales_user")
 }
 
 model telegram_users {
   id          String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  telegram_id String     @unique @db.VarChar(50)
+  telegram_id String?    @unique @db.VarChar(50)
   username    String?    @db.VarChar(100)
   full_name   String?    @db.VarChar(100)
   is_active   Boolean    @default(true)
@@ -120,10 +123,10 @@ model telegram_users {
   created_at  DateTime   @default(now()) @db.Timestamptz
   updated_at  DateTime   @default(now()) @updatedAt @db.Timestamptz
 
-  bot_sessions     bot_sessions?
-  audit_logs       audit_logs[]
-  ticket_history   ticket_history[]
-  ticket_assignees ticket_assignees[]
+  user           users?
+  bot_sessions   bot_sessions?
+  audit_logs     audit_logs[]
+  ticket_history ticket_history[]
 }
 
 model bot_sessions {
@@ -290,12 +293,14 @@ model tickets {
   id                 String   @id @db.VarChar(50)
   asset_id           String   @db.Uuid
   failure_code_id    String   @db.Uuid
-  current_version    Int      @default(0)
+  aftersales_user_id String   @db.Uuid
+  current_version    Int      @default(1)
   created_at         DateTime @default(now()) @db.Timestamptz
   leader_assignee_id String?  @unique @db.Uuid
 
   asset           assets            @relation(fields: [asset_id], references: [id], onDelete: Restrict)
   failure_code    failure_codes     @relation(fields: [failure_code_id], references: [id], onDelete: Restrict)
+  aftersales_user users             @relation("ticket_aftersales_user", fields: [aftersales_user_id], references: [id], onDelete: Restrict)
   leader_assignee ticket_assignees? @relation("ticket_leader_assignee", fields: [leader_assignee_id], references: [id], onDelete: SetNull)
 
   ticket_history   ticket_history[]
@@ -303,6 +308,7 @@ model tickets {
 
   @@index([asset_id])
   @@index([failure_code_id])
+  @@index([aftersales_user_id])
   @@index([created_at])
 }
 
@@ -333,19 +339,15 @@ model ticket_history {
 // ==================================================
 
 model ticket_assignees {
-  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  ticket_id        String   @db.VarChar(50)
-  telegram_user_id String?  @db.Uuid
-  user_id          String?  @db.Uuid
-  created_at       DateTime @default(now()) @db.Timestamptz
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  ticket_id  String   @db.VarChar(50)
+  user_id    String   @db.Uuid
+  created_at DateTime @default(now()) @db.Timestamptz
 
-  ticket        tickets         @relation("ticket_assignee_list", fields: [ticket_id], references: [id], onDelete: Cascade)
-  telegram_user telegram_users? @relation(fields: [telegram_user_id], references: [id], onDelete: Cascade)
-  user          users?          @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  lead_ticket   tickets?        @relation("ticket_leader_assignee")
+  ticket      tickets  @relation("ticket_assignee_list", fields: [ticket_id], references: [id], onDelete: Cascade)
+  user        users    @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  lead_ticket tickets? @relation("ticket_leader_assignee")
 
-  @@unique([ticket_id, telegram_user_id])
   @@unique([ticket_id, user_id])
-  @@index([telegram_user_id])
   @@index([user_id])
 }

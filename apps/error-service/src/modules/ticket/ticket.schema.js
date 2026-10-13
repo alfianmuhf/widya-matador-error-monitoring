@@ -103,6 +103,7 @@ export const createTicketSchema = z.object({
   failureCodeId: z
     .string({ required_error: "Failure Code ID wajib diisi" })
     .uuid("Format Failure Code ID tidak valid"),
+  aftersalesUserId: z.string().uuid("Format Aftersales User ID tidak valid").optional(),
   damageDescription: z.string().trim().optional(),
   actionTaken: z.string().trim().optional(),
   rootCause: z.string().trim().optional(),
@@ -123,18 +124,25 @@ export const createTicketSchema = z.object({
 });
 
 /**
- * Zod schema for adding a team member to ticket_assignees
+ * Zod schema for transferring aftersales responsibility
+ */
+export const transferAftersalesSchema = z.object({
+  aftersalesUserId: z
+    .string({ required_error: "Target user Aftersales wajib dipilih" })
+    .uuid("Format User ID Aftersales tidak valid"),
+});
+
+/**
+ * Zod schema for adding a software team member to ticket_assignees
  */
 export const addAssigneeSchema = z
   .object({
     userId: z.string().uuid("Format User ID tidak valid").optional(),
-    telegramUserId: z.string().uuid("Format Telegram User ID tidak valid").optional(),
     email: z.string().trim().email("Format email tidak valid").optional(),
-    telegramId: z.string().trim().optional(),
     isLeader: z.boolean().optional(),
   })
-  .refine((data) => data.userId || data.telegramUserId || data.email || data.telegramId, {
-    message: "Harus menyertakan salah satu: userId, telegramUserId, email, atau telegramId",
+  .refine((data) => data.userId || data.email, {
+    message: "Harus menyertakan userId atau email pengguna software",
   });
 
 /**

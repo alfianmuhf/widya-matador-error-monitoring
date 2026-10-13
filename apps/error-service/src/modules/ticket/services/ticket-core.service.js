@@ -202,6 +202,16 @@ export const addComment = async (ticketId, { notes }, actor = {}) => {
  * Starts version at 0.
  */
 export const createTicket = async (data, actor = {}) => {
+  // Verifikasi wewenang: khusus coordinator divisi aftersales
+  const actorRole = (actor.role || "").toLowerCase();
+  const actorDivision = (actor.division || "").toLowerCase();
+  if (actorRole !== "coordinator" || actorDivision !== "after_sales") {
+    throw createError(
+      403,
+      "Akses ditolak: Fitur penambahan tiket baru hanya dapat dilakukan oleh Koordinator divisi Aftersales."
+    );
+  }
+
   // 1. Verify Asset exists
   const asset = await prisma.assets.findUnique({
     where: { unit_code: data.unitCode },
@@ -219,12 +229,17 @@ export const createTicket = async (data, actor = {}) => {
     throw createError(404, "Failure code tidak ditemukan");
   }
 
+  // Resolve aftersales_user_id (selalu gunakan ID koordinator aftersales pembuat tiket)
+  const aftersalesUserId = actor.id;
+
+  // Generate unique Ticket ID: ERR-YYYYMMDD-NNNN
   const ticketId = await generateTicketId();
 
   const ticketData = {
     id: ticketId,
     asset_id: asset.id,
     failure_code_id: failureCode.id,
+    aftersales_user_id: aftersalesUserId,
   };
 
   const initialStatus = data.status ? data.status.toLowerCase() : "open";
@@ -257,11 +272,109 @@ export const createTicket = async (data, actor = {}) => {
       unitCode: asset.unit_code,
       severity: initialSeverity,
       status: initialStatus,
+      aftersalesUserId,
     },
   });
 
   // Broadcast realtime SSE event
   ticketEvents.notifyTicketCreated(formatted);
+
+  return formatted;
+};
+
+/**
+ * Transfer aftersales responsibility to another aftersales user
+ * Allowed when ticket status is 'open'.
+ * Can be executed by current aftersales owner or Admin.
+ */
+export const transferAftersalesLead = async (ticketId, { aftersalesUserId }, actor = {}) => {
+  if (!actor) {
+    throw createError(401, "Autentikasi diperlukan");
+  }
+
+  const ticket = await ticketRepo.findById(ticketId);
+  if (!ticket) {
+    throw createError(404, `Tiket '${ticketId}' tidak ditemukan`);
+  }
+
+  const currentHistory =
+    (ticket.ticket_history || []).find((h) => h.version === ticket.current_version) ||
+    ticket.ticket_history?.[0] ||
+    {};
+  const currentStatus = (currentHistory.status || "open").toLowerCase();
+
+  // Rule: "tapi itu yang status nya masih open"
+  if (currentStatus !== "open") {
+    throw createError(
+      403,
+      `Akses ditolak: Pengalihan penanggung jawab Aftersales hanya dapat dilakukan ketika tiket berstatus 'open' (status saat ini: '${currentStatus}').`
+    );
+  }
+
+  const actorRole = (actor.role || "").toLowerCase();
+  const isCurrentAftersales = ticket.aftersales_user_id && ticket.aftersales_user_id === actor.id;
+  const isAdmin = actorRole === "admin";
+
+  if (!isCurrentAftersales && !isAdmin) {
+    throw createError(
+      403,
+      "Akses ditolak: Hanya Koordinator penanggung jawab Aftersales saat ini atau Admin yang dapat mengalihkan penanggung jawab."
+    );
+  }
+
+  // Validate target user
+  const targetUser = await prisma.users.findUnique({
+    where: { id: aftersalesUserId },
+  });
+  if (!targetUser) {
+    throw createError(404, "User Aftersales target tidak ditemukan");
+  }
+
+  const targetDivision = (targetUser.division || "").toLowerCase();
+  if (targetDivision !== "after_sales") {
+    throw createError(400, "User target harus berasal dari divisi After Sales");
+  }
+
+  // Update ticket
+  await ticketRepo.updateAftersalesLead(ticketId, targetUser.id);
+
+  const oldAftersalesName = ticket.aftersales_user?.name || "Petugas Sebelumnya";
+  const newAftersalesName = targetUser.name || "Petugas Baru";
+  const actorName = actor.name || actor.email || "Sistem";
+
+  // Next version history
+  const nextVersion = (ticket.current_version ?? 0) + 1;
+  const historyData = {
+    status: "open",
+    damage_description: currentHistory.damage_description,
+    action_taken: currentHistory.action_taken,
+    root_cause: currentHistory.root_cause,
+    severity: currentHistory.severity,
+    notes: `Penanggung jawab Aftersales dialihkan dari ${oldAftersalesName} ke ${newAftersalesName}`,
+    changed_by_user_id: actor.id || null,
+    changed_by_telegram_user_id: actor.telegram_user_id || null,
+  };
+
+  const updatedRaw = await ticketRepo.updateWithHistory(ticketId, nextVersion, historyData);
+  const formatted = formatTicket(updatedRaw);
+
+  await recordLog({
+    actor: actorName,
+    actorUserId: actor.id || null,
+    action: "update",
+    deleteAction: "NONE",
+    entityType: "TicketAftersalesLead",
+    entityId: ticketId,
+    details: {
+      identifier: ticketId,
+      changeSummary: `Penanggung jawab Aftersales dialihkan ke '${newAftersalesName}'`,
+      ticketId,
+      oldAftersalesUserId: ticket.aftersales_user_id,
+      newAftersalesUserId: targetUser.id,
+    },
+  });
+
+  ticketEvents.notifyTicketUpdated(formatted);
 
   return formatted;
 };

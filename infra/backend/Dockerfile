@@ -26,5 +26,5 @@ COPY apps/error-service/src ./src/
 # Expose port backend
 EXPOSE 3000
 
-# Jalankan server langsung dengan Node.js
-CMD ["node", "src/server.js"]
+# Jalankan migrasi database ke perubahan terbaru saat deploy, lalu start server
+CMD ["sh", "-c", "npx prisma migrate deploy && node src/server.js"]

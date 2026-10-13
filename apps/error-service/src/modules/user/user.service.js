@@ -11,13 +11,38 @@ import { linkTelegram } from "../auth/otp.store.js";
  * Format: [email_prefix]12345 (nama email sebelum tanda @ diikuti '12345')
  * Example: joko@gmail.com -> joko12345
  */
-export const createUser = async ({ email, name, role, division, telegramId, username }, adminUser = null) => {
+export const createUser = async (
+  { email, name, role, division, telegramId, username, telegram_user_id, telegramUserId },
+  adminUser = null
+) => {
   const adminId = adminUser?.id || null;
 
   // 1. Check if email already registered
   const existingUser = await userRepository.findUserByEmail(email);
   if (existingUser) {
     throw createError(409, "Email sudah terdaftar. Silakan gunakan email lain.");
+  }
+
+  // 1b. Resolusi dan validasi telegram_user_id (Whitelist)
+  const resolvedTeleUserId = telegram_user_id || telegramUserId || null;
+  let whitelisted = null;
+  if (resolvedTeleUserId) {
+    whitelisted = await prisma.telegram_users.findUnique({
+      where: { id: resolvedTeleUserId },
+    });
+    if (!whitelisted) {
+      throw createError(
+        404,
+        "Akun Telegram tidak ditemukan di Whitelist Telegram. Harap masukkan ke Whitelist Telegram terlebih dahulu."
+      );
+    }
+
+    const alreadyLinked = await prisma.users.findUnique({
+      where: { telegram_user_id: resolvedTeleUserId },
+    });
+    if (alreadyLinked) {
+      throw createError(409, "Akun Telegram ini sudah ditautkan ke pengguna lain.");
+    }
   }
 
   // 2. Generate initial password: nama email sebelum @ + "12345"
@@ -39,27 +64,37 @@ export const createUser = async ({ email, name, role, division, telegramId, user
     password_hash: hashedPassword,
     status: "invited",
     must_change_password: true,
+    telegram_user_id: resolvedTeleUserId,
   });
 
-  // 4b. Resolusi telegram (opsional) — verifikasi ringan ke whitelist bila ada
-  const teleId = telegramId ? String(telegramId).trim() : null;
-  const teleUsername = username ? String(username).replace(/^@/, "").trim() : null;
+  // 4b. Resolusi telegram (opsional) — sinkronisasi ke whitelist/OTP
   let telegram = null;
-  if (teleId || teleUsername) {
-    const whitelisted = await prisma.telegram_users.findFirst({
-      where: {
-        OR: [
-          ...(teleId ? [{ telegram_id: teleId }] : []),
-          ...(teleUsername ? [{ username: teleUsername }] : []),
-        ],
-      },
-    });
+  if (whitelisted) {
     telegram = {
-      telegramId: whitelisted?.telegram_id || teleId,
-      username: whitelisted?.username || teleUsername || null,
-      whitelisted: Boolean(whitelisted),
+      telegramId: whitelisted.telegram_id,
+      username: whitelisted.username,
+      whitelisted: true,
     };
     linkTelegram(email, telegram); // link in-memory untuk reset password via OTP
+  } else {
+    const teleId = telegramId ? String(telegramId).trim() : null;
+    const teleUsername = username ? String(username).replace(/^@/, "").trim() : null;
+    if (teleId || teleUsername) {
+      const legacyWhitelisted = await prisma.telegram_users.findFirst({
+        where: {
+          OR: [
+            ...(teleId ? [{ telegram_id: teleId }] : []),
+            ...(teleUsername ? [{ username: teleUsername }] : []),
+          ],
+        },
+      });
+      telegram = {
+        telegramId: legacyWhitelisted?.telegram_id || teleId,
+        username: legacyWhitelisted?.username || teleUsername || null,
+        whitelisted: Boolean(legacyWhitelisted),
+      };
+      linkTelegram(email, telegram);
+    }
   }
 
   // 5. Track who created the account in audit log
@@ -196,6 +231,36 @@ export const updateUser = async (id, data, adminUser) => {
     }
   }
 
+  // 3b. If telegram_user_id updated, validate whitelist and check duplicate
+  const teleUserIdProvided = data.telegram_user_id !== undefined || data.telegramUserId !== undefined;
+  const targetTelegramUserId = teleUserIdProvided
+    ? (data.telegram_user_id !== undefined ? data.telegram_user_id : data.telegramUserId)
+    : undefined;
+
+  if (teleUserIdProvided) {
+    if (targetTelegramUserId) {
+      const whitelisted = await prisma.telegram_users.findUnique({
+        where: { id: targetTelegramUserId },
+      });
+      if (!whitelisted) {
+        throw createError(
+          404,
+          "Akun Telegram tidak ditemukan di Whitelist Telegram. Harap masukkan ke Whitelist Telegram terlebih dahulu."
+        );
+      }
+
+      const alreadyLinked = await prisma.users.findFirst({
+        where: {
+          telegram_user_id: targetTelegramUserId,
+          id: { not: id },
+        },
+      });
+      if (alreadyLinked) {
+        throw createError(409, "Akun Telegram ini sudah ditautkan ke pengguna lain.");
+      }
+    }
+  }
+
   // 4. Construct update payload
   const updatePayload = {};
   if (data.email !== undefined) updatePayload.email = data.email;
@@ -203,6 +268,7 @@ export const updateUser = async (id, data, adminUser) => {
   if (data.role !== undefined) updatePayload.role = data.role.toLowerCase();
   if (data.division !== undefined) updatePayload.division = data.division ? data.division.toLowerCase() : null;
   if (data.status !== undefined) updatePayload.status = data.status.toLowerCase();
+  if (teleUserIdProvided) updatePayload.telegram_user_id = targetTelegramUserId || null;
 
   let passwordChanged = false;
   if (data.password) {
@@ -235,6 +301,9 @@ export const updateUser = async (id, data, adminUser) => {
   }
   if (data.email && data.email !== existingUser.email) {
     changes.push(`email: ${existingUser.email} → ${data.email}`);
+  }
+  if (teleUserIdProvided && targetTelegramUserId !== existingUser.telegram_user_id) {
+    changes.push(`telegram_user_id: ${existingUser.telegram_user_id || "tidak ada"} → ${targetTelegramUserId || "dihapus"}`);
   }
   if (passwordChanged) {
     changes.push("reset kata sandi");

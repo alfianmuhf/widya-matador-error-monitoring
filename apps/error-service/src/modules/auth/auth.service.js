@@ -9,6 +9,7 @@ import {
 } from "../../utils/jwt.js";
 import { publish as publishWebhook } from "../webhook/webhook.publisher.js";
 import { getTelegramLink, createOtp, verifyOtp } from "./otp.store.js";
+import { recordLog } from "../audit-log/audit-log.service.js";
 
 const MAX_FAILED_ATTEMPTS = 5;
 const LOCKOUT_DURATION_MINUTES = 15;
@@ -32,6 +33,23 @@ export const register = async ({ email, password, name, role, division }) => {
     division: division || null,
     status: "active",
     must_change_password: false,
+  });
+
+  await recordLog({
+    actor: newUser.email,
+    actorUserId: newUser.id,
+    action: "CREATE",
+    deleteAction: "NONE",
+    entityType: "User",
+    entityId: newUser.id,
+    details: {
+      identifier: newUser.email,
+      changeSummary: `Registrasi akun baru '${newUser.name}' (${newUser.role})`,
+      email: newUser.email,
+      name: newUser.name,
+      role: newUser.role,
+      division: newUser.division,
+    },
   });
 
   return newUser;
@@ -350,6 +368,21 @@ export const changePassword = async (userId, { currentPassword, newPassword }, m
     ip_address: meta.ipAddress || null,
   });
 
+  await recordLog({
+    actor: updatedUser.email || updatedUser.name || "User",
+    actorUserId: updatedUser.id,
+    action: "UPDATE",
+    deleteAction: "NONE",
+    entityType: "User",
+    entityId: updatedUser.id,
+    details: {
+      identifier: updatedUser.email,
+      changeSummary: "Ubah kata sandi akun pengguna",
+      action: "change_password",
+    },
+    ipAddress: meta.ipAddress || null,
+  });
+
   return {
     user: updatedUser,
     accessToken,
@@ -401,6 +434,20 @@ export const resetPassword = async ({ email, otp, newPassword }) => {
   const hashedPassword = await hashPassword(newPassword);
   await authRepository.resetPasswordWithOtp(user.id, hashedPassword, user.status === "invited");
   await authRepository.revokeAllUserTokens(user.id);
+
+  await recordLog({
+    actor: user.email || user.name || "User",
+    actorUserId: user.id,
+    action: "UPDATE",
+    deleteAction: "NONE",
+    entityType: "User",
+    entityId: user.id,
+    details: {
+      identifier: user.email,
+      changeSummary: "Reset kata sandi pengguna melalui verifikasi OTP Telegram",
+      action: "reset_password_otp",
+    },
+  });
 
   return { message: "Password berhasil direset. Silakan login dengan password baru." };
 };

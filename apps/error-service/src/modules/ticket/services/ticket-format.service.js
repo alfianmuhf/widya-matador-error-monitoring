@@ -158,15 +158,11 @@ export const formatTicket = (t) => {
   // Format assignees
   const formattedAssignees = (t.ticket_assignees || []).map((a) => {
     const isLeader = a.id === t.leader_assignee_id;
-    let name = "Unknown";
-    let identifier = "-";
-
-    if (a.user) {
-      name = a.user.name;
-      identifier = a.user.email;
-    } else if (a.telegram_user) {
-      name = a.telegram_user.full_name || a.telegram_user.username || a.telegram_user.telegram_id;
-      identifier = a.telegram_user.username ? `@${a.telegram_user.username}` : a.telegram_user.telegram_id;
+    let name = a.user?.name || "Unknown";
+    let identifier = a.user?.email || "-";
+    const tele = a.user?.telegram_user;
+    if (tele?.username) {
+      identifier = `@${tele.username}`;
     }
 
     return {
@@ -176,9 +172,11 @@ export const formatTicket = (t) => {
       name,
       identifier,
       userId: a.user_id,
-      telegramUserId: a.telegram_user_id,
+      user_id: a.user_id,
+      telegramUserId: tele?.id || null,
+      telegram_user_id: tele?.id || null,
       user: a.user || null,
-      telegramUser: a.telegram_user || null,
+      telegramUser: tele || null,
       createdAt: a.created_at,
     };
   });
@@ -214,6 +212,18 @@ export const formatTicket = (t) => {
     reporter,
     reporterUserId: initialHistory.changed_by_user_id || null,
     reporterTelegramId: initialHistory.changed_by_telegram_user_id || null,
+    aftersalesUserId: t.aftersales_user_id,
+    aftersales_user_id: t.aftersales_user_id,
+    aftersalesUser: t.aftersales_user
+      ? {
+          id: t.aftersales_user.id,
+          name: t.aftersales_user.name,
+          email: t.aftersales_user.email,
+          role: t.aftersales_user.role,
+          division: t.aftersales_user.division,
+          telegramUser: t.aftersales_user.telegram_user || null,
+        }
+      : null,
     description: currentHistory.damage_description || "-",
     damageDescription: currentHistory.damage_description || null,
     damage_description: currentHistory.damage_description || null,
@@ -230,7 +240,7 @@ export const formatTicket = (t) => {
       ? {
           id: t.leader_assignee.id,
           user: t.leader_assignee.user,
-          telegramUser: t.leader_assignee.telegram_user,
+          telegramUser: t.leader_assignee.user?.telegram_user || null,
         }
       : null,
     assignees: formattedAssignees,

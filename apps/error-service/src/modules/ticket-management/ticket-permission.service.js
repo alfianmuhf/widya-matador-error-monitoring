@@ -49,11 +49,11 @@ export const checkUpdateTicketPermission = async (ticketId, actor, currentTicket
   const role = (actorUser?.role || actor.role || "").toLowerCase();
   const division = (actorUser?.division || actorTelegram?.division || actor.division || "").toLowerCase();
 
-  // 1. Role Admin: Tidak memiliki akses di manajemen tiket
+  // 1. Role Admin: Tidak dapat melakukan update tiket (hanya koordinator sesuai divisi dan status)
   if (role === "admin") {
     throw createError(
       403,
-      "Akses ditolak: Admin tidak memiliki akses untuk mengelola atau memperbarui tiket."
+      "Akses ditolak: Admin tidak memiliki akses untuk update tiket. Pembaruan tiket hanya dapat dilakukan oleh Koordinator sesuai divisi dan status tiket."
     );
   }
 
@@ -65,7 +65,15 @@ export const checkUpdateTicketPermission = async (ticketId, actor, currentTicket
     );
   }
 
-  // 3. Tim Aftersales: Mengelola tiket yang berstatus 'open' dan dibuat oleh dirinya
+  // 3. Wajib role Coordinator
+  if (role !== "coordinator") {
+    throw createError(
+      403,
+      "Akses ditolak: Pembaruan tiket hanya dapat dilakukan oleh Koordinator sesuai divisi dan status tiket."
+    );
+  }
+
+  // 3. Tim Aftersales: Mengelola tiket yang berstatus 'open' dan ditugaskan pada dirinya (aftersales_user_id)
   if (division === "after_sales") {
     if (currentStatus !== "open") {
       throw createError(
@@ -74,15 +82,12 @@ export const checkUpdateTicketPermission = async (ticketId, actor, currentTicket
       );
     }
 
-    // Jika user web, pastikan dia adalah pembuat tiket (dilihat dari history version 1 atau 0)
     if (actorUser?.id) {
-      const isCreator = (ticket.ticket_history || []).some(
-        (h) => (h.version === 1 || h.version === 0) && h.changed_by_user_id === actorUser.id
-      );
-      if (!isCreator) {
+      const isResponsible = ticket.aftersales_user_id === actorUser.id;
+      if (!isResponsible) {
         throw createError(
           403,
-          "Akses ditolak: Anda hanya dapat mengelola tiket yang Anda buat sendiri."
+          "Akses ditolak: Hanya penanggung jawab Aftersales pada tiket ini yang dapat melakukan pembaruan."
         );
       }
     }
@@ -102,7 +107,6 @@ export const checkUpdateTicketPermission = async (ticketId, actor, currentTicket
 
     const isAssigned = await ticketRepo.findAssigneeByTicketAndMember(ticketId, {
       userId: actorUser?.id,
-      telegramUserId: actorTelegram?.id,
     });
 
     if (!isAssigned) {
@@ -118,7 +122,6 @@ export const checkUpdateTicketPermission = async (ticketId, actor, currentTicket
   // 5. Divisi lainnya / belum diset: jika terdaftar sebagai assignee diizinkan hanya jika tiket berstatus 'escalated'
   const isAssigned = await ticketRepo.findAssigneeByTicketAndMember(ticketId, {
     userId: actorUser?.id,
-    telegramUserId: actorTelegram?.id,
   });
 
   if (isAssigned) {

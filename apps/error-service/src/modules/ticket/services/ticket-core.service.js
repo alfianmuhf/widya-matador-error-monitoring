@@ -5,6 +5,28 @@ import { ticketEvents } from "../ticket.events.js";
 import { recordLog } from "../../audit-log/audit-log.service.js";
 import { formatTicket, capitalizeStatus, generateTicketId } from "./ticket-format.service.js";
 import { checkUpdateTicketPermission } from "../../ticket-management/ticket-permission.service.js";
+import { publish as publishWebhook } from "../../webhook/webhook.publisher.js";
+
+/**
+ * Resolve grup Telegram untuk notifikasi escalated.
+ * Prioritas: grup client+location → location → client → null (fallback n8n).
+ */
+const resolveEscalatedGroup = async (ticket) => {
+  const clientId = ticket.asset?.client_id || ticket.asset?.client?.id || null;
+  const locationId = ticket.asset?.location_id || ticket.asset?.location?.id || null;
+
+  const findGroup = async (where) => {
+    const g = await prisma.telegram_groups.findFirst({ where: { is_active: true, ...where } });
+    return g?.chat_id || null;
+  };
+
+  let chatId = null;
+  if (clientId && locationId) chatId = await findGroup({ client_id: clientId, location_id: locationId });
+  if (!chatId && locationId) chatId = await findGroup({ location_id: locationId, client_id: null });
+  if (!chatId && clientId) chatId = await findGroup({ client_id: clientId, location_id: null });
+
+  return { chatId, clientId, locationId };
+};
 
 /**
  * Get tickets list with filtering, searching, and pagination
@@ -186,6 +208,20 @@ export const updateTicket = async (ticketId, data, actor = {}) => {
 
   // Broadcast realtime SSE event
   ticketEvents.notifyTicketUpdated(formatted);
+
+  // Publish ticket.escalated event when status changes from open to escalated
+  if (isStatus && targetStatus === "escalated" && (currentHistory.status || "").toLowerCase() === "open") {
+    const actorName = actor.email || actor.name || "Sistem";
+    const group = await resolveEscalatedGroup(currentTicket);
+    publishWebhook("ticket.escalated", {
+      actor: { userId: actor.id || null, telegramId: actor.telegram_user_id || null, name: actorName },
+      data: {
+        ticketId,
+        escalatedBy: actorName,
+        group,
+      },
+    });
+  }
 
   return formatted;
 };

@@ -7,10 +7,10 @@ import { publish as publishWebhook } from "../../webhook/webhook.publisher.js";
 import { formatTicket } from "./ticket-format.service.js";
 
 /**
- * Resolve tujuan grup Telegram untuk notifikasi tiket (klaim).
+ * Resolve grup Telegram untuk notifikasi escalated.
  * Prioritas: grup client+location → location → client → null (fallback n8n).
  */
-const resolveClaimGroup = async (ticket) => {
+const resolveEscalatedGroup = async (ticket) => {
   const clientId = ticket.asset?.client_id || ticket.asset?.client?.id || null;
   const locationId = ticket.asset?.location_id || ticket.asset?.location?.id || null;
 
@@ -207,17 +207,13 @@ export const claimTicket = async (ticketId, actor) => {
 
   ticketEvents.notifyTicketUpdated(formatted);
 
-  // Notifikasi grup: "tiket diklaim oleh X" (grup = client/location tiket)
-  const group = await resolveClaimGroup(ticket);
-  publishWebhook("ticket.claimed", {
+  // Publish ticket.escalated event (replaces ticket.claimed)
+  const group = await resolveEscalatedGroup(ticket);
+  publishWebhook("ticket.escalated", {
     actor: { userId: actorUser?.id || null, telegramId: actorTelegram?.telegram_id || null, name: actorName },
     data: {
       ticketId,
-      claimer: {
-        name: actorName,
-        userId: actorUser?.id || null,
-        telegramId: actorTelegram?.telegram_id || null,
-      },
+      escalatedBy: actorName,
       group,
     },
   });
@@ -367,8 +363,7 @@ export const addAssignee = async (ticketId, data, actor) => {
 
   ticketEvents.notifyTicketUpdated(formatted);
 
-  // Notifikasi DM ke anggota baru saja (tanpa pesan grup) — 409 duplikat
-  // sudah ditolak di atas, jadi event ini tidak pernah dobel per tiket.
+  // Always publish ticket.member_added when a member is added
   publishWebhook("ticket.member_added", {
     actor: { userId: actor.id || null, telegramId: actor.telegram_user_id || null, name: actorName },
     data: {
@@ -386,6 +381,24 @@ export const addAssignee = async (ticketId, data, actor) => {
       },
     },
   });
+
+  // If member is added as leader, also publish ticket.leader_changed
+  if (shouldBeLeader) {
+    publishWebhook("ticket.leader_changed", {
+      actor: { userId: actor.id || null, telegramId: actor.telegram_user_id || null, name: actorName },
+      data: {
+        ticketId,
+        oldLeader: null,
+        newLeader: {
+          name: targetName,
+          userId: targetUser?.id || null,
+          telegramId: targetUser?.telegram_user?.telegram_id || null,
+        },
+        changedBy: actorName,
+        changeType: "added_as_leader",
+      },
+    });
+  }
 
   return {
     message: `Anggota tim software '${targetName}' berhasil ditambahkan ke tiket`,
@@ -678,6 +691,29 @@ export const changeLeader = async (ticketId, data, actor) => {
 
   ticketEvents.notifyTicketUpdated(formatted);
 
+  // Publish ticket.leader_changed event for leadership transfer
+  const oldLeaderName = currentLeader?.user?.name || currentLeader?.telegram_user?.username || "Leader Lama";
+  // Use existing newLeaderName and actorName variables declared above
+
+  publishWebhook("ticket.leader_changed", {
+    actor: { userId: actor.id || null, telegramId: actor.telegram_user_id || null, name: actorName },
+    data: {
+      ticketId,
+      oldLeader: {
+        name: oldLeaderName,
+        userId: currentLeader?.user_id || null,
+        telegramId: currentLeader?.telegram_user?.telegram_id || null,
+      },
+      newLeader: {
+        name: newLeaderName,
+        userId: targetAssignee.user_id || null,
+        telegramId: targetAssignee.telegram_user?.telegram_id || null,
+      },
+      changedBy: actorName,
+      changeType: "transfer",
+    },
+  });
+
   return formatted;
 };
 
@@ -779,6 +815,28 @@ export const removeAssignee = async (ticketId, assigneeId, actor) => {
   });
 
   ticketEvents.notifyTicketUpdated(formatted);
+
+  // Publish ticket.member_removed event
+  const leaderName = currentLeader?.user?.name || currentLeader?.telegram_user?.username || "Leader";
+  const removedMemberTelegramId = targetAssignee.telegram_user?.telegram_id || null;
+
+  publishWebhook("ticket.member_removed", {
+    actor: { userId: actor.id || null, telegramId: actor.telegram_user_id || null, name: actorName },
+    data: {
+      ticketId,
+      removedMember: {
+        name: memberName,
+        userId: targetAssignee.user_id || null,
+        telegramId: removedMemberTelegramId,
+      },
+      removedBy: actorName,
+      leader: {
+        name: leaderName,
+        userId: currentLeader?.user_id || null,
+        telegramId: currentLeader?.telegram_user?.telegram_id || null,
+      },
+    },
+  });
 
   return {
     message: `Anggota '${memberName}' berhasil dihapus dari tiket`,

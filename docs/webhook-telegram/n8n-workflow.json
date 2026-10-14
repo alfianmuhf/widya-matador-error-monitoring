@@ -11,22 +11,29 @@
       },
       "type": "n8n-nodes-base.rabbitmqTrigger",
       "typeVersion": 1,
-      "position": [-220, 0],
-      "id": "a1000000-0000-4000-8000-000000000001",
+      "position": [
+        -220,
+        0
+      ],
       "name": "RabbitMQ Trigger",
       "credentials": {
-        "rabbitmq": { "id": "REPLACE_WITH_RABBITMQ_CREDENTIAL_ID", "name": "RabbitMQ account" }
+        "rabbitmq": {
+          "id": "REPLACE_WITH_RABBITMQ_CREDENTIAL_ID",
+          "name": "RabbitMQ account"
+        }
       }
     },
     {
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "const ADMIN_CHAT_ID = 'REPLACE_WITH_ADMIN_GROUP_CHAT_ID';\nconst store = $getWorkflowStaticData('global');\nstore.seen = store.seen || {};\n\nconst esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\"/g, '&quot;');\nconst out = [];\n\nfor (const item of $input.all()) {\n  const m = item.json;\n  if (!m.deliveryId || store.seen[m.deliveryId]) continue; // skip deliveryId duplikat\n  store.seen[m.deliveryId] = Date.now();\n\n  // batasi ukuran static data (simpan 500 deliveryId terakhir)\n  const keys = Object.keys(store.seen);\n  if (keys.length > 500) {\n    for (const k of keys.slice(0, keys.length - 500)) delete store.seen[k];\n  }\n\n  const d = m.data || {};\n  let chatId = null;\n  let text = null;\n  let fallbackNote = '';\n\n  if (m.event === 'user.invited') {\n    // DM invitee; bila tidak ada telegram -> fallback grup admin\n    chatId = (d.telegram && d.telegram.telegramId) || ADMIN_CHAT_ID;\n    if (!(d.telegram && d.telegram.telegramId)) {\n      fallbackNote = '<br/><i>(target DM tidak ada &mdash; diteruskan ke grup admin)</i>';\n    }\n    text = '<b>Undangan Akses</b><br/>' +\n      'Halo ' + esc(d.user && d.user.name) + ',<br/>' +\n      'Akun <b>' + esc(d.user && d.user.email) + '</b> (role: ' + esc(d.user && d.user.role) + ') telah dibuat.<br/>' +\n      'Silakan login di aplikasi After-Sales.' + fallbackNote;\n  } else if (m.event === 'ticket.claimed') {\n    // Grup client/location tiket; bila tidak ada -> fallback grup admin\n    chatId = (d.group && d.group.chatId) || ADMIN_CHAT_ID;\n    if (!(d.group && d.group.chatId)) {\n      fallbackNote = '<br/><i>(grup tiket tidak ditemukan &mdash; fallback grup admin)</i>';\n    }\n    text = '<b>Tiket diklaim</b><br/>' +\n      'Tiket <code>' + esc(m.ticketId || (d.ticketId)) + '</code> diklaim oleh <b>' + esc(d.claimer && d.claimer.name) + '</b>.' + fallbackNote;\n  } else if (m.event === 'ticket.member_added') {\n    // DM ke anggota baru saja; tanpa telegram -> TANPA pesan grup (skip)\n    chatId = d.addedMember && d.addedMember.telegram && d.addedMember.telegram.telegramId;\n    if (chatId) {\n      text = '<b>Kamu ditambahkan ke tiket</b><br/>' +\n        'Tiket <code>' + esc(d.ticketId) + '</code> &mdash; ditambahkan oleh <b>' + esc(d.addedBy) + '</b>.';\n    }\n  } else if (m.event === 'otp.password_reset') {\n    chatId = d.telegram && d.telegram.telegramId;\n    if (chatId) {\n      text = '<b>Reset Password</b><br/>' +\n        'OTP kamu: <code>' + esc(d.otp) + '</code><br/>' +\n        'Berlaku ' + esc(d.expiresInMinutes) + ' menit. Jangan bagikan ke siapa pun.';\n    }\n  }\n\n  if (chatId && text) out.push({ json: Object.assign({}, m, { _chatId: chatId, _text: text }) });\n}\n\nreturn out;"
+        "jsCode": "// ============================================================\n// Dedup + Route: RabbitMQ -> Telegram\n// - Static data ($getWorkflowStaticData) hanya persist SETELAH workflow diaktifkan.\n//   Saat test mode (Execute Workflow), static data TIDAK disimpan -> bisa dobel 1x.\n// - Batasi store 500 deliveryId terakhir.\n// ============================================================\n\nconst ADMIN_CHAT_ID = 'REPLACE_WITH_ADMIN_GROUP_CHAT_ID';\nconst store = $getWorkflowStaticData('global');\nstore.seen = store.seen || {};\n\nconst esc = (s) => String(s ?? '').replace(/&/g, '&').replace(/</g, '<').replace(/>/g, '>').replace(/\"/g, '\"');\nconst out = [];\n\nfor (const item of $input.all()) {\n  const m = item.json;\n  \n  // Validasi payload minimal\n  if (!m || !m.deliveryId || !m.event) continue;\n  if (store.seen[m.deliveryId]) continue;\n  store.seen[m.deliveryId] = Date.now();\n\n  // Batasi ukuran static data (simpan 500 deliveryId terakhir)\n  const keys = Object.keys(store.seen);\n  if (keys.length > 500) {\n    for (const k of keys.slice(0, keys.length - 500)) delete store.seen[k];\n  }\n\n  const d = m.data || {};\n  let chatId = null;\n  let text = null;\n  let fallbackNote = '';\n\n  if (m.event === 'user.invited') {\n    // DM invitee; bila tidak ada telegram -> fallback grup admin\n    chatId = (d.telegram && d.telegram.telegramId) || ADMIN_CHAT_ID;\n    if (!(d.telegram && d.telegram.telegramId)) {\n      fallbackNote = '<br/><i>(target DM tidak ada &mdash; diteruskan ke grup admin)</i>';\n    }\n    text = '<b>Undangan Akses</b><br/>' +\n      'Halo ' + esc(d.user && d.user.name) + ',<br/>' +\n      'Akun <b>' + esc(d.user && d.user.email) + '</b> (role: ' + esc(d.user && d.user.role) + ') telah dibuat.<br/>' +\n      'Silakan login di aplikasi After-Sales.' + fallbackNote;\n  } else if (m.event === 'ticket.claimed') {\n    // Grup client/location tiket; bila tidak ada -> fallback grup admin\n    chatId = (d.group && d.group.chatId) || ADMIN_CHAT_ID;\n    if (!(d.group && d.group.chatId)) {\n      fallbackNote = '<br/><i>(grup tiket tidak ditemukan &mdash; fallback grup admin)</i>';\n    }\n    text = '<b>Tiket diklaim</b><br/>' +\n      'Tiket <code>' + esc(d.ticketId) + '</code> diklaim oleh <b>' + esc(d.claimer && d.claimer.name) + '</b>.' + fallbackNote;\n  } else if (m.event === 'ticket.member_added') {\n    // DM ke anggota baru saja; tanpa telegram -> TANPA pesan grup (skip)\n    chatId = d.addedMember && d.addedMember.telegram && d.addedMember.telegram.telegramId;\n    if (chatId) {\n      text = '<b>Kamu ditambahkan ke tiket</b><br/>' +\n        'Tiket <code>' + esc(d.ticketId) + '</code> &mdash; ditambahkan oleh <b>' + esc(d.addedBy) + '</b>.';\n    }\n  } else if (m.event === 'otp.password_reset') {\n    chatId = d.telegram && d.telegram.telegramId;\n    if (chatId) {\n      text = '<b>Reset Password</b><br/>' +\n        'OTP kamu: <code>' + esc(d.otp) + '</code><br/>' +\n        'Berlaku ' + esc(d.expiresInMinutes) + ' menit. Jangan bagikan ke siapa pun.';\n    }\n  }\n\n  if (chatId && text) out.push({ json: Object.assign({}, m, { _chatId: chatId, _text: text }) });\n}\n\nreturn out;"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 1,
-      "position": [0, 0],
-      "id": "a1000000-0000-4000-8000-000000000002",
+      "position": [
+        0,
+        0
+      ],
       "name": "Dedup + Route"
     },
     {
@@ -41,22 +48,45 @@
         }
       },
       "type": "n8n-nodes-base.telegram",
-      "typeVersion": 1.2,
-      "position": [220, 0],
-      "id": "a1000000-0000-4000-8000-000000000003",
+      "typeVersion": "1.2",
+      "position": [
+        220,
+        0
+      ],
       "name": "Kirim Telegram",
       "credentials": {
-        "telegramApi": { "id": "REPLACE_WITH_TELEGRAM_CREDENTIAL_ID", "name": "Telegram Bot account" }
+        "telegramApi": {
+          "id": "REPLACE_WITH_TELEGRAM_CREDENTIAL_ID",
+          "name": "Telegram Bot account"
+        }
       }
     }
   ],
   "connections": {
     "RabbitMQ Trigger": {
-      "main": [[{ "node": "Dedup + Route", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Dedup + Route",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Dedup + Route": {
-      "main": [[{ "node": "Kirim Telegram", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Kirim Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
-  "settings": { "executionOrder": "v1" }
+  "settings": {
+    "executionOrder": "v1"
+  }
 }

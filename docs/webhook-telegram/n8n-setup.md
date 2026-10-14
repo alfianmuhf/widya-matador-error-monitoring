@@ -19,8 +19,9 @@ Workflow importable: `n8n-workflow.json` (di folder ini).
 - Queue `erad.telegram.notify`, ack **Execution Finishes Successfully** — bila eksekusi gagal,
   pesan di-nack → masuk DLQ (`erad.telegram.notify.dlx`, sudah di-assert publisher) dan bisa
   di-requeue manual dari management UI (`localhost:15672`).
-- Dedup `deliveryId` via workflow static data (batas 500 id terakhir). Catatan n8n: static data
-  tidak tersimpan saat *test run* — dedup efektif setelah workflow aktif (mode produksi).
+- Dedup `deliveryId` via workflow static data (batas 500 id terakhir).
+  **Penting**: Static data (`$getWorkflowStaticData`) **tidak persist saat *test run*** (tombol "Execute Workflow").
+  Dedup hanya efektif setelah workflow **diaktifkan (Activate)**. Saat test mode, pesan bisa terkirim dobel 1x — ini normal.
 - Routing per event:
   - `user.invited` → DM `data.telegram.telegramId`, fallback grup admin bila null.
   - `ticket.claimed` → grup `data.group.chatId`, fallback grup admin bila null.

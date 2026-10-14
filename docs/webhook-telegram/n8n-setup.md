@@ -9,7 +9,7 @@ Workflow importable: `n8n-workflow.json` (di folder ini).
    - **RabbitMQ** (`rabbitmq`): host `localhost`, port `5672`, user/pass default `guest`/`guest`
      (atau sesuai `RABBITMQ_URL` di `.env.backend`).
    - **Telegram Bot** (`telegramApi`): token dari @BotFather.
-3. Di node **Dedup + Route**, ganti `REPLACE_WITH_ADMIN_GROUP_CHAT_ID` dengan chat ID grup admin
+3. Di node **Route: User Invited**, **Route: Ticket Escalated**, ganti `REPLACE_WITH_SOFTWARE_GROUP_CHAT_ID` dengan chat ID grup software
    (fallback saat target DM/grup tidak ada).
 4. **Activate** workflow, lalu pastikan RabbitMQ jalan: `docker compose up -d rabbitmq`
    (dari folder `infra/`) dan set `RABBITMQ_URL=amqp://localhost:5672` di `.env.backend`.
@@ -22,7 +22,9 @@ Workflow importable: `n8n-workflow.json` (di folder ini).
 - Dedup `deliveryId` via workflow static data (batas 500 id terakhir). Catatan n8n: static data
   tidak tersimpan saat *test run* — dedup efektif setelah workflow aktif (mode produksi).
 - Routing per event:
-  - `user.invited` → DM `data.telegram.telegramId`, fallback grup admin bila null.
-  - `ticket.claimed` → grup `data.group.chatId`, fallback grup admin bila null.
+  - `user.invited` → DM `data.telegram.telegramId`, fallback grup software bila null.
+  - `ticket.escalated` → grup `data.group.chatId`, fallback grup software bila null.
+  - `ticket.leader_changed` (transfer) → DM ke old leader + new leader; `added_as_leader` → DM ke new leader saja.
   - `ticket.member_added` → DM `data.addedMember.telegram.telegramId` saja; tanpa telegram → tidak ada pesan.
+  - `ticket.member_removed` → DM ke removed member + current leader.
   - `otp.password_reset` → DM `data.telegram.telegramId` berisi OTP 6 digit.

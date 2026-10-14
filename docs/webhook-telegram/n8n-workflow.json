@@ -11,10 +11,16 @@
       },
       "type": "n8n-nodes-base.rabbitmqTrigger",
       "typeVersion": 1,
-      "position": [-220, 0],
+      "position": [
+        -220,
+        0
+      ],
       "name": "RabbitMQ Trigger",
       "credentials": {
-        "rabbitmq": { "id": "REPLACE_WITH_RABBITMQ_CREDENTIAL_ID", "name": "RabbitMQ account" }
+        "rabbitmq": {
+          "id": "REPLACE_WITH_RABBITMQ_CREDENTIAL_ID",
+          "name": "RabbitMQ account"
+        }
       }
     },
     {
@@ -24,7 +30,10 @@
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 1,
-      "position": [0, 0],
+      "position": [
+        0,
+        0
+      ],
       "name": "Dedup"
     },
     {
@@ -34,7 +43,10 @@
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 1,
-      "position": [220, -100],
+      "position": [
+        220,
+        -100
+      ],
       "name": "Route: User Invited"
     },
     {
@@ -44,17 +56,23 @@
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 1,
-      "position": [220, 0],
+      "position": [
+        220,
+        0
+      ],
       "name": "Route: Ticket Escalated"
     },
     {
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "const esc = (s) => String(s ?? \"\").replace(/&/g, \"&\").replace(/</g, \"<\").replace(/>/g, \">\").replace(/\"/g, \"\"\");\n\nconst out = [];\n\nfor (const item of $input.all()) {\n  const m = item.json;\n  if (m.event !== 'ticket.leader_changed') continue;\n\n  const d = m.data || {};\n  const changeType = d.changeType || 'transfer';\n\n  if (changeType === 'added_as_leader') {\n    // New member added as leader - DM to new leader only\n    const chatId = d.newLeader && d.newLeader.telegramId;\n    if (chatId) {\n      const text = '<b>Anda Dijadikan Leader</b>\\n' +\n        'Anda ditambahkan sebagai Leader tim software pada tiket <code>' + esc(d.ticketId) + '</code> oleh <b>' + esc(d.changedBy) + '</b>.';\n      out.push({ json: Object.assign({}, m, { _chatId: chatId, _text: text }) });\n    }\n  } else {\n    // Leadership transfer - DM to both old and new leader\n    if (d.oldLeader && d.oldLeader.telegramId) {\n      const text = '<b>Kepemimpinan Dialihkan</b>\\n' +\n        'Kepemimpinan tiket <code>' + esc(d.ticketId) + '</code> dialihkan dari Anda ke <b>' + esc(d.newLeader?.name) + '</b> oleh <b>' + esc(d.changedBy) + '</b>.';\n      out.push({ json: Object.assign({}, m, { _chatId: d.oldLeader.telegramId, _text: text }) });\n    }\n    if (d.newLeader && d.newLeader.telegramId) {\n      const text = '<b>Anda Menjadi Leader Baru</b>\\n' +\n        'Kepemimpinan tiket <code>' + esc(d.ticketId) + '</code> dialihkan ke Anda oleh <b>' + esc(d.changedBy) + '</b>. Leader sebelumnya: <b>' + esc(d.oldLeader?.name) + '</b>.';\n      out.push({ json: Object.assign({}, m, { _chatId: d.newLeader.telegramId, _text: text }) });\n    }\n  }\n}\n\nreturn out;"
+        "jsCode": "const esc = (s) => String(s ?? \"\").replace(/&/g, \"&\").replace(/</g, \"<\").replace(/>/g, \">\").replace(/\"/g, \"\"\");\n\nconst out = [];\n\nfor (const item of $input.all()) {\n  const m = item.json;\n  if (m.event !== 'ticket.leader_changed') continue;\n\n  const d = m.data || {};\n  const changeType = d.changeType || 'transfer';\n\n  if (changeType === 'added_as_leader') {\n    const chatId = d.newLeader && d.newLeader.telegramId;\n    if (chatId) {\n      const text = '<b>Anda Dijadikan Leader</b>\\n' +\n        'Anda ditambahkan sebagai Leader tim software pada tiket <code>' + esc(d.ticketId) + '</code> oleh <b>' + esc(d.changedBy) + '</b>.';\n      out.push({ json: Object.assign({}, m, { _chatId: chatId, _text: text }) });\n    }\n  } else {\n    if (d.oldLeader && d.oldLeader.telegramId) {\n      const text = '<b>Kepemimpinan Dialihkan</b>\\n' +\n        'Kepemimpinan tiket <code>' + esc(d.ticketId) + '</code> dialihkan dari Anda ke <b>' + esc(d.newLeader?.name) + '</b> oleh <b>' + esc(d.changedBy) + '</b>.';\n      out.push({ json: Object.assign({}, m, { _chatId: d.oldLeader.telegramId, _text: text }) });\n    }\n    if (d.newLeader && d.newLeader.telegramId) {\n      const text = '<b>Anda Menjadi Leader Baru</b>\\n' +\n        'Kepemimpinan tiket <code>' + esc(d.ticketId) + '</code> dialihkan ke Anda oleh <b>' + esc(d.changedBy) + '</b>. Leader sebelumnya: <b>' + esc(d.oldLeader?.name) + '</b>.';\n      out.push({ json: Object.assign({}, m, { _chatId: d.newLeader.telegramId, _text: text }) });\n    }\n  }\n}\n\nreturn out;"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 1,
-      "position": [220, 100],
+      "position": [
+        220,
+        100
+      ],
       "name": "Route: Leader Changed"
     },
     {
@@ -64,17 +82,23 @@
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 1,
-      "position": [220, 200],
+      "position": [
+        220,
+        200
+      ],
       "name": "Route: Member Added"
     },
     {
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "const esc = (s) => String(s ?? \"\").replace(/&/g, \"&\").replace(/</g, \"<\").replace(/>/g, \">\").replace(/\"/g, \"\"\");\n\nconst out = [];\n\nfor (const item of $input.all()) {\n  const m = item.json;\n  if (m.event !== 'ticket.member_removed') continue;\n\n  const d = m.data || {};\n  \n  // DM to removed member\n  if (d.removedMember && d.removedMember.telegramId) {\n    const text = '<b>Anda Dihapus dari Tiket</b>\\n' +\n      'Anda dihapus dari tim software tiket <code>' + esc(d.ticketId) + '</code> oleh <b>' + esc(d.removedBy) + '</b>.';\n    out.push({ json: Object.assign({}, m, { _chatId: d.removedMember.telegramId, _text: text }) });\n  }\n  \n  // DM to current leader\n  if (d.leader && d.leader.telegramId) {\n    const text = '<b>Anggota Dihapus</b>\\n' +\n      '<b>' + esc(d.removedMember?.name) + '</b> dihapus dari tim software tiket <code>' + esc(d.ticketId) + '</code> oleh <b>' + esc(d.removedBy) + '</b>.';\n    out.push({ json: Object.assign({}, m, { _chatId: d.leader.telegramId, _text: text }) });\n  }\n}\n\nreturn out."
+        "jsCode": "const esc = (s) => String(s ?? \"\").replace(/&/g, \"&\").replace(/</g, \"<\").replace(/>/g, \">\").replace(/\"/g, \"\"\");\n\nconst out = [];\n\nfor (const item of $input.all()) {\n  const m = item.json;\n  if (m.event !== 'ticket.member_removed') continue;\n\n  const d = m.data || {};\n  \n  if (d.removedMember && d.removedMember.telegramId) {\n    const text = '<b>Anda Dihapus dari Tiket</b>\\n' +\n      'Anda dihapus dari tim software tiket <code>' + esc(d.ticketId) + '</code> oleh <b>' + esc(d.removedBy) + '</b>.';\n    out.push({ json: Object.assign({}, m, { _chatId: d.removedMember.telegramId, _text: text }) });\n  }\n  \n  if (d.leader && d.leader.telegramId) {\n    const text = '<b>Anggota Dihapus</b>\\n' +\n      '<b>' + esc(d.removedMember?.name) + '</b> dihapus dari tim software tiket <code>' + esc(d.ticketId) + '</code> oleh <b>' + esc(d.removedBy) + '</b>.';\n    out.push({ json: Object.assign({}, m, { _chatId: d.leader.telegramId, _text: text }) });\n  }\n}\n\nreturn out."
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 1,
-      "position": [220, 300],
+      "position": [
+        220,
+        300
+      ],
       "name": "Route: Member Removed"
     },
     {
@@ -90,41 +114,127 @@
       },
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
-      "position": [440, 100],
+      "position": [
+        440,
+        100
+      ],
       "name": "Kirim Telegram",
       "credentials": {
-        "telegramApi": { "id": "REPLACE_WITH_TELEGRAM_CREDENTIAL_ID", "name": "Telegram Bot account" }
+        "telegramApi": {
+          "id": "REPLACE_WITH_TELEGRAM_CREDENTIAL_ID",
+          "name": "Telegram Bot account"
+        }
       }
     }
   ],
   "connections": {
     "RabbitMQ Trigger": {
-      "main": [[{ "node": "Dedup", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Dedup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Dedup": {
       "main": [
-        [{ "node": "Route: User Invited", "type": "main", "index": 0 }],
-        [{ "node": "Route: Ticket Escalated", "type": "main", "index": 0 }],
-        [{ "node": "Route: Leader Changed", "type": "main", "index": 0 }],
-        [{ "node": "Route: Member Added", "type": "main", "index": 0 }],
-        [{ "node": "Route: Member Removed", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Route: User Invited",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Route: Ticket Escalated",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Route: Leader Changed",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Route: Member Added",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Route: Member Removed",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Route: User Invited": {
-      "main": [[{ "node": "Kirim Telegram", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Kirim Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Route: Ticket Escalated": {
-      "main": [[{ "node": "Kirim Telegram", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Kirim Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Route: Leader Changed": {
-      "main": [[{ "node": "Kirim Telegram", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Kirim Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Route: Member Added": {
-      "main": [[{ "node": "Kirim Telegram", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Kirim Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Route: Member Removed": {
-      "main": [[{ "node": "Kirim Telegram", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Kirim Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
-  "settings": { "executionOrder": "v1" }
+  "settings": {
+    "executionOrder": "v1"
+  }
 }

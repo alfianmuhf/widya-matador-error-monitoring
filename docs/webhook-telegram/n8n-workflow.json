@@ -11,10 +11,7 @@
       },
       "type": "n8n-nodes-base.rabbitmqTrigger",
       "typeVersion": 1,
-      "position": [
-        -220,
-        0
-      ],
+      "position": [-220, 0],
       "name": "RabbitMQ Trigger",
       "credentials": {
         "rabbitmq": {
@@ -30,75 +27,57 @@
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 1,
-      "position": [
-        0,
-        0
-      ],
+      "position": [0, 0],
       "name": "Dedup"
     },
     {
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "const esc = (s) => String(s ?? \"\").replace(/&/g, \"&\").replace(/</g, \"<\").replace(/>/g, \">\").replace(/\"/g, \"\"\");\n\nconst out = [];\n\nfor (const item of $input.all()) {\n  const m = item.json;\n  if (m.event !== 'user.invited') continue;\n\n  const d = m.data || {};\n  const chatId = d.telegram && d.telegram.telegramId;\n  if (!chatId) continue;\n\n  const text = '<b>Undangan Akses</b>\\n' +\n    'Halo <b>' + esc(d.user && d.user.name) + '</b>,\\n' +\n    'Akun <b>' + esc(d.user && d.user.email) + '</b> (role: ' + esc(d.user && d.user.role) + ') telah dibuat.\\n' +\n    'Silakan login di aplikasi After-Sales.';\n\n  out.push({ json: Object.assign({}, m, { _chatId: chatId, _text: text }) });\n}\n\nreturn out;"
+        "jsCode": "const esc = (s) => String(s ?? \"\").replace(/&/g, \"&amp;\").replace(/</g, \"&lt;\").replace(/>/g, \"&gt;\").replace(/\"/g, \"&quot;\");\n\nconst out = [];\n\nfor (const item of $input.all()) {\n  const m = item.json;\n  if (m.event !== 'user.invited') continue;\n\n  const d = m.data || {};\n  const chatId = d.telegram && d.telegram.telegramId;\n  if (!chatId) continue;\n\n  const text = '<b>Undangan Akses</b>\\n' +\n    'Halo <b>' + esc(d.user && d.user.name) + '</b>,\\n' +\n    'Akun <b>' + esc(d.user && d.user.email) + '</b> (role: ' + esc(d.user && d.user.role) + ') telah dibuat.\\n' +\n    'Silakan login di aplikasi After-Sales.';\n\n  out.push({ json: Object.assign({}, m, { _chatId: chatId, _text: text }) });\n}\n\nreturn out;"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 1,
-      "position": [
-        220,
-        -100
-      ],
+      "position": [220, -100],
       "name": "Route: User Invited"
     },
     {
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "const SOFTWARE_CHAT_ID = 'REPLACE_WITH_SOFTWARE_GROUP_CHAT_ID';\n\nconst esc = (s) => String(s ?? \"\").replace(/&/g, \"&\").replace(/</g, \"<\").replace(/>/g, \">\").replace(/\"/g, \"\"\");\n\nconst out = [];\n\nfor (const item of $input.all()) {\n  const m = item.json;\n  if (m.event !== 'ticket.escalated') continue;\n\n  const d = m.data || {};\n  let chatId = (d.group && d.group.chatId) || SOFTWARE_CHAT_ID;\n  let fallbackNote = '';\n  if (!(d.group && d.group.chatId)) {\n    fallbackNote = '\\n<i>(grup tiket tidak ditemukan - fallback grup software)</i>';\n  }\n  const text = '<b>Tiket Dideskalasikan</b>\\n' +\n    'Tiket <code>' + esc(d.ticketId) + '</code> dideskalasi oleh <b>' + esc(d.escalatedBy) + '</b>.' + fallbackNote;\n\n  out.push({ json: Object.assign({}, m, { _chatId: chatId, _text: text }) });\n}\n\nreturn out;"
+        "jsCode": "const SOFTWARE_CHAT_ID = 'REPLACE_WITH_SOFTWARE_GROUP_CHAT_ID';\n\nconst esc = (s) => String(s ?? \"\").replace(/&/g, \"&amp;\").replace(/</g, \"&lt;\").replace(/>/g, \"&gt;\").replace(/\"/g, \"&quot;\");\n\nconst out = [];\n\nfor (const item of $input.all()) {\n  const m = item.json;\n  if (m.event !== 'ticket.escalated') continue;\n\n  const d = m.data || {};\n  let chatId = (d.group && d.group.chatId) || SOFTWARE_CHAT_ID;\n  let fallbackNote = '';\n  if (!(d.group && d.group.chatId)) {\n    fallbackNote = '\\n<i>(grup tiket tidak ditemukan - fallback grup software)</i>';\n  }\n  const text = '<b>Tiket Dideskalasikan</b>\\n' +\n    'Tiket <code>' + esc(d.ticketId) + '</code> dideskalasi oleh <b>' + esc(d.escalatedBy) + '</b>.' + fallbackNote;\n\n  out.push({ json: Object.assign({}, m, { _chatId: chatId, _text: text }) });\n}\n\nreturn out;"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 1,
-      "position": [
-        220,
-        0
-      ],
+      "position": [220, 0],
       "name": "Route: Ticket Escalated"
     },
     {
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "const esc = (s) => String(s ?? \"\").replace(/&/g, \"&\").replace(/</g, \"<\").replace(/>/g, \">\").replace(/\"/g, \"\"\");\n\nconst out = [];\n\nfor (const item of $input.all()) {\n  const m = item.json;\n  if (m.event !== 'ticket.leader_changed') continue;\n\n  const d = m.data || {};\n  const changeType = d.changeType || 'transfer';\n\n  if (changeType === 'added_as_leader') {\n    const chatId = d.newLeader && d.newLeader.telegramId;\n    if (chatId) {\n      const text = '<b>Anda Dijadikan Leader</b>\\n' +\n        'Anda ditambahkan sebagai Leader tim software pada tiket <code>' + esc(d.ticketId) + '</code> oleh <b>' + esc(d.changedBy) + '</b>.';\n      out.push({ json: Object.assign({}, m, { _chatId: chatId, _text: text }) });\n    }\n  } else {\n    if (d.oldLeader && d.oldLeader.telegramId) {\n      const text = '<b>Kepemimpinan Dialihkan</b>\\n' +\n        'Kepemimpinan tiket <code>' + esc(d.ticketId) + '</code> dialihkan dari Anda ke <b>' + esc(d.newLeader?.name) + '</b> oleh <b>' + esc(d.changedBy) + '</b>.';\n      out.push({ json: Object.assign({}, m, { _chatId: d.oldLeader.telegramId, _text: text }) });\n    }\n    if (d.newLeader && d.newLeader.telegramId) {\n      const text = '<b>Anda Menjadi Leader Baru</b>\\n' +\n        'Kepemimpinan tiket <code>' + esc(d.ticketId) + '</code> dialihkan ke Anda oleh <b>' + esc(d.changedBy) + '</b>. Leader sebelumnya: <b>' + esc(d.oldLeader?.name) + '</b>.';\n      out.push({ json: Object.assign({}, m, { _chatId: d.newLeader.telegramId, _text: text }) });\n    }\n  }\n}\n\nreturn out;"
+        "jsCode": "const esc = (s) => String(s ?? \"\").replace(/&/g, \"&amp;\").replace(/</g, \"&lt;\").replace(/>/g, \"&gt;\").replace(/\"/g, \"&quot;\");\n\nconst out = [];\n\nfor (const item of $input.all()) {\n  const m = item.json;\n  if (m.event !== 'ticket.leader_changed') continue;\n\n  const d = m.data || {};\n  const changeType = d.changeType || 'transfer';\n\n  if (changeType === 'added_as_leader') {\n    const chatId = d.newLeader && d.newLeader.telegramId;\n    if (chatId) {\n      const text = '<b>Anda Dijadikan Leader</b>\\n' +\n        'Anda ditambahkan sebagai Leader tim software pada tiket <code>' + esc(d.ticketId) + '</code> oleh <b>' + esc(d.changedBy) + '</b>.';\n      out.push({ json: Object.assign({}, m, { _chatId: chatId, _text: text }) });\n    }\n  } else {\n    if (d.oldLeader && d.oldLeader.telegramId) {\n      const text = '<b>Kepemimpinan Dialihkan</b>\\n' +\n        'Kepemimpinan tiket <code>' + esc(d.ticketId) + '</code> dialihkan dari Anda ke <b>' + esc(d.newLeader?.name) + '</b> oleh <b>' + esc(d.changedBy) + '</b>.';\n      out.push({ json: Object.assign({}, m, { _chatId: d.oldLeader.telegramId, _text: text }) });\n    }\n    if (d.newLeader && d.newLeader.telegramId) {\n      const text = '<b>Anda Menjadi Leader Baru</b>\\n' +\n        'Kepemimpinan tiket <code>' + esc(d.ticketId) + '</code> dialihkan ke Anda oleh <b>' + esc(d.changedBy) + '</b>. Leader sebelumnya: <b>' + esc(d.oldLeader?.name) + '</b>.';\n      out.push({ json: Object.assign({}, m, { _chatId: d.newLeader.telegramId, _text: text }) });\n    }\n  }\n}\n\nreturn out;"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 1,
-      "position": [
-        220,
-        100
-      ],
+      "position": [220, 100],
       "name": "Route: Leader Changed"
     },
     {
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "const esc = (s) => String(s ?? \"\").replace(/&/g, \"&\").replace(/</g, \"<\").replace(/>/g, \">\").replace(/\"/g, \"\"\");\n\nconst out = [];\n\nfor (const item of $input.all()) {\n  const m = item.json;\n  if (m.event !== 'ticket.member_added') continue;\n\n  const d = m.data || {};\n  const chatId = d.addedMember && d.addedMember.telegram && d.addedMember.telegram.telegramId;\n  if (!chatId) continue;\n\n  const text = '<b>Kamu Ditambahkan ke Tiket</b>\\n' +\n    'Tiket <code>' + esc(d.ticketId) + '</code> - ditambahkan oleh <b>' + esc(d.addedBy) + '</b>.';\n\n  out.push({ json: Object.assign({}, m, { _chatId: chatId, _text: text }) });\n}\n\nreturn out;"
+        "jsCode": "const esc = (s) => String(s ?? \"\").replace(/&/g, \"&amp;\").replace(/</g, \"&lt;\").replace(/>/g, \"&gt;\").replace(/\"/g, \"&quot;\");\n\nconst out = [];\n\nfor (const item of $input.all()) {\n  const m = item.json;\n  if (m.event !== 'ticket.member_added') continue;\n\n  const d = m.data || {};\n  const chatId = d.addedMember && d.addedMember.telegram && d.addedMember.telegram.telegramId;\n  if (!chatId) continue;\n\n  const text = '<b>Kamu Ditambahkan ke Tiket</b>\\n' +\n    'Tiket <code>' + esc(d.ticketId) + '</code> - ditambahkan oleh <b>' + esc(d.addedBy) + '</b>.';\n\n  out.push({ json: Object.assign({}, m, { _chatId: chatId, _text: text }) });\n}\n\nreturn out;"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 1,
-      "position": [
-        220,
-        200
-      ],
+      "position": [220, 200],
       "name": "Route: Member Added"
     },
     {
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "const esc = (s) => String(s ?? \"\").replace(/&/g, \"&\").replace(/</g, \"<\").replace(/>/g, \">\").replace(/\"/g, \"\"\");\n\nconst out = [];\n\nfor (const item of $input.all()) {\n  const m = item.json;\n  if (m.event !== 'ticket.member_removed') continue;\n\n  const d = m.data || {};\n  \n  if (d.removedMember && d.removedMember.telegramId) {\n    const text = '<b>Anda Dihapus dari Tiket</b>\\n' +\n      'Anda dihapus dari tim software tiket <code>' + esc(d.ticketId) + '</code> oleh <b>' + esc(d.removedBy) + '</b>.';\n    out.push({ json: Object.assign({}, m, { _chatId: d.removedMember.telegramId, _text: text }) });\n  }\n  \n  if (d.leader && d.leader.telegramId) {\n    const text = '<b>Anggota Dihapus</b>\\n' +\n      '<b>' + esc(d.removedMember?.name) + '</b> dihapus dari tim software tiket <code>' + esc(d.ticketId) + '</code> oleh <b>' + esc(d.removedBy) + '</b>.';\n    out.push({ json: Object.assign({}, m, { _chatId: d.leader.telegramId, _text: text }) });\n  }\n}\n\nreturn out."
+        "jsCode": "const esc = (s) => String(s ?? \"\").replace(/&/g, \"&amp;\").replace(/</g, \"&lt;\").replace(/>/g, \"&gt;\").replace(/\"/g, \"&quot;\");\n\nconst out = [];\n\nfor (const item of $input.all()) {\n  const m = item.json;\n  if (m.event !== 'ticket.member_removed') continue;\n\n  const d = m.data || {};\n  \n  if (d.removedMember && d.removedMember.telegramId) {\n    const text = '<b>Anda Dihapus dari Tiket</b>\\n' +\n      'Anda dihapus dari tim software tiket <code>' + esc(d.ticketId) + '</code> oleh <b>' + esc(d.removedBy) + '</b>.';\n    out.push({ json: Object.assign({}, m, { _chatId: d.removedMember.telegramId, _text: text }) });\n  }\n  \n  if (d.leader && d.leader.telegramId) {\n    const text = '<b>Anggota Dihapus</b>\\n' +\n      '<b>' + esc(d.removedMember?.name) + '</b> dihapus dari tim software tiket <code>' + esc(d.ticketId) + '</code> oleh <b>' + esc(d.removedBy) + '</b>.';\n    out.push({ json: Object.assign({}, m, { _chatId: d.leader.telegramId, _text: text }) });\n  }\n}\n\nreturn out;"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 1,
-      "position": [
-        220,
-        300
-      ],
+      "position": [220, 300],
       "name": "Route: Member Removed"
     },
     {
@@ -114,10 +93,7 @@
       },
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
-      "position": [
-        440,
-        100
-      ],
+      "position": [440, 100],
       "name": "Kirim Telegram",
       "credentials": {
         "telegramApi": {
@@ -146,30 +122,22 @@
             "node": "Route: User Invited",
             "type": "main",
             "index": 0
-          }
-        ],
-        [
+          },
           {
             "node": "Route: Ticket Escalated",
             "type": "main",
             "index": 0
-          }
-        ],
-        [
+          },
           {
             "node": "Route: Leader Changed",
             "type": "main",
             "index": 0
-          }
-        ],
-        [
+          },
           {
             "node": "Route: Member Added",
             "type": "main",
             "index": 0
-          }
-        ],
-        [
+          },
           {
             "node": "Route: Member Removed",
             "type": "main",

@@ -5,8 +5,7 @@ FROM node:22-alpine
 
 WORKDIR /app
 
-# Layer 1: Copy file env dari root menjadi .env di dalam container
-COPY .env.backend.example .env
+# Environment variables (.env) di-inject dari luar container via docker-compose (env_file: ../../env-file/.env.backend)
 
 # Install library OS pendukung Prisma & Bcrypt di Alpine
 RUN apk add --no-cache openssl libc6-compat

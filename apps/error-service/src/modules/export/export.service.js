@@ -1,6 +1,6 @@
 import ExcelJS from "exceljs";
 import PDFDocument from "pdfkit";
-import { formatDateTimeWIB } from "../ticket/ticket.service.js";
+import { formatDateTimeWIB, computeDurationText } from "../ticket/ticket.service.js";
 
 /**
  * Generate formatted Excel buffer for tickets
@@ -18,7 +18,7 @@ export const generateTicketsExcel = async (tickets = [], meta = {}) => {
   });
 
   // 1. Title Banner
-  sheet.mergeCells("A1:R1");
+  sheet.mergeCells("A1:V1");
   const titleCell = sheet.getCell("A1");
   titleCell.value = "LAPORAN REKAPITULASI TIKET AFTERSALES — ERAD";
   titleCell.font = { name: "Arial", size: 16, bold: true, color: { argb: "FFFFFFFF" } };
@@ -31,7 +31,7 @@ export const generateTicketsExcel = async (tickets = [], meta = {}) => {
   sheet.getRow(1).height = 36;
 
   // 2. Metadata Information
-  sheet.mergeCells("A2:R2");
+  sheet.mergeCells("A2:V2");
   const metaCell = sheet.getCell("A2");
   const printTime = formatDateTimeWIB(new Date());
   metaCell.value = `Tanggal Unduh: ${printTime} WIB | Total Tiket: ${tickets.length} | Sistem: ERAD Load Scanner Aftersales`;
@@ -65,7 +65,11 @@ export const generateTicketsExcel = async (tickets = [], meta = {}) => {
     { header: "Kerusakan", key: "description", width: 30 },
     { header: "Penanganan", key: "handling", width: 30 },
     { header: "Penyebab", key: "cause", width: 24 },
-    { header: "Tanggal Dibuat", key: "createdDateTimeText", width: 20 },
+    { header: "Open At", key: "open_at", width: 20 },
+    { header: "Escalated At", key: "escalated_at", width: 20 },
+    { header: "Solved At", key: "solved_at", width: 20 },
+    { header: "Time To Analyst", key: "timeToAnalysis", width: 18 },
+    { header: "Time To Solved", key: "timeToSolve", width: 18 },
     { header: "Durasi (MTTR)", key: "durationText", width: 16 },
   ];
 
@@ -118,7 +122,11 @@ export const generateTicketsExcel = async (tickets = [], meta = {}) => {
       t.description || "-",
       t.handling || "-",
       t.cause || "-",
-      t.createdDateTimeText || formatDateTimeWIB(t.createdAt),
+      t.openDateTimeText || (t.open_at ? formatDateTimeWIB(t.open_at) : (t.createdAt ? formatDateTimeWIB(t.createdAt) : "-")),
+      t.escalated_at ? (t.escalatedDateTimeText || formatDateTimeWIB(t.escalated_at)) : "—",
+      t.solved_at ? (t.solvedDateTimeText || formatDateTimeWIB(t.solved_at)) : "—",
+      t.timeToAnalysisText || (t.escalated_at ? computeDurationText(t.open_at || t.createdAt, t.escalated_at) : "—"),
+      t.timeToSolveText || (t.solved_at ? computeDurationText(t.open_at || t.createdAt, t.solved_at) : "—"),
       t.durationText || "—",
     ];
 
@@ -139,7 +147,7 @@ export const generateTicketsExcel = async (tickets = [], meta = {}) => {
       };
 
       // Alignment tweaks
-      if ([1, 2, 3, 4, 8, 10, 11, 13, 17, 18].includes(colIdx + 1)) {
+      if ([1, 2, 3, 4, 8, 10, 11, 13, 17, 18, 19, 20, 21, 22].includes(colIdx + 1)) {
         cell.alignment = { vertical: "middle", horizontal: "center" };
       } else {
         cell.alignment = { vertical: "middle", horizontal: "left" };
@@ -320,7 +328,7 @@ export const generateTicketsPdf = async (tickets = [], meta = {}) => {
             `${t.component || "-"}\n${t.failureCode || ""}`,
             t.severity || "Rendah",
             t.status || "Open",
-            t.createdDateText || "-",
+            t.openDateText || t.createdDateText || "-",
             t.durationText || "—",
             t.reporter || "-",
           ];

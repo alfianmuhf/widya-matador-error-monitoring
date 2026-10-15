@@ -1241,7 +1241,7 @@ Mengelola siklus hidup tiket gangguan operasional Load Scanner (pelaporan, eskal
 | **Protokol** | **REST API** |
 | **HTTP Method** | `GET` |
 | **Endpoint Path** | `/tickets` |
-| **Query Params** | `?page=1&limit=10&search=&status=&severity=&componentId=&clientId=&locationId=&unitCode=&startDate=&endDate=&sortBy=createdAt&sortOrder=desc` |
+| **Query Params** | `?page=1&limit=10&search=&status=&severity=&componentId=&clientId=&locationId=&unitCode=&startDate=&endDate=&sortBy=openAt&sortOrder=desc` |
 | **Autentikasi** | `Authorization: Bearer <access_token>` |
 | **Role Izin** | **Semua Role** (`admin`, `coordinator`, `viewer`) |
 
@@ -1256,9 +1256,77 @@ Mengambil daftar tiket dengan filter multi-kriteria dan pagination.
 * **`clientId`** *(UUID, opsional)*: Filter berdasarkan ID client.
 * **`locationId`** *(UUID, opsional)*: Filter berdasarkan ID lokasi.
 * **`unitCode`** *(String, opsional)*: Filter nomor unit scanner tertentu.
-* **`startDate`** & **`endDate`** *(Tanggal `YYYY-MM-DD` atau ISO 8601, opsional)*: Filter rentang tanggal dibuat.
-* **`sortBy`** *(Enum string, opsional, default `"createdAt"`)*: `"createdAt"`, `"id"`, atau `"ticketId"`.
+* **`startDate`** & **`endDate`** *(Tanggal `YYYY-MM-DD` atau ISO 8601, opsional)*: Filter rentang tanggal dibuat (`open_at`).
+* **`sortBy`** *(Enum string, opsional, default `"openAt"`)*: `"openAt"`, `"escalatedAt"`, `"solvedAt"`, `"createdAt"`, `"id"`, atau `"ticketId"`.
 * **`sortOrder`** *(Enum string, opsional, default `"desc"`)*: `"asc"` atau `"desc"`.
+
+#### ✅ Contoh Respons Sukses: `200 OK`
+```json
+{
+  "success": true,
+  "data": {
+    "tickets": [
+      {
+        "id": "ERR-20261007-0001",
+        "ticketId": "ERR-20261007-0001",
+        "currentVersion": 2,
+        "unit": "WLS-001",
+        "unitCode": "WLS-001",
+        "unitType": "portable",
+        "client": "PT Vale Indonesia",
+        "location": "Sorowako Site",
+        "component": "Sensor LiDAR",
+        "failureCode": "LDR-01",
+        "failureName": "No Point Cloud Stream",
+        "severity": "Sedang",
+        "rawSeverity": "sedang",
+        "status": "Escalated",
+        "rawStatus": "escalated",
+        "openAt": "2026-10-07T08:00:00.000Z",
+        "escalatedAt": "2026-10-07T10:15:00.000Z",
+        "solvedAt": null,
+        "openDateText": "07 Okt 2026",
+        "openDateTimeText": "07 Okt 2026, 15:00",
+        "escalatedDateText": "07 Okt 2026",
+        "escalatedDateTimeText": "07 Okt 2026, 17:15",
+        "solvedDateText": "-",
+        "solvedDateTimeText": "-",
+        "timeToAnalysis": "2 jam 15 menit",
+        "timeToAnalysisText": "2 jam 15 menit",
+        "timeToSolve": "-",
+        "timeToSolveText": "-",
+        "durationText": "1 hari 4 jam",
+        "reporter": "Bruno Aftersales",
+        "aftersalesUserId": "981ba263-8103-4c76-a7ed-f241297e8b27",
+        "aftersalesUser": {
+          "id": "981ba263-8103-4c76-a7ed-f241297e8b27",
+          "name": "Bruno Aftersales",
+          "email": "bruno@erad.id",
+          "role": "coordinator",
+          "division": "after_sales"
+        },
+        "leaderAssigneeId": "550e8400-e29b-41d4-a716-446655440001",
+        "assignees": [
+          {
+            "id": "550e8400-e29b-41d4-a716-446655440001",
+            "isLeader": true,
+            "name": "Siti Software Leader",
+            "identifier": "siti@erad.id"
+          }
+        ],
+        "createdAt": "2026-10-07T08:00:00.000Z"
+      }
+    ],
+    "meta": {
+      "total": 40,
+      "page": 1,
+      "limit": 10,
+      "totalPages": 4
+    }
+  }
+}
+```
+
 
 #### âŒ Contoh Error Query Parameter Input: `422 Unprocessable Entity`
 Jika mengirimkan parameter status yang tidak dikenal:
@@ -1334,6 +1402,11 @@ Membuat tiket baru manual dari antarmuka dashboard.
       "severity": "sedang",
       "unitCode": "UN-10023",
       "aftersalesUserId": "981ba263-8103-4c76-a7ed-f241297e8b27",
+      "openAt": "2026-10-09T08:30:00.000Z",
+      "escalatedAt": null,
+      "solvedAt": null,
+      "timeToAnalysis": "-",
+      "timeToSolve": "-",
       "createdAt": "2026-10-09T08:30:00.000Z"
     }
   }
@@ -1411,6 +1484,18 @@ Mengambil data detail tiket berdasarkan ID tiket (termasuk unit, client, lokasi,
     "damageDescription": "Sensor mati mendadak saat operasi",
     "actionTaken": "Eskalasi ke tim software untuk debugging firmware",
     "rootCause": null,
+    "openAt": "2026-10-07T08:00:00.000Z",
+    "escalatedAt": "2026-10-07T10:15:00.000Z",
+    "solvedAt": null,
+    "openDateText": "07 Okt 2026",
+    "openDateTimeText": "07 Okt 2026, 15:00",
+    "escalatedDateText": "07 Okt 2026",
+    "escalatedDateTimeText": "07 Okt 2026, 17:15",
+    "solvedDateText": "-",
+    "solvedDateTimeText": "-",
+    "timeToAnalysis": "2 jam 15 menit",
+    "timeToSolve": "-",
+    "createdAt": "2026-10-07T08:00:00.000Z",
     "leaderAssigneeId": "550e8400-e29b-41d4-a716-446655440001",
     "assignees": [
       {
@@ -1465,6 +1550,13 @@ Memperbarui status penanganan, severity, catatan, atau rincian analisis teknis t
 | **Software Coordinator** (`division: software`) | **Hanya dapat mengupdate saat status tiket `escalated`** DAN **wajib terdaftar** di `ticket_assignees` tiket bersangkutan. |
 | **Admin** (`role: admin`) | **Ditolak (`403 Forbidden`)**. Admin hanya dapat mengelola akses, mengalihkan penanggung jawab/leader, dan mengelola anggota tim, bukan memperbarui penanganan tiket. |
 | **Viewer** (`role: viewer`) | **Ditolak (`403 Forbidden`)**. Hanya memiliki hak baca (read-only). |
+
+> [!IMPORTANT]
+> **Aturan Lifecycle Timestamps & Penguncian Status `solved`:**
+> * **`open_at`**: Dicatat otomatis saat tiket pertama kali dibuat (`POST /tickets`). Nilai ini permanen.
+> * **`escalated_at`**: Dicatat otomatis **HANYA** ketika Aftersales pertama kali mengubah status tiket dari `open` ke `escalated`. Jika ada update catatan/tindakan lanjutan oleh tim Software saat status tetap `escalated`, atau saat tiket diklaim oleh Leader Software (`POST /tickets/:id/claim`), nilai `escalated_at` **dijamin tidak tertimpa**.
+> * **`solved_at`**: Dicatat otomatis saat tiket diselesaikan (baik diselesaikan oleh tim Software dari status `escalated` ke `solved`, maupun diselesaikan langsung oleh penanggung jawab Aftersales dari status `open` ke `solved` tanpa melalui eskalasi).
+> * **Penguncian Permanen Tiket `solved`**: Begitu tiket berstatus `solved`, tiket langsung dikunci secara permanen (`403 Forbidden`). Seluruh divisi maupun admin tidak dapat lagi mengupdate atau memodifikasi tiket yang sudah selesai.
 
 #### âŒ Contoh Error Status Salah: `422 Unprocessable Entity`
 ```json
@@ -1922,6 +2014,25 @@ Mengambil daftar tiket yang dikelola beserta ringkasan KPI dan metadata:
       "failureCode": "LID-ERR-001",
       "damageDescription": "Point cloud terputus saat vibrasi tinggi",
       "actionTaken": "Tiket diklaim oleh Siti Software Leader (Leader Software)",
+      "openAt": "2026-10-09T08:00:00.000Z",
+      "escalatedAt": "2026-10-09T09:30:00.000Z",
+      "solvedAt": null,
+      "openDateText": "09 Okt 2026",
+      "openDateTimeText": "09 Okt 2026, 15:00",
+      "escalatedDateText": "09 Okt 2026",
+      "escalatedDateTimeText": "09 Okt 2026, 16:30",
+      "solvedDateText": "-",
+      "solvedDateTimeText": "-",
+      "timeToAnalysisText": "1 jam 30 menit",
+      "timeToSolveText": "-",
+      "aftersalesUserId": "981ba263-8103-4c76-a7ed-f241297e8b27",
+      "aftersalesUser": {
+        "id": "981ba263-8103-4c76-a7ed-f241297e8b27",
+        "name": "Bruno Aftersales",
+        "email": "bruno@erad.id",
+        "role": "coordinator",
+        "division": "after_sales"
+      },
       "leaderAssigneeId": "ca2823c5-d250-47de-9238-991d33afb896",
       "assignees": [
         {
@@ -2218,11 +2329,13 @@ Modul untuk mengunduh rekapitulasi data tiket dalam bentuk dokumen Excel (.xlsx)
 
 | Method | Endpoint | Deskripsi | Query Params |
 |:---|:---|:---|:---|
-| `GET` | `/exports/excel` | Download laporan tiket Excel | `?status=&severity=&search=&startDate=&endDate=` |
-| `GET` | `/exports/pdf` | Download laporan tiket PDF | `?status=&severity=&search=&startDate=&endDate=` |
+| `GET` | `/exports/excel` | Download laporan tiket Excel (22 kolom) | `?status=&severity=&search=&startDate=&endDate=` |
+| `GET` | `/exports/pdf` | Download laporan tiket PDF (A4 Landscape) | `?status=&severity=&search=&startDate=&endDate=` |
 | `GET` | `/tickets/export/excel` | Alias download Excel langsung dari rute tickets | `?status=&severity=&search=&startDate=&endDate=` |
 | `GET` | `/tickets/export/pdf` | Alias download PDF langsung dari rute tickets | `?status=&severity=&search=&startDate=&endDate=` |
 
+* **Format Laporan Excel (`.xlsx`)**: Berisi 22 kolom data lengkap:
+  1. `No`, 2. `Ticket ID`, 3. `Unit Code`, 4. `Tipe`, 5. `Client`, 6. `Lokasi`, 7. `Komponen`, 8. `Kode Failure`, 9. `Nama Failure`, 10. `Severity`, 11. `Status`, 12. `Pelapor`, 13. `Sumber`, 14. `Kerusakan`, 15. `Penanganan`, 16. `Penyebab`, 17. **`Open At`**, 18. **`Escalated At`**, 19. **`Solved At`**, 20. **`Time To Analyst`** (`escalated_at - open_at`), 21. **`Time To Solved`** (`solved_at - open_at`), 22. **`Durasi (MTTR)`**.
 * **Autentikasi**: Mendukung header `Authorization: Bearer <access_token>` atau via query param URL `?token=<access_token>` (memudahkan download via link `<a>` browser).
 * **Role Izin**: Semua Role (`admin`, `coordinator`, `viewer`).
 
@@ -2291,9 +2404,17 @@ Menyediakan metrik agregasi untuk visualisasi statistik kartu dan grafik pada Da
 | **Protokol** | **REST API** |
 | **HTTP Method** | `GET` |
 | **Endpoint Path** | `/summary` & `/error-analytics` |
-| **Query Params** | `?timeRange=30d` (pilihan: `30d`, `90d`, `6m`, `all`) |
+| **Query Params** | `?timeRange=30d` (pilihan: `30d`, `90d`, `6m`, `all`), `status=`, `componentId=`, `clientId=`, `locationId=` |
 | **Autentikasi** | `Authorization: Bearer <access_token>` |
 | **Role Izin** | **Semua Role** (`admin`, `coordinator`, `viewer`) |
+
+* **Metrik Utama Dashboard (`/summary`)**:
+  * **Total Tiket**: Jumlah tiket pada rentang periode yang dipilih (`open_at`).
+  * **Status Tiket**: Jumlah tiket berstatus `Open`, `Escalated`, dan `Solved`.
+  * **Completion Rate**: Rasio persentase penyelesaian tiket: `(solved / total) * 100%`.
+  * **MTTR (Mean Time to Resolution)**: Rata-rata durasi perbaikan untuk tiket yang berhasil diselesaikan:
+    $$\text{MTTR} = \frac{\sum (\text{solved\_at} - \text{open\_at})}{\text{Jumlah Tiket Solved}}$$
+  * **Unit Terdampak & Tren Bulanan**: Pemetaan unit scanner bermasalah serta grafik volume tiket bulanan.
 
 #### âŒ Contoh Error Filter timeRange Tidak Valid: `422 Unprocessable Entity`
 Jika mengirim query filter `?timeRange=10tahun`:

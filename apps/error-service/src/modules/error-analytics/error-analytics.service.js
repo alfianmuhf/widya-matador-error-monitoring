@@ -30,7 +30,7 @@ export async function getErrorAnalyticsData(query = {}) {
   // 1. Build Where Clause
   const where = {};
   if (startDate) {
-    where.created_at = { gte: startDate };
+    where.open_at = { gte: startDate };
   }
   if (status && status !== "all") {
     const st = status.toLowerCase() === "monitor" ? "escalated" : status.toLowerCase();
@@ -97,7 +97,7 @@ export async function getErrorAnalyticsData(query = {}) {
       },
     },
     orderBy: {
-      created_at: "asc",
+      open_at: "asc",
     },
   });
 

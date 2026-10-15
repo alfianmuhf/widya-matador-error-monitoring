@@ -31,7 +31,21 @@ export const queryTicketsSchema = z.object({
   unitCode: z.string().trim().optional(),
   startDate: z.string().datetime({ offset: true }).or(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).optional(),
   endDate: z.string().datetime({ offset: true }).or(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).optional(),
-  sortBy: z.enum(["createdAt", "created_at", "id", "ticketId"]).optional().default("createdAt"),
+  sortBy: z
+    .enum([
+      "openAt",
+      "open_at",
+      "createdAt",
+      "created_at",
+      "escalatedAt",
+      "escalated_at",
+      "solvedAt",
+      "solved_at",
+      "id",
+      "ticketId",
+    ])
+    .optional()
+    .default("openAt"),
   sortOrder: z.enum(["asc", "desc"]).optional().default("desc"),
 });
 

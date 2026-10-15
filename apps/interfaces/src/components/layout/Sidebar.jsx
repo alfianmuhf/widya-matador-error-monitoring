@@ -302,25 +302,6 @@ export default function Sidebar() {
           </ul>
         </nav>
       </div>
-
-      {/* Footer Info */}
-      <div
-        style={{
-          padding: "20px 16px",
-          borderTop: "1px solid var(--sidebar-border)",
-          fontSize: "12px",
-          color: "#64748b",
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "4px" }}>
-          <span style={{ color: "#94a3b8", fontSize: "12px" }}>
-            🤖 Bot aftersales · <span style={{ color: "#22c55e" }}>online</span>
-          </span>
-        </div>
-        <div style={{ color: "#64748b", fontSize: "11px" }}>
-          After-Sales Platform v1.0 · Live Data
-        </div>
-      </div>
     </aside>
   );
 }

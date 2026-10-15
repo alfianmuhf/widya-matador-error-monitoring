@@ -60,7 +60,7 @@ export async function getSummaryData(query = {}) {
   // 1. Build Where Clause
   const where = {};
   if (startDate) {
-    where.created_at = { gte: startDate };
+    where.open_at = { gte: startDate };
   }
   if (status && status !== "all") {
     const st = status.toLowerCase() === "monitor" ? "escalated" : status.toLowerCase();
@@ -118,7 +118,7 @@ export async function getSummaryData(query = {}) {
       },
     },
     orderBy: {
-      created_at: "asc",
+      open_at: "asc",
     },
   });
 
@@ -127,7 +127,7 @@ export async function getSummaryData(query = {}) {
   if (prevStartDate && prevEndDate) {
     const prevWhere = {
       ...where,
-      created_at: {
+      open_at: {
         gte: prevStartDate,
         lt: prevEndDate,
       },
@@ -162,24 +162,35 @@ export async function getSummaryData(query = {}) {
   const completionRate = totalTickets > 0 ? Math.round((completedTickets / totalTickets) * 100) : 0;
 
   // 5. MTTR (Mean Time to Resolution)
+  // Rumus: SUM(Time to Solve) / COUNT(Ticket ID solved)
+  // Time to Solve = solved_at - open_at
   let totalResolutionHours = 0;
   let resolvedCount = 0;
   for (const t of tickets) {
-    const solvedRow = (t.ticket_history || []).find((h) => h.status === "solved");
-    if (solvedRow && t.created_at) {
-      const diffHours = (new Date(solvedRow.changed_at).getTime() - new Date(t.created_at).getTime()) / (1000 * 60 * 60);
+    if (t.solved_at && t.open_at) {
+      const diffHours = (new Date(t.solved_at).getTime() - new Date(t.open_at).getTime()) / (1000 * 60 * 60);
       if (diffHours >= 0) {
         totalResolutionHours += diffHours;
         resolvedCount++;
+      }
+    } else {
+      const solvedRow = (t.ticket_history || []).find((h) => h.status === "solved");
+      const openTime = t.open_at;
+      if (solvedRow && openTime) {
+        const diffHours = (new Date(solvedRow.changed_at).getTime() - new Date(openTime).getTime()) / (1000 * 60 * 60);
+        if (diffHours >= 0) {
+          totalResolutionHours += diffHours;
+          resolvedCount++;
+        }
       }
     }
   }
 
   let mttrDays = 0;
+  let mttrHours = 0;
   if (resolvedCount > 0) {
+    mttrHours = Number((totalResolutionHours / resolvedCount).toFixed(1));
     mttrDays = Number((totalResolutionHours / resolvedCount / 24).toFixed(1));
-  } else if (completedTickets > 0) {
-    mttrDays = 4.0;
   }
 
   // 6. Unit Terdampak
@@ -197,7 +208,7 @@ export async function getSummaryData(query = {}) {
   }
 
   for (const t of tickets) {
-    const key = formatMonthYear(t.created_at);
+    const key = formatMonthYear(t.open_at);
     if (monthlyMap.has(key)) {
       monthlyMap.set(key, monthlyMap.get(key) + 1);
     } else if (timeRange === "all") {
@@ -280,6 +291,8 @@ export async function getSummaryData(query = {}) {
       completedTickets,
       completionRate,
       mttrDays: mttrDays.toFixed(1),
+      mttrHours: mttrHours.toFixed(1),
+      resolvedCount,
       affectedUnits,
       totalUnits: totalOperationalUnits,
     },

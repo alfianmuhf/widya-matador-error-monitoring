@@ -1,47 +1,161 @@
 import { useMemo } from "react";
 
+// =========================================================================
+// MINIMALIST LINE SVG ICONS (Clean, Subtle Outline)
+// =========================================================================
+const IconClock = ({ size = 15, color = "currentColor" }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="10" />
+    <polyline points="12 6 12 12 16 14" />
+  </svg>
+);
+
+const IconArrowUpRight = ({ size = 15, color = "currentColor" }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="7" y1="17" x2="17" y2="7" />
+    <polyline points="7 7 17 7 17 17" />
+  </svg>
+);
+
+const IconCheckCircle = ({ size = 15, color = "currentColor" }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+    <polyline points="22 4 12 14.01 9 11.01" />
+  </svg>
+);
+
+const IconWrench = ({ size = 16, color = "currentColor" }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
+  </svg>
+);
+
+const IconTerminal = ({ size = 16, color = "currentColor" }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="4 17 10 11 4 5" />
+    <line x1="12" y1="19" x2="20" y2="19" />
+  </svg>
+);
+
+const IconUser = ({ size = 14, color = "currentColor" }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+    <circle cx="12" cy="7" r="4" />
+  </svg>
+);
+
+const IconSend = ({ size = 13, color = "currentColor" }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="22" y1="2" x2="11" y2="13" />
+    <polygon points="22 2 15 22 11 13 2 9 22 2" />
+  </svg>
+);
+
+const IconMonitor = ({ size = 13, color = "currentColor" }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
+    <line x1="8" y1="21" x2="16" y2="21" />
+    <line x1="12" y1="17" x2="12" y2="21" />
+  </svg>
+);
+
+const IconServer = ({ size = 13, color = "currentColor" }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="2" y="2" width="20" height="8" rx="2" ry="2" />
+    <rect x="2" y="14" width="20" height="8" rx="2" ry="2" />
+    <line x1="6" y1="6" x2="6.01" y2="6" />
+    <line x1="6" y1="18" x2="6.01" y2="18" />
+  </svg>
+);
+
+const IconInfo = ({ size = 15, color = "currentColor" }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="10" />
+    <line x1="12" y1="16" x2="12" y2="12" />
+    <line x1="12" y1="8" x2="12.01" y2="8" />
+  </svg>
+);
+
+const IconClose = ({ size = 18, color = "currentColor" }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="18" y1="6" x2="6" y2="18" />
+    <line x1="6" y1="6" x2="18" y2="18" />
+  </svg>
+);
+
+// Fallback date-time formatter WIB
+const formatDateTime = (val) => {
+  if (!val) return "-";
+  try {
+    const d = new Date(val);
+    if (isNaN(d.getTime())) return "-";
+    const dateStr = d.toLocaleDateString("id-ID", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      timeZone: "Asia/Jakarta",
+    });
+    const timeStr = d.toLocaleTimeString("id-ID", {
+      hour: "2-digit",
+      minute: "2-digit",
+      timeZone: "Asia/Jakarta",
+    }).replace(".", ":");
+    return `${dateStr}, ${timeStr} WIB`;
+  } catch {
+    return "-";
+  }
+};
+
 export default function TicketDetailDrawer({ ticket, onClose }) {
   if (!ticket) return null;
 
   const assignedMembers = ticket.assignees || ticket.assignedMembers || [];
 
-  // Urutkan riwayat dari versi terbaru ke terlama (descending) untuk kemudahan membaca kronologi
+  // Urutkan riwayat dari versi terbaru ke terlama (descending)
   const sortedHistory = useMemo(() => {
     if (!ticket.history || !Array.isArray(ticket.history)) return [];
     return [...ticket.history].sort((a, b) => (b.version ?? 0) - (a.version ?? 0));
   }, [ticket.history]);
 
-  // Deteksi tim penanggung jawab berdasarkan siklus hidup & status tiket:
-  // - v0 status open: Tim Aftersales
-  // - status escalated: Tim Software
-  // - status solved: dideteksi apakah sebelum solved adalah escalated (Software) atau open (Aftersales)
+  // Tim penanggung jawab saat ini dengan styling aksen yang elegan & tidak berlebihan
   const handlerInfo = useMemo(() => {
     const rawStatus = (ticket.rawStatus || ticket.status || "").toLowerCase();
 
     if (rawStatus === "open") {
       return {
         team: "Tim Aftersales",
-        badgeBg: "#fef2f2",
-        badgeBorder: "#fecaca",
-        badgeColor: "#dc2626",
-        icon: "🛠️",
-        description: "Tiket sedang ditangani oleh Tim Aftersales di lapangan.",
+        borderLeft: "4px solid #2563eb",
+        borderColor: "#bfdbfe",
+        cardBg: "linear-gradient(90deg, #f0f7ff 0%, #ffffff 100%)",
+        iconBg: "#dbeafe",
+        iconColor: "#1d4ed8",
+        teamColor: "#1e40af",
+        badgeBg: "#eff6ff",
+        badgeColor: "#1d4ed8",
+        badgeBorder: "#bfdbfe",
+        icon: <IconWrench size={18} color="#1d4ed8" />,
+        description: "Tiket sedang dalam penanganan awal oleh Tim Aftersales di lapangan.",
       };
     }
 
     if (rawStatus === "escalated") {
       return {
         team: "Tim Software",
+        borderLeft: "4px solid #f59e0b",
+        borderColor: "#fed7aa",
+        cardBg: "linear-gradient(90deg, #fffbeb 0%, #ffffff 100%)",
+        iconBg: "#fef3c7",
+        iconColor: "#d97706",
+        teamColor: "#92400e",
         badgeBg: "#fffbeb",
-        badgeBorder: "#fde68a",
         badgeColor: "#b45309",
-        icon: "💻",
+        badgeBorder: "#fde68a",
+        icon: <IconTerminal size={18} color="#d97706" />,
         description: "Tiket telah dieskalasi ke Tim Software untuk investigasi teknis & perbaikan sistem.",
       };
     }
 
     if (rawStatus === "solved") {
-      // Periksa riwayat sebelum solved untuk mengetahui siapa yang menyelesaikan
       let solvedByTeam = "Tim Aftersales";
       if (ticket.history && Array.isArray(ticket.history)) {
         const sortedAsc = [...ticket.history].sort((a, b) => (a.version ?? 0) - (b.version ?? 0));
@@ -60,34 +174,46 @@ export default function TicketDetailDrawer({ ticket, onClose }) {
 
       return {
         team: `Diselesaikan oleh ${solvedByTeam}`,
+        borderLeft: "4px solid #10b981",
+        borderColor: "#bbf7d0",
+        cardBg: "linear-gradient(90deg, #f0fdf4 0%, #ffffff 100%)",
+        iconBg: "#dcfce7",
+        iconColor: "#15803d",
+        teamColor: "#14532d",
         badgeBg: "#f0fdf4",
-        badgeBorder: "#bbf7d0",
         badgeColor: "#15803d",
-        icon: "✅",
-        description: `Kendala unit berhasil diselesaikan dan status operasional kembali normal oleh ${solvedByTeam}.`,
+        badgeBorder: "#bbf7d0",
+        icon: <IconCheckCircle size={18} color="#15803d" />,
+        description: `Kendala unit berhasil diselesaikan dan operasional kembali normal oleh ${solvedByTeam}.`,
       };
     }
 
     return {
       team: "Tim Aftersales",
+      borderLeft: "4px solid #64748b",
+      borderColor: "#cbd5e1",
+      cardBg: "#f8fafc",
+      iconBg: "#f1f5f9",
+      iconColor: "#475569",
+      teamColor: "#334155",
       badgeBg: "#f8fafc",
-      badgeBorder: "#e2e8f0",
       badgeColor: "#475569",
-      icon: "ℹ️",
+      badgeBorder: "#cbd5e1",
+      icon: <IconInfo size={18} color="#475569" />,
       description: "Menunggu penanganan lebih lanjut.",
     };
   }, [ticket]);
 
-  // Format Status Badge
+  // Status Badge Helper dengan palet warna bersih & elegan
   const getStatusBadge = (st) => {
     const s = (st || "").toLowerCase();
     if (s === "open") {
       return {
-        bg: "#fef2f2",
-        border: "#fecaca",
-        color: "#dc2626",
-        dot: "#ef4444",
-        label: "open",
+        bg: "#eff6ff",
+        border: "#bfdbfe",
+        color: "#1d4ed8",
+        dot: "#3b82f6",
+        label: "Open",
       };
     }
     if (s === "escalated") {
@@ -96,7 +222,7 @@ export default function TicketDetailDrawer({ ticket, onClose }) {
         border: "#fde68a",
         color: "#b45309",
         dot: "#f59e0b",
-        label: "escalated",
+        label: "Escalated",
       };
     }
     if (s === "solved") {
@@ -105,39 +231,57 @@ export default function TicketDetailDrawer({ ticket, onClose }) {
         border: "#bbf7d0",
         color: "#15803d",
         dot: "#22c55e",
-        label: "solved",
+        label: "Solved",
       };
     }
     return {
       bg: "#f8fafc",
-      border: "#e2e8f0",
+      border: "#cbd5e1",
       color: "#475569",
-      dot: "#64748b",
-      label: s || "open",
+      dot: "#94a3b8",
+      label: s || "Open",
     };
   };
 
-  // Format Severity Badge
+  // Severity Badge Helper dengan warna elegan
   const getSeverityBadge = (sev) => {
     const s = (sev || "").toLowerCase();
     if (s === "tinggi") {
-      return { bg: "#fef2f2", border: "#fecaca", color: "#dc2626", label: "tinggi" };
+      return { bg: "#fef2f2", border: "#fecaca", color: "#dc2626", label: "Tinggi" };
     }
     if (s === "sedang") {
-      return { bg: "#fffbeb", border: "#fde68a", color: "#b45309", label: "sedang" };
+      return { bg: "#fffbeb", border: "#fde68a", color: "#b45309", label: "Sedang" };
     }
-    return { bg: "#eff6ff", border: "#bfdbfe", color: "#1d4ed8", label: "rendah" };
+    return { bg: "#f0fdfa", border: "#ccfbf1", color: "#0f766e", label: "Rendah" };
   };
 
   const statusBadge = getStatusBadge(ticket.rawStatus || ticket.status);
   const severityBadge = getSeverityBadge(ticket.rawSeverity || ticket.severity);
+
+  // Waktu Lifecycle Tiket (Open, Escalated, Solved)
+  const openTimeFormatted =
+    ticket.openDateTimeText ||
+    ticket.createdDateTimeText ||
+    (ticket.open_at || ticket.openAt || ticket.created_at || ticket.createdAt
+      ? formatDateTime(ticket.open_at || ticket.openAt || ticket.created_at || ticket.createdAt)
+      : "-");
+
+  const hasEscalated = Boolean(ticket.escalated_at || ticket.escalatedAt || ticket.escalatedDateTimeText);
+  const escalatedTimeFormatted = hasEscalated
+    ? ticket.escalatedDateTimeText || formatDateTime(ticket.escalated_at || ticket.escalatedAt)
+    : "-";
+
+  const hasSolved = Boolean(ticket.solved_at || ticket.solvedAt || ticket.solvedDateTimeText || ticket.resolvedAt);
+  const solvedTimeFormatted = hasSolved
+    ? ticket.solvedDateTimeText || formatDateTime(ticket.solved_at || ticket.solvedAt || ticket.resolvedAt)
+    : "-";
 
   return (
     <div
       style={{
         position: "fixed",
         inset: 0,
-        backgroundColor: "rgba(11, 30, 39, 0.65)",
+        backgroundColor: "rgba(15, 23, 42, 0.65)",
         backdropFilter: "blur(4px)",
         zIndex: 9999,
         display: "flex",
@@ -146,27 +290,28 @@ export default function TicketDetailDrawer({ ticket, onClose }) {
       }}
       onClick={onClose}
     >
-      {/* Drawer Container (Lebar & Lega: max 860px) */}
+      {/* Drawer Container (Minimalis, Rapi, & Elegan) */}
       <div
         style={{
           width: "100%",
           maxWidth: "860px",
           height: "100%",
           backgroundColor: "#f8fafc",
-          boxShadow: "-12px 0 35px rgba(0, 0, 0, 0.2)",
+          boxShadow: "-12px 0 35px rgba(0, 0, 0, 0.18)",
           display: "flex",
           flexDirection: "column",
           animation: "slideInRight 0.25s cubic-bezier(0.16, 1, 0.3, 1)",
           zIndex: 10001,
+          overflow: "hidden",
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header Drawer */}
+        {/* Header Drawer (Deep Navy Minimalist dengan Aksen Cyan) */}
         <div
           style={{
             backgroundColor: "#0b1e27",
             padding: "20px 24px",
-            borderBottom: "1px solid rgba(255,255,255,0.08)",
+            borderBottom: "1px solid rgba(255, 255, 255, 0.08)",
             display: "flex",
             justifyContent: "space-between",
             alignItems: "flex-start",
@@ -183,22 +328,22 @@ export default function TicketDetailDrawer({ ticket, onClose }) {
                   letterSpacing: "0.08em",
                   color: "#38bdf8",
                   backgroundColor: "rgba(56, 189, 248, 0.12)",
-                  padding: "3px 8px",
+                  border: "1px solid rgba(56, 189, 248, 0.25)",
+                  padding: "3px 9px",
                   borderRadius: "5px",
                 }}
               >
                 Detail Tiket Gangguan
               </span>
 
-              {/* Version Pill */}
               <span
                 style={{
                   fontSize: "11px",
                   fontWeight: 700,
                   color: "#f1f5f9",
-                  backgroundColor: "rgba(255, 255, 255, 0.14)",
+                  backgroundColor: "rgba(255, 255, 255, 0.12)",
                   padding: "3px 9px",
-                  borderRadius: "9999px",
+                  borderRadius: "5px",
                   border: "1px solid rgba(255, 255, 255, 0.2)",
                 }}
               >
@@ -208,7 +353,7 @@ export default function TicketDetailDrawer({ ticket, onClose }) {
 
             <h2
               style={{
-                fontSize: "20px",
+                fontSize: "21px",
                 fontWeight: 750,
                 color: "#ffffff",
                 marginTop: "8px",
@@ -219,14 +364,15 @@ export default function TicketDetailDrawer({ ticket, onClose }) {
               {ticket.id}
             </h2>
 
+            {/* Badges: Status & Severity (Aksen Warna Proporsional) */}
             <div style={{ display: "flex", alignItems: "center", gap: "10px", marginTop: "10px", flexWrap: "wrap" }}>
-              {/* Status Pill */}
+              {/* Status Pill with dot */}
               <span
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
                   gap: "6px",
-                  padding: "4px 10px",
+                  padding: "3px 10px",
                   borderRadius: "9999px",
                   border: `1px solid ${statusBadge.border}`,
                   backgroundColor: statusBadge.bg,
@@ -237,8 +383,8 @@ export default function TicketDetailDrawer({ ticket, onClose }) {
               >
                 <span
                   style={{
-                    width: "7px",
-                    height: "7px",
+                    width: "6px",
+                    height: "6px",
                     borderRadius: "50%",
                     backgroundColor: statusBadge.dot,
                   }}
@@ -251,8 +397,8 @@ export default function TicketDetailDrawer({ ticket, onClose }) {
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
-                  gap: "6px",
-                  padding: "4px 10px",
+                  gap: "5px",
+                  padding: "3px 10px",
                   borderRadius: "9999px",
                   border: `1px solid ${severityBadge.border}`,
                   backgroundColor: severityBadge.bg,
@@ -264,39 +410,40 @@ export default function TicketDetailDrawer({ ticket, onClose }) {
                 <span style={{ fontSize: "11px", opacity: 0.8 }}>Severity:</span>
                 {severityBadge.label}
               </span>
+
+              <span style={{ fontSize: "12px", color: "#94a3b8", marginLeft: "4px" }}>
+                Durasi: <strong style={{ color: "#f8fafc" }}>{ticket.durationText || "—"}</strong>
+              </span>
             </div>
           </div>
 
-          {/* Close button */}
+          {/* Close button (Line icon) */}
           <button
             type="button"
             onClick={onClose}
             title="Tutup detail tiket"
             style={{
-              background: "rgba(255,255,255,0.08)",
-              border: "1px solid rgba(255,255,255,0.12)",
+              background: "rgba(255, 255, 255, 0.08)",
+              border: "1px solid rgba(255, 255, 255, 0.15)",
               color: "#94a3b8",
               cursor: "pointer",
               padding: "7px",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              borderRadius: "8px",
+              borderRadius: "6px",
               transition: "all 0.15s ease",
             }}
             onMouseEnter={(e) => {
               e.currentTarget.style.color = "#ffffff";
-              e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.18)";
+              e.currentTarget.style.backgroundColor = "rgba(255, 255, 255, 0.18)";
             }}
             onMouseLeave={(e) => {
               e.currentTarget.style.color = "#94a3b8";
-              e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.08)";
+              e.currentTarget.style.backgroundColor = "rgba(255, 255, 255, 0.08)";
             }}
           >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
+            <IconClose size={18} />
           </button>
         </div>
 
@@ -305,36 +452,288 @@ export default function TicketDetailDrawer({ ticket, onClose }) {
           style={{
             flex: 1,
             overflowY: "auto",
-            padding: "24px",
+            padding: "22px 24px",
             display: "flex",
             flexDirection: "column",
-            gap: "20px",
+            gap: "18px",
           }}
         >
-          {/* BANNER: INFORMASI TIM PENANGGUNG JAWAB SAAT INI */}
+          {/* ============================================================= */}
+          {/* 1. KARTU SIKLUS WAKTU TIKET (OPEN, ESCALATED, SOLVED)           */}
+          {/* ============================================================= */}
           <div
             style={{
-              backgroundColor: handlerInfo.badgeBg,
-              border: `1px solid ${handlerInfo.badgeBorder}`,
+              backgroundColor: "#ffffff",
+              border: "1px solid #e2e8f0",
               borderRadius: "12px",
               padding: "16px 20px",
+              boxShadow: "0 1px 3px rgba(0, 0, 0, 0.02)",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "14px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                <span
+                  style={{
+                    width: "3px",
+                    height: "14px",
+                    backgroundColor: "#0e8587",
+                    borderRadius: "2px",
+                  }}
+                />
+                <span style={{ fontSize: "12px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "#334155" }}>
+                  Jejak Waktu Siklus Tiket
+                </span>
+              </div>
+              <div style={{ fontSize: "11.5px", color: "#64748b" }}>
+                Zona Waktu: <strong>WIB (GMT+7)</strong>
+              </div>
+            </div>
+
+            {/* 3 Kolom Responsif: Open, Escalated, Solved (Warna Aksen Bersih) */}
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+                gap: "14px",
+              }}
+            >
+              {/* Milestone 1: Open (Aksen Lembut Biru) */}
+              <div
+                style={{
+                  backgroundColor: "#ffffff",
+                  border: "1px solid #bae6fd",
+                  borderTop: "3px solid #0284c7",
+                  borderRadius: "8px",
+                  padding: "13px 15px",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "5px",
+                  boxShadow: "0 1px 2px rgba(2, 132, 199, 0.04)",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <div
+                    style={{
+                      width: "24px",
+                      height: "24px",
+                      borderRadius: "6px",
+                      backgroundColor: "#e0f2fe",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      flexShrink: 0,
+                    }}
+                  >
+                    <IconClock size={13} color="#0284c7" />
+                  </div>
+                  <span style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", color: "#0369a1" }}>
+                    Tiket Dibuat (Open)
+                  </span>
+                </div>
+
+                <div style={{ fontSize: "13px", fontWeight: 750, color: "#0f172a", marginTop: "2px" }}>
+                  {openTimeFormatted}
+                </div>
+
+                <div style={{ fontSize: "11.5px", color: "#64748b", marginTop: "1px" }}>
+                  Pelapor: <strong style={{ color: "#0284c7" }}>{ticket.reporter || "-"}</strong>
+                </div>
+              </div>
+
+              {/* Milestone 2: Escalated (Aksen Lembut Amber) */}
+              <div
+                style={{
+                  backgroundColor: "#ffffff",
+                  border: hasEscalated ? "1px solid #fed7aa" : "1px dashed #cbd5e1",
+                  borderTop: hasEscalated ? "3px solid #d97706" : "1px dashed #cbd5e1",
+                  borderRadius: "8px",
+                  padding: "13px 15px",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "5px",
+                  boxShadow: hasEscalated ? "0 1px 2px rgba(217, 119, 6, 0.04)" : "none",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <div
+                    style={{
+                      width: "24px",
+                      height: "24px",
+                      borderRadius: "6px",
+                      backgroundColor: hasEscalated ? "#fef3c7" : "#f1f5f9",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      flexShrink: 0,
+                    }}
+                  >
+                    <IconArrowUpRight size={13} color={hasEscalated ? "#d97706" : "#94a3b8"} />
+                  </div>
+                  <span
+                    style={{
+                      fontSize: "11px",
+                      fontWeight: 700,
+                      textTransform: "uppercase",
+                      letterSpacing: "0.04em",
+                      color: hasEscalated ? "#b45309" : "#94a3b8",
+                    }}
+                  >
+                    Dieskalasi (Escalated)
+                  </span>
+                </div>
+
+                <div
+                  style={{
+                    fontSize: "13px",
+                    fontWeight: 750,
+                    color: hasEscalated ? "#0f172a" : "#94a3b8",
+                    marginTop: "2px",
+                  }}
+                >
+                  {escalatedTimeFormatted}
+                </div>
+
+                <div style={{ fontSize: "11.5px", color: "#64748b", marginTop: "1px" }}>
+                  {hasEscalated ? (
+                    <span>
+                      Durasi Analisis:{" "}
+                      <span
+                        style={{
+                          fontWeight: 700,
+                          color: "#b45309",
+                          backgroundColor: "#fef3c7",
+                          padding: "1px 6px",
+                          borderRadius: "4px",
+                          border: "1px solid #fde68a",
+                        }}
+                      >
+                        {ticket.timeToAnalysisText && ticket.timeToAnalysisText !== "-" ? ticket.timeToAnalysisText : "-"}
+                      </span>
+                    </span>
+                  ) : (
+                    <span style={{ color: "#94a3b8" }}>Menunggu eskalasi</span>
+                  )}
+                </div>
+              </div>
+
+              {/* Milestone 3: Solved (Aksen Lembut Emerald) */}
+              <div
+                style={{
+                  backgroundColor: "#ffffff",
+                  border: hasSolved ? "1px solid #bbf7d0" : "1px dashed #cbd5e1",
+                  borderTop: hasSolved ? "3px solid #16a34a" : "1px dashed #cbd5e1",
+                  borderRadius: "8px",
+                  padding: "13px 15px",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "5px",
+                  boxShadow: hasSolved ? "0 1px 2px rgba(22, 163, 74, 0.04)" : "none",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <div
+                    style={{
+                      width: "24px",
+                      height: "24px",
+                      borderRadius: "6px",
+                      backgroundColor: hasSolved ? "#dcfce7" : "#f1f5f9",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      flexShrink: 0,
+                    }}
+                  >
+                    <IconCheckCircle size={13} color={hasSolved ? "#16a34a" : "#94a3b8"} />
+                  </div>
+                  <span
+                    style={{
+                      fontSize: "11px",
+                      fontWeight: 700,
+                      textTransform: "uppercase",
+                      letterSpacing: "0.04em",
+                      color: hasSolved ? "#15803d" : "#94a3b8",
+                    }}
+                  >
+                    Diselesaikan (Solved)
+                  </span>
+                </div>
+
+                <div
+                  style={{
+                    fontSize: "13px",
+                    fontWeight: 750,
+                    color: hasSolved ? "#0f172a" : "#94a3b8",
+                    marginTop: "2px",
+                  }}
+                >
+                  {solvedTimeFormatted}
+                </div>
+
+                <div style={{ fontSize: "11.5px", color: "#64748b", marginTop: "1px" }}>
+                  {hasSolved ? (
+                    <span>
+                      Durasi Solved:{" "}
+                      <span
+                        style={{
+                          fontWeight: 700,
+                          color: "#15803d",
+                          backgroundColor: "#dcfce7",
+                          padding: "1px 6px",
+                          borderRadius: "4px",
+                          border: "1px solid #bbf7d0",
+                        }}
+                      >
+                        {ticket.timeToSolveText && ticket.timeToSolveText !== "-" ? ticket.timeToSolveText : "-"}
+                      </span>
+                    </span>
+                  ) : (
+                    <span style={{ color: "#94a3b8" }}>Dalam penanganan</span>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* ============================================================= */}
+          {/* 2. BANNER: TIM PENANGGUNG JAWAB SAAT INI (AKSEN ELEGAN)       */}
+          {/* ============================================================= */}
+          <div
+            style={{
+              background: handlerInfo.cardBg,
+              border: `1px solid ${handlerInfo.borderColor}`,
+              borderLeft: handlerInfo.borderLeft,
+              borderRadius: "10px",
+              padding: "14px 18px",
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",
-              gap: "14px",
-              boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
+              gap: "12px",
+              boxShadow: "0 1px 3px rgba(0, 0, 0, 0.02)",
             }}
           >
             <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-              <span style={{ fontSize: "24px" }}>{handlerInfo.icon}</span>
+              <div
+                style={{
+                  width: "36px",
+                  height: "36px",
+                  borderRadius: "8px",
+                  backgroundColor: handlerInfo.iconBg,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
+                }}
+              >
+                {handlerInfo.icon}
+              </div>
               <div>
-                <div style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: handlerInfo.badgeColor }}>
+                <div style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: handlerInfo.teamColor }}>
                   Tim Penanggung Jawab Saat Ini
                 </div>
-                <div style={{ fontSize: "15px", fontWeight: 750, color: "var(--text-dark)", marginTop: "2px" }}>
+                <div style={{ fontSize: "14.5px", fontWeight: 750, color: "#0f172a", marginTop: "1px" }}>
                   {handlerInfo.team}
                 </div>
-                <p style={{ fontSize: "12.5px", color: "var(--text-secondary)", marginTop: "2px", margin: 0 }}>
+                <p style={{ fontSize: "12.5px", color: "#475569", marginTop: "2px", margin: 0 }}>
                   {handlerInfo.description}
                 </p>
               </div>
@@ -342,59 +741,60 @@ export default function TicketDetailDrawer({ ticket, onClose }) {
 
             <div
               style={{
-                fontSize: "12px",
-                fontWeight: 650,
+                fontSize: "11.5px",
+                fontWeight: 700,
                 color: handlerInfo.badgeColor,
-                backgroundColor: "#ffffff",
-                padding: "6px 14px",
-                borderRadius: "8px",
+                backgroundColor: handlerInfo.badgeBg,
+                padding: "3px 9px",
+                borderRadius: "5px",
                 border: `1px solid ${handlerInfo.badgeBorder}`,
                 whiteSpace: "nowrap",
               }}
             >
-              Versi Terkini: v{ticket.currentVersion ?? ticket.current_version ?? 0}
+              v{ticket.currentVersion ?? ticket.current_version ?? 0}
             </div>
           </div>
 
-          {/* CARD INFORMASI PENANGGUNG JAWAB AFTERSALES (JIKA TERSEDIA) */}
+          {/* ============================================================= */}
+          {/* 3. PENANGGUNG JAWAB AFTERSALES (AKSEN BIRU HALUS)             */}
+          {/* ============================================================= */}
           {ticket.aftersalesUser && (
             <div
               style={{
-                backgroundColor: "#eff6ff",
-                borderRadius: "12px",
+                background: "linear-gradient(90deg, #f0f7ff 0%, #ffffff 100%)",
+                borderRadius: "10px",
                 border: "1px solid #bfdbfe",
-                padding: "14px 18px",
+                borderLeft: "4px solid #0284c7",
+                padding: "13px 18px",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "space-between",
                 gap: "12px",
-                boxShadow: "0 1px 2px rgba(37, 99, 235, 0.05)",
+                boxShadow: "0 1px 2px rgba(2, 132, 199, 0.03)",
               }}
             >
-              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
                 <div
                   style={{
-                    width: "36px",
-                    height: "36px",
-                    borderRadius: "8px",
-                    backgroundColor: "#dbeafe",
-                    color: "#1d4ed8",
+                    width: "32px",
+                    height: "32px",
+                    borderRadius: "6px",
+                    backgroundColor: "#e0f2fe",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    fontSize: "18px",
                     flexShrink: 0,
                   }}
                 >
-                  🛠️
+                  <IconUser size={15} color="#0284c7" />
                 </div>
                 <div>
-                  <div style={{ fontSize: "11px", fontWeight: 700, color: "#1d4ed8", textTransform: "uppercase" }}>
+                  <div style={{ fontSize: "11px", fontWeight: 700, color: "#0369a1", textTransform: "uppercase" }}>
                     Penanggung Jawab Aftersales
                   </div>
                   <div style={{ fontSize: "13.5px", fontWeight: 750, color: "#0f172a", marginTop: "1px" }}>
                     {ticket.aftersalesUser.name}{" "}
-                    <span style={{ fontSize: "12px", color: "#64748b", fontWeight: 500 }}>
+                    <span style={{ fontSize: "12px", color: "#64748b", fontWeight: 400 }}>
                       ({ticket.aftersalesUser.email})
                     </span>
                   </div>
@@ -411,81 +811,90 @@ export default function TicketDetailDrawer({ ticket, onClose }) {
                   fontSize: "11px",
                   fontWeight: 700,
                   padding: "3px 8px",
-                  borderRadius: "6px",
-                  backgroundColor: "#dbeafe",
-                  color: "#1d4ed8",
-                  border: "1px solid #bfdbfe",
+                  borderRadius: "4px",
+                  backgroundColor: "#e0f2fe",
+                  color: "#0369a1",
+                  border: "1px solid #bae6fd",
                   whiteSpace: "nowrap",
                 }}
               >
-                Owner Open
+                Owner Tiket
               </span>
             </div>
           )}
 
-          {/* CARD 1: DETAIL UPDATE TERAKHIR TIKET */}
+          {/* ============================================================= */}
+          {/* 4. DETAIL UPDATE TERAKHIR TIKET (BERSIH & ELEGAN)              */}
+          {/* ============================================================= */}
           <div
             style={{
               backgroundColor: "#ffffff",
               borderRadius: "12px",
-              border: "1px solid var(--border-light)",
-              padding: "20px 22px",
-              boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
+              border: "1px solid #e2e8f0",
+              padding: "18px 20px",
+              boxShadow: "0 1px 3px rgba(0, 0, 0, 0.02)",
             }}
           >
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px" }}>
-              <h3 style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-dark)", margin: 0 }}>
-                Detail Update Terakhir Tiket
-              </h3>
-              <span style={{ fontSize: "12px", color: "var(--text-muted)" }}>
-                Durasi Gangguan: <strong style={{ color: "var(--text-dark)" }}>{ticket.durationText || "—"}</strong>
-              </span>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "14px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                <span
+                  style={{
+                    width: "3px",
+                    height: "14px",
+                    backgroundColor: "#0e8587",
+                    borderRadius: "2px",
+                  }}
+                />
+                <h3 style={{ fontSize: "14.5px", fontWeight: 750, color: "#0f172a", margin: 0 }}>
+                  Informasi Teknis & Kerusakan
+                </h3>
+              </div>
             </div>
 
-            {/* Grid 2 Kolom untuk Informasi Unit & Kerusakan */}
+            {/* Grid 2 Kolom untuk Informasi Unit & Kerusakan (Netral & Bersih) */}
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
-                gap: "16px",
-                paddingBottom: "16px",
-                borderBottom: "1px solid var(--border-light)",
+                gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
+                gap: "12px",
+                paddingBottom: "14px",
+                borderBottom: "1px solid #edf2f7",
               }}
             >
               {/* Kolom Kiri: Unit & Site */}
               <div
                 style={{
                   backgroundColor: "#f8fafc",
-                  padding: "14px 16px",
-                  borderRadius: "10px",
-                  border: "1px solid #edf2f7",
+                  padding: "12px 14px",
+                  borderRadius: "8px",
+                  border: "1px solid #e2e8f0",
                   display: "flex",
                   flexDirection: "column",
-                  gap: "10px",
+                  gap: "8px",
                 }}
               >
-                <div style={{ fontSize: "12px", fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase" }}>
+                <div style={{ fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
                   Informasi Unit & Penempatan
                 </div>
 
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span style={{ fontSize: "13px", color: "var(--text-muted)" }}>Unit Code:</span>
-                  <span style={{ fontSize: "13px", fontWeight: 700, color: "var(--text-dark)", fontFamily: "monospace" }}>
-                    {ticket.unit} <span style={{ fontWeight: 500, color: "var(--text-muted)" }}>({ticket.unitType || "portable"})</span>
+                  <span style={{ fontSize: "12.5px", color: "#64748b" }}>Unit Code:</span>
+                  <span style={{ fontSize: "12.5px", fontWeight: 750, color: "#0f172a", fontFamily: "monospace" }}>
+                    {ticket.unit} <span style={{ fontWeight: 400, color: "#64748b" }}>({ticket.unitType || "portable"})</span>
                   </span>
                 </div>
 
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span style={{ fontSize: "13px", color: "var(--text-muted)" }}>Klien:</span>
-                  <span style={{ fontSize: "13px", fontWeight: 650, color: "var(--text-dark)" }}>
-                    {ticket.client}
+                  <span style={{ fontSize: "12.5px", color: "#64748b" }}>Klien:</span>
+                  <span style={{ fontSize: "12.5px", fontWeight: 650, color: "#0f172a" }}>
+                    {ticket.client || "-"}
                   </span>
                 </div>
 
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span style={{ fontSize: "13px", color: "var(--text-muted)" }}>Lokasi Site:</span>
-                  <span style={{ fontSize: "13px", fontWeight: 650, color: "var(--text-dark)" }}>
-                    {ticket.location}
+                  <span style={{ fontSize: "12.5px", color: "#64748b" }}>Lokasi Site:</span>
+                  <span style={{ fontSize: "12.5px", fontWeight: 650, color: "#0f172a" }}>
+                    {ticket.location || "-"}
                   </span>
                 </div>
               </div>
@@ -494,36 +903,37 @@ export default function TicketDetailDrawer({ ticket, onClose }) {
               <div
                 style={{
                   backgroundColor: "#f8fafc",
-                  padding: "14px 16px",
-                  borderRadius: "10px",
-                  border: "1px solid #edf2f7",
+                  padding: "12px 14px",
+                  borderRadius: "8px",
+                  border: "1px solid #e2e8f0",
                   display: "flex",
                   flexDirection: "column",
-                  gap: "10px",
+                  gap: "8px",
                 }}
               >
-                <div style={{ fontSize: "12px", fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase" }}>
+                <div style={{ fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
                   Modul & Kode Kerusakan
                 </div>
 
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span style={{ fontSize: "13px", color: "var(--text-muted)" }}>Modul Komponen:</span>
-                  <span style={{ fontSize: "13px", fontWeight: 700, color: "var(--text-dark)" }}>
+                  <span style={{ fontSize: "12.5px", color: "#64748b" }}>Modul Komponen:</span>
+                  <span style={{ fontSize: "12.5px", fontWeight: 750, color: "#0f172a" }}>
                     {ticket.component}
                   </span>
                 </div>
 
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span style={{ fontSize: "13px", color: "var(--text-muted)" }}>Failure Code:</span>
+                  <span style={{ fontSize: "12.5px", color: "#64748b" }}>Failure Code:</span>
                   <span
                     style={{
-                      fontSize: "12.5px",
+                      fontSize: "12px",
                       fontWeight: 750,
-                      color: "var(--primary-teal)",
+                      color: "#0f766e",
                       fontFamily: "monospace",
-                      backgroundColor: "var(--primary-teal-light)",
-                      padding: "2px 8px",
-                      borderRadius: "6px",
+                      backgroundColor: "#f0fdfa",
+                      border: "1px solid #99f6e4",
+                      padding: "2px 7px",
+                      borderRadius: "4px",
                     }}
                   >
                     {ticket.failureCode}
@@ -531,30 +941,31 @@ export default function TicketDetailDrawer({ ticket, onClose }) {
                 </div>
 
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span style={{ fontSize: "13px", color: "var(--text-muted)" }}>Nama Failure:</span>
-                  <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-dark)", textAlign: "right" }}>
+                  <span style={{ fontSize: "12.5px", color: "#64748b" }}>Nama Failure:</span>
+                  <span style={{ fontSize: "12.5px", fontWeight: 600, color: "#0f172a", textAlign: "right" }}>
                     {ticket.failureName || "-"}
                   </span>
                 </div>
               </div>
             </div>
 
-            {/* Rincian Gejala, Tindakan Terakhir, dan Root Cause */}
-            <div style={{ display: "flex", flexDirection: "column", gap: "14px", marginTop: "16px" }}>
+            {/* Rincian Gejala, Tindakan Terakhir, dan Root Cause (Aksen Warna Hanya di Titik Penting) */}
+            <div style={{ display: "flex", flexDirection: "column", gap: "12px", marginTop: "14px" }}>
+              {/* 1. Deskripsi Kerusakan (Netral & Rapi) */}
               <div>
-                <span style={{ fontSize: "12px", fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase" }}>
+                <span style={{ fontSize: "11px", fontWeight: 700, color: "#475569", textTransform: "uppercase" }}>
                   Deskripsi / Gejala Kerusakan
                 </span>
                 <p
                   style={{
-                    fontSize: "13.5px",
-                    color: "var(--text-dark)",
+                    fontSize: "13px",
+                    color: "#0f172a",
                     marginTop: "4px",
                     lineHeight: 1.5,
                     backgroundColor: "#f8fafc",
-                    padding: "12px 14px",
-                    borderRadius: "8px",
-                    border: "1px solid var(--border-light)",
+                    padding: "10px 12px",
+                    borderRadius: "6px",
+                    border: "1px solid #e2e8f0",
                     margin: "4px 0 0 0",
                   }}
                 >
@@ -562,20 +973,22 @@ export default function TicketDetailDrawer({ ticket, onClose }) {
                 </p>
               </div>
 
+              {/* 2. Tindakan Penanganan (Aksen Hijau Lembut) */}
               <div>
-                <span style={{ fontSize: "12px", fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase" }}>
+                <span style={{ fontSize: "11px", fontWeight: 700, color: "#15803d", textTransform: "uppercase" }}>
                   Tindakan Penanganan Terakhir (Action Taken)
                 </span>
                 <p
                   style={{
-                    fontSize: "13.5px",
-                    color: "var(--text-dark)",
+                    fontSize: "13px",
+                    color: "#14532d",
                     marginTop: "4px",
                     lineHeight: 1.5,
                     backgroundColor: "#f0fdf4",
-                    padding: "12px 14px",
-                    borderRadius: "8px",
+                    padding: "10px 12px",
+                    borderRadius: "6px",
                     border: "1px solid #bbf7d0",
+                    borderLeft: "3.5px solid #16a34a",
                     margin: "4px 0 0 0",
                   }}
                 >
@@ -583,21 +996,23 @@ export default function TicketDetailDrawer({ ticket, onClose }) {
                 </p>
               </div>
 
+              {/* 3. Akar Masalah (Aksen Amber Lembut) */}
               {Boolean(ticket.rootCause || ticket.cause) && (
                 <div>
-                  <span style={{ fontSize: "12px", fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase" }}>
+                  <span style={{ fontSize: "11px", fontWeight: 700, color: "#b45309", textTransform: "uppercase" }}>
                     Akar Penyebab (Root Cause)
                   </span>
                   <p
                     style={{
-                      fontSize: "13.5px",
-                      color: "var(--text-dark)",
+                      fontSize: "13px",
+                      color: "#78350f",
                       marginTop: "4px",
                       lineHeight: 1.5,
                       backgroundColor: "#fffbeb",
-                      padding: "12px 14px",
-                      borderRadius: "8px",
+                      padding: "10px 12px",
+                      borderRadius: "6px",
                       border: "1px solid #fde68a",
+                      borderLeft: "3.5px solid #d97706",
                       margin: "4px 0 0 0",
                     }}
                   >
@@ -607,42 +1022,38 @@ export default function TicketDetailDrawer({ ticket, onClose }) {
               )}
             </div>
 
-            {/* Meta Footer: Pelapor & Waktu Dibuat */}
+            {/* Meta Footer */}
             <div
               style={{
-                borderTop: "1px solid var(--border-light)",
-                marginTop: "16px",
-                paddingTop: "14px",
+                borderTop: "1px solid #edf2f7",
+                marginTop: "14px",
+                paddingTop: "12px",
                 display: "flex",
                 justifyContent: "space-between",
                 alignItems: "center",
                 flexWrap: "wrap",
-                gap: "12px",
-                fontSize: "12.5px",
-                color: "var(--text-secondary)",
+                gap: "10px",
+                fontSize: "12px",
+                color: "#64748b",
               }}
             >
               <div>
-                <span style={{ color: "var(--text-muted)" }}>Pembuat Tiket (v0): </span>
-                <strong style={{ color: "var(--text-dark)" }}>{ticket.reporter || "-"}</strong>
+                <span>Pembuat Tiket: </span>
+                <strong style={{ color: "#0f172a" }}>{ticket.reporter || "-"}</strong>
               </div>
 
               <div>
-                <span style={{ color: "var(--text-muted)" }}>Waktu Dibuat: </span>
-                <strong style={{ color: "var(--text-dark)" }}>{ticket.createdDateTimeText}</strong>
-              </div>
-
-              <div>
-                <span style={{ color: "var(--text-muted)" }}>Sumber: </span>
+                <span>Sumber Masuk: </span>
                 <span
                   style={{
-                    fontWeight: 700,
+                    fontWeight: 650,
                     textTransform: "uppercase",
                     fontSize: "11px",
                     padding: "2px 7px",
                     borderRadius: "4px",
-                    backgroundColor: "#e2e8f0",
+                    backgroundColor: "#f1f5f9",
                     color: "#334155",
+                    border: "1px solid #cbd5e1",
                   }}
                 >
                   {ticket.source || "dashboard"}
@@ -651,24 +1062,31 @@ export default function TicketDetailDrawer({ ticket, onClose }) {
             </div>
           </div>
 
-          {/* CARD 2: ANGGOTA TIM SOFTWARE (JIKA ADA) */}
+          {/* ============================================================= */}
+          {/* 5. ANGGOTA TIM SOFTWARE                                       */}
+          {/* ============================================================= */}
           <div
             style={{
               backgroundColor: "#ffffff",
               borderRadius: "12px",
-              border: "1px solid var(--border-light)",
-              padding: "20px 22px",
-              boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
+              border: "1px solid #e2e8f0",
+              padding: "18px 20px",
+              boxShadow: "0 1px 3px rgba(0, 0, 0, 0.02)",
             }}
           >
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "14px" }}>
-              <div>
-                <h3 style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-dark)", margin: 0 }}>
-                  Anggota Tim Software ({assignedMembers.length})
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                <span
+                  style={{
+                    width: "3px",
+                    height: "14px",
+                    backgroundColor: "#0e8587",
+                    borderRadius: "2px",
+                  }}
+                />
+                <h3 style={{ fontSize: "14.5px", fontWeight: 750, color: "#0f172a", margin: 0 }}>
+                  Tim Penanganan Software ({assignedMembers.length})
                 </h3>
-                <span style={{ fontSize: "12px", color: "var(--text-muted)" }}>
-                  Anggota tim software yang ditugaskan / mengklaim tiket ini
-                </span>
               </div>
 
               {assignedMembers.some((m) => m.isLeader) && (
@@ -676,14 +1094,14 @@ export default function TicketDetailDrawer({ ticket, onClose }) {
                   style={{
                     fontSize: "11.5px",
                     fontWeight: 700,
-                    padding: "3px 9px",
-                    borderRadius: "9999px",
-                    backgroundColor: "#eff6ff",
-                    color: "#1d4ed8",
-                    border: "1px solid #bfdbfe",
+                    padding: "2px 8px",
+                    borderRadius: "4px",
+                    backgroundColor: "#f0fdfa",
+                    color: "#0f766e",
+                    border: "1px solid #99f6e4",
                   }}
                 >
-                  👑 Leader Terdaftar
+                  Leader Terdaftar
                 </span>
               )}
             </div>
@@ -692,22 +1110,20 @@ export default function TicketDetailDrawer({ ticket, onClose }) {
               <div
                 style={{
                   textAlign: "center",
-                  padding: "24px 16px",
-                  borderRadius: "10px",
+                  padding: "20px 14px",
+                  borderRadius: "8px",
                   backgroundColor: "#f8fafc",
                   border: "1px dashed #cbd5e1",
-                  color: "var(--text-muted)",
-                  fontSize: "13px",
+                  color: "#64748b",
+                  fontSize: "12.5px",
                 }}
               >
                 {(ticket.rawStatus || ticket.status || "").toLowerCase() === "escalated" ? (
                   <div>
-                    <span style={{ display: "block", fontSize: "20px", marginBottom: "4px" }}>⏳</span>
-                    <strong>Tiket berstatus Escalated.</strong> Belum ada anggota tim Software yang mengklaim atau ditugaskan pada tiket ini.
+                    <strong style={{ color: "#d97706" }}>Tiket berstatus Escalated.</strong> Belum ada anggota tim Software yang mengklaim tiket ini.
                   </div>
                 ) : (
                   <div>
-                    <span style={{ display: "block", fontSize: "20px", marginBottom: "4px" }}>🛠️</span>
                     Tiket sedang ditangani secara internal oleh <strong>Tim Aftersales</strong> (belum dieskalasi ke tim Software).
                   </div>
                 )}
@@ -716,8 +1132,8 @@ export default function TicketDetailDrawer({ ticket, onClose }) {
               <div
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))",
-                  gap: "12px",
+                  gridTemplateColumns: "repeat(auto-fill, minmax(250px, 1fr))",
+                  gap: "10px",
                 }}
               >
                 {assignedMembers.map((member, idx) => {
@@ -728,26 +1144,26 @@ export default function TicketDetailDrawer({ ticket, onClose }) {
                       style={{
                         display: "flex",
                         alignItems: "center",
-                        gap: "12px",
-                        padding: "12px 14px",
-                        borderRadius: "10px",
-                        backgroundColor: isLeader ? "#f0fdfa" : "#f8fafc",
-                        border: isLeader ? "1.5px solid #0e8587" : "1px solid var(--border-light)",
-                        boxShadow: "0 1px 2px rgba(0,0,0,0.02)",
+                        gap: "10px",
+                        padding: "10px 12px",
+                        borderRadius: "8px",
+                        backgroundColor: isLeader ? "#f0fdfa" : "#ffffff",
+                        border: isLeader ? "1.5px solid #0e8587" : "1px solid #e2e8f0",
+                        boxShadow: isLeader ? "0 1px 3px rgba(14, 133, 135, 0.08)" : "none",
                       }}
                     >
                       <div
                         style={{
-                          width: "38px",
-                          height: "38px",
+                          width: "34px",
+                          height: "34px",
                           borderRadius: "50%",
                           backgroundColor: isLeader ? "#0e8587" : "#e2e8f0",
                           color: isLeader ? "#ffffff" : "#334155",
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "center",
-                          fontWeight: 750,
-                          fontSize: "14px",
+                          fontWeight: 700,
+                          fontSize: "13px",
                           flexShrink: 0,
                         }}
                       >
@@ -758,9 +1174,9 @@ export default function TicketDetailDrawer({ ticket, onClose }) {
                         <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                           <span
                             style={{
-                              fontSize: "13.5px",
+                              fontSize: "13px",
                               fontWeight: 700,
-                              color: "var(--text-dark)",
+                              color: "#0f172a",
                               whiteSpace: "nowrap",
                               overflow: "hidden",
                               textOverflow: "ellipsis",
@@ -770,7 +1186,7 @@ export default function TicketDetailDrawer({ ticket, onClose }) {
                           </span>
                         </div>
 
-                        <div style={{ fontSize: "12px", color: "var(--text-muted)", marginTop: "1px" }}>
+                        <div style={{ fontSize: "11.5px", color: "#64748b", marginTop: "1px" }}>
                           {member.identifier || member.email || "-"}
                         </div>
 
@@ -778,28 +1194,29 @@ export default function TicketDetailDrawer({ ticket, onClose }) {
                           {isLeader ? (
                             <span
                               style={{
-                                fontSize: "10.5px",
+                                fontSize: "10px",
                                 fontWeight: 750,
-                                padding: "2px 6px",
-                                borderRadius: "4px",
+                                padding: "2px 7px",
+                                borderRadius: "3px",
                                 backgroundColor: "#0e8587",
                                 color: "#ffffff",
                               }}
                             >
-                              👑 Leader Software
+                              LEADER
                             </span>
                           ) : (
                             <span
                               style={{
-                                fontSize: "10.5px",
-                                fontWeight: 650,
+                                fontSize: "10px",
+                                fontWeight: 600,
                                 padding: "2px 6px",
-                                borderRadius: "4px",
-                                backgroundColor: "#e2e8f0",
+                                borderRadius: "3px",
+                                backgroundColor: "#f1f5f9",
                                 color: "#475569",
+                                border: "1px solid #e2e8f0",
                               }}
                             >
-                              Anggota Tim Software
+                              Anggota Tim
                             </span>
                           )}
                         </div>
@@ -811,32 +1228,41 @@ export default function TicketDetailDrawer({ ticket, onClose }) {
             )}
           </div>
 
-          {/* CARD 3: RIWAYAT PERUBAHAN TIKET (TICKET HISTORY & TIMELINE) */}
+          {/* ============================================================= */}
+          {/* 6. LINIMASA RIWAYAT TIKET (BERSIH DENGAN AKSEN STATUS)         */}
+          {/* ============================================================= */}
           <div
             style={{
               backgroundColor: "#ffffff",
               borderRadius: "12px",
-              border: "1px solid var(--border-light)",
-              padding: "20px 22px",
-              boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
+              border: "1px solid #e2e8f0",
+              padding: "18px 20px",
+              boxShadow: "0 1px 3px rgba(0, 0, 0, 0.02)",
             }}
           >
-            <div style={{ marginBottom: "16px" }}>
+            <div style={{ marginBottom: "14px" }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <h3 style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-dark)", margin: 0 }}>
-                  Linimasa Riwayat Tiket ({sortedHistory.length} Versi)
-                </h3>
-                <span style={{ fontSize: "12px", color: "var(--text-muted)" }}>
-                  Dimulai dari Versi 0 (Tiket Dibuat)
+                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                  <span
+                    style={{
+                      width: "3px",
+                      height: "14px",
+                      backgroundColor: "#0e8587",
+                      borderRadius: "2px",
+                    }}
+                  />
+                  <h3 style={{ fontSize: "14.5px", fontWeight: 750, color: "#0f172a", margin: 0 }}>
+                    Linimasa Riwayat Tiket ({sortedHistory.length} Versi)
+                  </h3>
+                </div>
+                <span style={{ fontSize: "11.5px", color: "#64748b" }}>
+                  Dimulai dari Versi 0
                 </span>
               </div>
-              <span style={{ fontSize: "12px", color: "var(--text-muted)", marginTop: "3px", display: "block" }}>
-                Rekam jejak setiap perubahan status, penanganan, dan tindakan pada tiket
-              </span>
             </div>
 
             {sortedHistory.length === 0 ? (
-              <div style={{ textAlign: "center", padding: "24px 0", color: "var(--text-muted)", fontSize: "13px" }}>
+              <div style={{ textAlign: "center", padding: "20px 0", color: "#64748b", fontSize: "12.5px" }}>
                 Belum ada data riwayat yang tercatat untuk tiket ini.
               </div>
             ) : (
@@ -849,7 +1275,7 @@ export default function TicketDetailDrawer({ ticket, onClose }) {
                     top: "16px",
                     bottom: "16px",
                     width: "2px",
-                    backgroundColor: "#e2e8f0",
+                    backgroundColor: "#cbd5e1",
                     zIndex: 0,
                   }}
                 />
@@ -857,10 +1283,9 @@ export default function TicketDetailDrawer({ ticket, onClose }) {
                 {sortedHistory.map((h, idx) => {
                   const histStatus = getStatusBadge(h.rawStatus || h.status);
                   const histSeverity = getSeverityBadge(h.rawSeverity || h.severity);
-                  const isInitialVersion = (h.version === 0);
+                  const isInitialVersion = h.version === 0;
                   const isCurrentLatest = idx === 0;
 
-                  // Deteksi sumber perubahan dari changedByUserId / changedByTelegramUserId / source
                   const isWebSource = Boolean(h.changedByUserId || h.source === "web" || h.source === "dashboard");
                   const isTeleSource = Boolean(h.changedByTelegramUserId || h.source === "telegram");
 
@@ -878,14 +1303,14 @@ export default function TicketDetailDrawer({ ticket, onClose }) {
                         gap: "14px",
                         position: "relative",
                         zIndex: 1,
-                        paddingBottom: idx === sortedHistory.length - 1 ? "0" : "20px",
+                        paddingBottom: idx === sortedHistory.length - 1 ? "0" : "18px",
                       }}
                     >
-                      {/* Timeline circle node with version label */}
+                      {/* Timeline circle node */}
                       <div
                         style={{
-                          width: "38px",
-                          height: "38px",
+                          width: "36px",
+                          height: "36px",
                           borderRadius: "50%",
                           backgroundColor: isCurrentLatest ? "#0e8587" : "#ffffff",
                           color: isCurrentLatest ? "#ffffff" : "#0e8587",
@@ -894,26 +1319,27 @@ export default function TicketDetailDrawer({ ticket, onClose }) {
                           alignItems: "center",
                           justifyContent: "center",
                           flexShrink: 0,
-                          fontSize: "12px",
+                          fontSize: "11.5px",
                           fontWeight: 750,
-                          boxShadow: "0 2px 4px rgba(0,0,0,0.06)",
+                          boxShadow: isCurrentLatest ? "0 0 0 4px rgba(14, 133, 135, 0.15)" : "none",
                         }}
                       >
                         v{h.version ?? 0}
                       </div>
 
-                      {/* Content Card Box */}
+                      {/* Content Card Box (Netral dengan Aksen Status Bersih) */}
                       <div
                         style={{
                           flex: 1,
                           backgroundColor: isCurrentLatest ? "#f8fafc" : "#ffffff",
-                          borderRadius: "12px",
-                          border: isCurrentLatest ? "1.5px solid #0e8587" : "1px solid var(--border-light)",
-                          padding: "16px 18px",
-                          boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
+                          borderRadius: "8px",
+                          border: isCurrentLatest ? "1.5px solid #0e8587" : "1px solid #e2e8f0",
+                          borderLeft: isCurrentLatest ? "3.5px solid #0e8587" : "1px solid #e2e8f0",
+                          padding: "14px 16px",
+                          boxShadow: "0 1px 2px rgba(0, 0, 0, 0.02)",
                         }}
                       >
-                        {/* Header Riwayat: Versi, Status, Severity, Sumber (Web/Telegram), Waktu */}
+                        {/* Header Riwayat */}
                         <div
                           style={{
                             display: "flex",
@@ -921,18 +1347,17 @@ export default function TicketDetailDrawer({ ticket, onClose }) {
                             justifyContent: "space-between",
                             flexWrap: "wrap",
                             gap: "8px",
-                            paddingBottom: "10px",
+                            paddingBottom: "8px",
                             borderBottom: "1px solid #edf2f7",
-                            marginBottom: "12px",
+                            marginBottom: "10px",
                           }}
                         >
                           <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
-                            {/* Chip Versi */}
                             <span
                               style={{
                                 fontSize: "11px",
-                                fontWeight: 750,
-                                padding: "2px 8px",
+                                fontWeight: 700,
+                                padding: "2px 7px",
                                 borderRadius: "4px",
                                 backgroundColor: isInitialVersion ? "#eff6ff" : "#f1f5f9",
                                 color: isInitialVersion ? "#1d4ed8" : "#334155",
@@ -942,12 +1367,11 @@ export default function TicketDetailDrawer({ ticket, onClose }) {
                               {isInitialVersion ? "v0 • Dibuat" : `v${h.version}`}
                             </span>
 
-                            {/* Badge Status */}
                             <span
                               style={{
                                 fontSize: "11px",
                                 fontWeight: 700,
-                                padding: "2px 8px",
+                                padding: "2px 7px",
                                 borderRadius: "4px",
                                 backgroundColor: histStatus.bg,
                                 color: histStatus.color,
@@ -968,28 +1392,27 @@ export default function TicketDetailDrawer({ ticket, onClose }) {
                               {histStatus.label}
                             </span>
 
-                            {/* Badge Severity */}
                             <span
                               style={{
                                 fontSize: "11px",
                                 fontWeight: 650,
-                                padding: "2px 8px",
+                                padding: "2px 7px",
                                 borderRadius: "4px",
                                 backgroundColor: histSeverity.bg,
                                 color: histSeverity.color,
                                 border: `1px solid ${histSeverity.border}`,
                               }}
                             >
-                              severity: {histSeverity.label}
+                              {histSeverity.label}
                             </span>
 
-                            {/* Badge Sumber Perubahan (Web vs Telegram) */}
+                            {/* Sumber Perubahan (Line Icon & Soft Color Pill) */}
                             {isTeleSource ? (
                               <span
                                 style={{
                                   fontSize: "11px",
-                                  fontWeight: 700,
-                                  padding: "2px 8px",
+                                  fontWeight: 650,
+                                  padding: "2px 7px",
                                   borderRadius: "4px",
                                   backgroundColor: "#f0fdfa",
                                   color: "#0f766e",
@@ -999,14 +1422,15 @@ export default function TicketDetailDrawer({ ticket, onClose }) {
                                   gap: "4px",
                                 }}
                               >
-                                📱 Telegram Bot
+                                <IconSend size={11} color="#0f766e" />
+                                Telegram
                               </span>
                             ) : isWebSource ? (
                               <span
                                 style={{
                                   fontSize: "11px",
-                                  fontWeight: 700,
-                                  padding: "2px 8px",
+                                  fontWeight: 650,
+                                  padding: "2px 7px",
                                   borderRadius: "4px",
                                   backgroundColor: "#eff6ff",
                                   color: "#1d4ed8",
@@ -1016,46 +1440,51 @@ export default function TicketDetailDrawer({ ticket, onClose }) {
                                   gap: "4px",
                                 }}
                               >
-                                🌐 Web Dashboard
+                                <IconMonitor size={11} color="#1d4ed8" />
+                                Web
                               </span>
                             ) : (
                               <span
                                 style={{
                                   fontSize: "11px",
-                                  fontWeight: 650,
-                                  padding: "2px 8px",
+                                  fontWeight: 600,
+                                  padding: "2px 7px",
                                   borderRadius: "4px",
                                   backgroundColor: "#f8fafc",
-                                  color: "#64748b",
+                                  color: "#475569",
                                   border: "1px solid #e2e8f0",
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "4px",
                                 }}
                               >
-                                ⚙️ Sistem
+                                <IconServer size={11} color="#475569" />
+                                Sistem
                               </span>
                             )}
                           </div>
 
-                          {/* Waktu update */}
-                          <span style={{ fontSize: "12px", color: "var(--text-muted)", fontWeight: 500 }}>
+                          <span style={{ fontSize: "11.5px", color: "#64748b" }}>
                             {h.timestamp}
                           </span>
                         </div>
 
-                        {/* Identitas Aktor Pengubah */}
-                        <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "10px" }}>
-                          <span style={{ fontSize: "12px", color: "var(--text-muted)" }}>Diperbarui oleh:</span>
-                          <strong style={{ fontSize: "13px", color: "var(--text-dark)" }}>
+                        {/* Aktor Pengubah */}
+                        <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "8px" }}>
+                          <span style={{ fontSize: "11.5px", color: "#64748b" }}>Oleh:</span>
+                          <strong style={{ fontSize: "12.5px", color: "#0f172a" }}>
                             {h.author || "Sistem"}
                           </strong>
                           {Boolean(h.authorDivision) && (
                             <span
                               style={{
                                 fontSize: "10.5px",
-                                fontWeight: 650,
+                                fontWeight: 600,
                                 padding: "1px 6px",
-                                borderRadius: "4px",
-                                backgroundColor: "#e2e8f0",
+                                borderRadius: "3px",
+                                backgroundColor: "#f1f5f9",
                                 color: "#334155",
+                                border: "1px solid #e2e8f0",
                               }}
                             >
                               Divisi: {h.authorDivision}
@@ -1063,107 +1492,51 @@ export default function TicketDetailDrawer({ ticket, onClose }) {
                           )}
                         </div>
 
-                        {/* Grid Rincian Data Transparansi Versi */}
-                        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                          {/* 1. Catatan Log / Notes */}
-                          <div
-                            style={{
-                              backgroundColor: "#f8fafc",
-                              padding: "10px 12px",
-                              borderRadius: "8px",
-                              border: "1px solid #e2e8f0",
-                            }}
-                          >
-                            <span style={{ fontSize: "11px", fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", display: "block" }}>
-                              Catatan Log / Notes:
-                            </span>
-                            <div style={{ fontSize: "13px", color: "#1e293b", marginTop: "2px", lineHeight: 1.45, fontWeight: 500 }}>
-                              {notesText || "—"}
+                        {/* Rincian data dengan aksen warna halus pada tindakan & akar masalah saja */}
+                        <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                          {notesText && (
+                            <div style={{ backgroundColor: "#ffffff", padding: "8px 10px", borderRadius: "6px", border: "1px solid #e2e8f0" }}>
+                              <span style={{ fontSize: "10.5px", fontWeight: 700, color: "#64748b", textTransform: "uppercase", display: "block" }}>
+                                Catatan:
+                              </span>
+                              <div style={{ fontSize: "12.5px", color: "#0f172a", marginTop: "2px" }}>
+                                {notesText}
+                              </div>
                             </div>
-                          </div>
+                          )}
 
-                          {/* 2. Gejala / Damage Description */}
-                          <div
-                            style={{
-                              backgroundColor: "#f8fafc",
-                              padding: "10px 12px",
-                              borderRadius: "8px",
-                              border: "1px solid #e2e8f0",
-                            }}
-                          >
-                            <span style={{ fontSize: "11px", fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", display: "block" }}>
-                              Deskripsi Kerusakan (damage_description):
-                            </span>
-                            <div style={{ fontSize: "13px", color: "#1e293b", marginTop: "2px", lineHeight: 1.45 }}>
-                              {damageText || "—"}
+                          {damageText && (
+                            <div style={{ backgroundColor: "#ffffff", padding: "8px 10px", borderRadius: "6px", border: "1px solid #e2e8f0" }}>
+                              <span style={{ fontSize: "10.5px", fontWeight: 700, color: "#64748b", textTransform: "uppercase", display: "block" }}>
+                                Deskripsi Kerusakan:
+                              </span>
+                              <div style={{ fontSize: "12.5px", color: "#0f172a", marginTop: "2px" }}>
+                                {damageText}
+                              </div>
                             </div>
-                          </div>
+                          )}
 
-                          {/* 3. Tindakan Penanganan / Action Taken */}
-                          <div
-                            style={{
-                              backgroundColor: actionText ? "#f0fdf4" : "#f8fafc",
-                              padding: "10px 12px",
-                              borderRadius: "8px",
-                              border: actionText ? "1px solid #bbf7d0" : "1px solid #e2e8f0",
-                            }}
-                          >
-                            <span
-                              style={{
-                                fontSize: "11px",
-                                fontWeight: 700,
-                                color: actionText ? "#166534" : "var(--text-muted)",
-                                textTransform: "uppercase",
-                                display: "block",
-                              }}
-                            >
-                              Tindakan Penanganan (action_taken):
-                            </span>
-                            <div
-                              style={{
-                                fontSize: "13px",
-                                color: actionText ? "#14532d" : "#64748b",
-                                marginTop: "2px",
-                                lineHeight: 1.45,
-                                fontWeight: actionText ? 500 : 400,
-                              }}
-                            >
-                              {actionText || "Belum ada tindakan khusus yang dicatat pada versi ini."}
+                          {actionText && (
+                            <div style={{ backgroundColor: "#f0fdf4", padding: "8px 10px", borderRadius: "6px", border: "1px solid #bbf7d0", borderLeft: "3px solid #16a34a" }}>
+                              <span style={{ fontSize: "10.5px", fontWeight: 700, color: "#15803d", textTransform: "uppercase", display: "block" }}>
+                                Tindakan Penanganan:
+                              </span>
+                              <div style={{ fontSize: "12.5px", color: "#14532d", marginTop: "2px" }}>
+                                {actionText}
+                              </div>
                             </div>
-                          </div>
+                          )}
 
-                          {/* 4. Akar Masalah / Root Cause */}
-                          <div
-                            style={{
-                              backgroundColor: causeText ? "#fffbeb" : "#f8fafc",
-                              padding: "10px 12px",
-                              borderRadius: "8px",
-                              border: causeText ? "1px solid #fde68a" : "1px solid #e2e8f0",
-                            }}
-                          >
-                            <span
-                              style={{
-                                fontSize: "11px",
-                                fontWeight: 700,
-                                color: causeText ? "#92400e" : "var(--text-muted)",
-                                textTransform: "uppercase",
-                                display: "block",
-                              }}
-                            >
-                              Akar Masalah (root_cause):
-                            </span>
-                            <div
-                              style={{
-                                fontSize: "13px",
-                                color: causeText ? "#78350f" : "#64748b",
-                                marginTop: "2px",
-                                lineHeight: 1.45,
-                                fontWeight: causeText ? 500 : 400,
-                              }}
-                            >
-                              {causeText || "Belum diidentifikasi pada versi ini."}
+                          {causeText && (
+                            <div style={{ backgroundColor: "#fffbeb", padding: "8px 10px", borderRadius: "6px", border: "1px solid #fde68a", borderLeft: "3px solid #d97706" }}>
+                              <span style={{ fontSize: "10.5px", fontWeight: 700, color: "#b45309", textTransform: "uppercase", display: "block" }}>
+                                Akar Masalah:
+                              </span>
+                              <div style={{ fontSize: "12.5px", color: "#78350f", marginTop: "2px" }}>
+                                {causeText}
+                              </div>
                             </div>
-                          </div>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -1177,9 +1550,9 @@ export default function TicketDetailDrawer({ ticket, onClose }) {
         {/* Footer Drawer */}
         <div
           style={{
-            padding: "16px 24px",
+            padding: "14px 24px",
             backgroundColor: "#ffffff",
-            borderTop: "1px solid var(--border-light)",
+            borderTop: "1px solid #e2e8f0",
             display: "flex",
             justifyContent: "flex-end",
             alignItems: "center",
@@ -1190,13 +1563,13 @@ export default function TicketDetailDrawer({ ticket, onClose }) {
             type="button"
             onClick={onClose}
             style={{
-              padding: "9px 20px",
-              borderRadius: "8px",
+              padding: "8px 20px",
+              borderRadius: "6px",
               border: "1px solid #cbd5e1",
               backgroundColor: "#ffffff",
               fontSize: "13px",
               fontWeight: 650,
-              color: "var(--text-dark)",
+              color: "#334155",
               cursor: "pointer",
               transition: "all 0.15s ease",
             }}
@@ -1207,7 +1580,7 @@ export default function TicketDetailDrawer({ ticket, onClose }) {
               e.currentTarget.style.backgroundColor = "#ffffff";
             }}
           >
-            Tutup Detail Tiket
+            Tutup
           </button>
         </div>
       </div>

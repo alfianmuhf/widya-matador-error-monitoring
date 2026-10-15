@@ -15,9 +15,9 @@ COPY apps/error-service/package*.json ./
 COPY apps/error-service/prisma.config.js ./
 RUN npm install
 
-# Copy Prisma schema dan generate Prisma Client
+# Copy Prisma schema dan generate Prisma Client (menggunakan dummy URL saat build-time)
 COPY apps/error-service/prisma ./prisma/
-RUN npx prisma generate
+RUN DATABASE_URL="postgresql://placeholder:placeholder@localhost:5432/placeholder" npx prisma generate
 
 # Copy source code backend
 COPY apps/error-service/src ./src/

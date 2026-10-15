@@ -126,7 +126,7 @@ export const ticketIncludes = {
 /**
  * Find paginated list of tickets with filters
  */
-export const findMany = async ({ skip = 0, take = 10, where = {}, orderBy = { created_at: "desc" } }) => {
+export const findMany = async ({ skip = 0, take = 10, where = {}, orderBy = { open_at: "desc" } }) => {
   return prisma.tickets.findMany({
     skip,
     take,
@@ -251,12 +251,13 @@ export const createWithHistory = async (ticketData, historyData) => {
  * Update ticket data and create a new history record atomically
  * Increments current_version (1, 2, 3...)
  */
-export const updateWithHistory = async (ticketId, nextVersion, historyData) => {
+export const updateWithHistory = async (ticketId, nextVersion, historyData, ticketData = {}) => {
   return prisma.$transaction(async (tx) => {
     await tx.tickets.update({
       where: { id: ticketId },
       data: {
         current_version: nextVersion,
+        ...ticketData,
       },
     });
 

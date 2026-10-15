@@ -78,14 +78,14 @@ export const getTickets = async (query = {}) => {
 
   // Date range filter
   if (query.startDate || query.endDate) {
-    where.created_at = {};
-    if (query.startDate) where.created_at.gte = new Date(query.startDate);
+    where.open_at = {};
+    if (query.startDate) where.open_at.gte = new Date(query.startDate);
     if (query.endDate) {
       const end = new Date(query.endDate);
       if (query.endDate.length === 10) {
         end.setHours(23, 59, 59, 999);
       }
-      where.created_at.lte = end;
+      where.open_at.lte = end;
     }
   }
 
@@ -107,12 +107,18 @@ export const getTickets = async (query = {}) => {
 
   // Order By
   const sortByMap = {
-    createdAt: "created_at",
-    created_at: "created_at",
+    openAt: "open_at",
+    open_at: "open_at",
+    createdAt: "open_at",
+    created_at: "open_at",
+    escalatedAt: "escalated_at",
+    escalated_at: "escalated_at",
+    solvedAt: "solved_at",
+    solved_at: "solved_at",
     ticketId: "id",
     id: "id",
   };
-  const sortBy = sortByMap[query.sortBy] || "created_at";
+  const sortBy = sortByMap[query.sortBy] || "open_at";
   const sortOrder = query.sortOrder || "desc";
   const orderBy = { [sortBy]: sortOrder };
 
@@ -181,7 +187,21 @@ export const updateTicket = async (ticketId, data, actor = {}) => {
     changed_by_telegram_user_id: actor.telegram_user_id || null,
   };
 
-  const updatedRaw = await ticketRepo.updateWithHistory(ticketId, nextVersion, historyData);
+  const previousStatus = (currentHistory.status || "open").toLowerCase();
+
+  // Mekanisme pencatatan waktu lifecycle:
+  // - escalated_at: diisi HANYA ketika status berubah dari 'open' ke 'escalated' untuk pertama kali (oleh Aftersales).
+  //   Jika tiket sudah 'escalated' dan ada update catatan/tindakan, atau saat diklaim, escalated_at TIDAK AKAN tertimpa.
+  // - solved_at: diisi waktu tiket berhasil tersolved
+  const ticketUpdateData = {};
+  if (previousStatus === "open" && targetStatus === "escalated" && !currentTicket.escalated_at) {
+    ticketUpdateData.escalated_at = new Date();
+  }
+  if (targetStatus === "solved" && !currentTicket.solved_at) {
+    ticketUpdateData.solved_at = new Date();
+  }
+
+  const updatedRaw = await ticketRepo.updateWithHistory(ticketId, nextVersion, historyData, ticketUpdateData);
   const formatted = formatTicket(updatedRaw);
 
   const isStatus = Boolean(data.status && data.status.toLowerCase() !== (currentHistory.status || "").toLowerCase());
@@ -271,15 +291,19 @@ export const createTicket = async (data, actor = {}) => {
   // Generate unique Ticket ID: ERR-YYYYMMDD-NNNN
   const ticketId = await generateTicketId();
 
+  const initialStatus = data.status ? data.status.toLowerCase() : "open";
+  const initialSeverity = data.severity ? data.severity.toLowerCase() : "rendah";
+
+  const now = new Date();
   const ticketData = {
     id: ticketId,
     asset_id: asset.id,
     failure_code_id: failureCode.id,
     aftersales_user_id: aftersalesUserId,
+    open_at: now,
+    escalated_at: initialStatus === "escalated" ? now : null,
+    solved_at: initialStatus === "solved" ? now : null,
   };
-
-  const initialStatus = data.status ? data.status.toLowerCase() : "open";
-  const initialSeverity = data.severity ? data.severity.toLowerCase() : "rendah";
 
   const historyData = {
     status: initialStatus,

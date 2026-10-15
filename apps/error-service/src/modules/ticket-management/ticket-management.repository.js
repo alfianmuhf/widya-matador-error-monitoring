@@ -65,7 +65,7 @@ export const findManagedTicketsByIds = async (ticketIds, { severity, search } = 
     where,
     include: ticketIncludes,
     orderBy: {
-      created_at: "desc",
+      open_at: "desc",
     },
   });
 

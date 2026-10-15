@@ -151,7 +151,7 @@ export default function AddAssigneeModal({ isOpen, onClose, ticket, onSuccess })
         "Status anggota ini akan berubah menjadi Leader, dan Leader sebelumnya otomatis menjadi anggota biasa.",
       confirmText: "Ya, Alihkan Leader",
       confirmBg: "#0e8587",
-      icon: "👑",
+      icon: null,
       onConfirm: async () => {
         try {
           setTransferringLeaderId(assignee.id);
@@ -402,7 +402,7 @@ export default function AddAssigneeModal({ isOpen, onClose, ticket, onSuccess })
                     border: "1px solid #fde68a",
                   }}
                 >
-                  👑 Memiliki Leader
+                  Leader Terdaftar
                 </span>
               )}
             </div>
@@ -512,7 +512,7 @@ export default function AddAssigneeModal({ isOpen, onClose, ticket, onSuccess })
                           }}
                           title="Alihkan tanggung jawab Leader software ke anggota ini"
                         >
-                          👑 Jadikan Leader
+                          Jadikan Leader
                         </button>
                       )}
 
@@ -632,7 +632,7 @@ export default function AddAssigneeModal({ isOpen, onClose, ticket, onSuccess })
                   }}
                   onClick={(e) => e.stopPropagation()}
                 >
-                  👑 Tetapkan sebagai Leader Tim Software
+                  Tetapkan sebagai Leader Tim Software
                 </label>
                 <span style={{ fontSize: "11.5px", color: "#64748b", marginTop: "2px", display: "block" }}>
                   {!hasLeader

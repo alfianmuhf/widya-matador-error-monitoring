@@ -12,14 +12,16 @@ Layanan di `infra/docker-compose.yml` dan konfigurasi terkait.
 
 ## Cara Menjalankan
 
-1. Pastikan file `.env` berada di `apps/error-service/.env` (diambil dari `.env.backend.example`).
+1. Pastikan file `.env` diletakkan pada folder `env-file` di luar repo:
+   - `aidev/dev/env-file/.env.backend` (salin dari `.env.backend.example`)
+   - `aidev/dev/env-file/.env.frontend` (salin dari `.env.frontend.example`)
 2. Tanpa `RABBITMQ_URL` di `.env` Backend → notifikasi Telegram mati tapi sistem tetap jalan (publish dilewati + warning).
 3. Dari direktori `infra/`:
    ```bash
-   docker compose up -d
+   # Jalankan semua service sekaligus (backend, frontend, rabbitmq)
+   docker compose --env-file ../../env-file/.env.frontend up -d --build
    ```
-   - Menjalankan backend, frontend, dan rabbitmq sekaligus.
-   - Atau cukup `docker compose up -d rabbitmq` hanya untuk menyiapkan RabbitMQ.
+   - Atau cukup `docker compose up -d rabbitmq` hanya untuk menyiapkan RabbitMQ saja.
 
 ## Catatan Penting
 

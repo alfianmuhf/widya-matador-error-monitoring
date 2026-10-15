@@ -7,6 +7,28 @@ import AddAssigneeModal from "../components/tickets/AddAssigneeModal.jsx";
 import TransferAftersalesModal from "../components/tickets/TransferAftersalesModal.jsx";
 import CreateTicketModal from "../components/tickets/CreateTicketModal.jsx";
 
+const formatDateTime = (val) => {
+  if (!val) return "-";
+  try {
+    const d = new Date(val);
+    if (isNaN(d.getTime())) return "-";
+    const dateStr = d.toLocaleDateString("id-ID", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      timeZone: "Asia/Jakarta",
+    });
+    const timeStr = d.toLocaleTimeString("id-ID", {
+      hour: "2-digit",
+      minute: "2-digit",
+      timeZone: "Asia/Jakarta",
+    }).replace(".", ":");
+    return `${dateStr}, ${timeStr} WIB`;
+  } catch {
+    return "-";
+  }
+};
+
 export default function ManajemenTiket() {
   const { user, accessToken } = useAuth();
   const currentUser = user?.user || user;
@@ -264,6 +286,7 @@ export default function ManajemenTiket() {
                   <th style={{ padding: "12px 16px", fontWeight: 700, color: "#475569" }}>Unit</th>
                   <th style={{ padding: "12px 16px", fontWeight: 700, color: "#475569" }}>Modul & Failure Code</th>
                   <th style={{ padding: "12px 16px", fontWeight: 700, color: "#475569" }}>Status</th>
+                  <th style={{ padding: "12px 16px", fontWeight: 700, color: "#475569" }}>Waktu Siklus</th>
                   <th style={{ padding: "12px 16px", fontWeight: 700, color: "#475569", textAlign: "right" }}>Aksi</th>
                 </tr>
               </thead>
@@ -384,7 +407,25 @@ export default function ManajemenTiket() {
                         </span>
                       </td>
 
-                      {/* 5. Aksi (Tanpa Ikon / Emoji) */}
+                      {/* 5. Waktu Siklus (Open, Escalated, Solved) */}
+                      <td style={{ padding: "12px 16px", verticalAlign: "middle" }}>
+                        <div style={{ display: "flex", flexDirection: "column", gap: "2px", fontSize: "11.5px" }}>
+                          <div style={{ color: "#334155" }}>
+                            <span style={{ color: "#64748b", fontWeight: 600 }}>Open:</span>{" "}
+                            {t.openDateTimeText || t.openDateText || (t.open_at || t.openAt || t.createdAt ? formatDateTime(t.open_at || t.openAt || t.createdAt) : "-")}
+                          </div>
+                          <div style={{ color: t.escalated_at || t.escalatedAt ? "#b45309" : "#94a3b8" }}>
+                            <span style={{ color: "#64748b", fontWeight: 600 }}>Esc:</span>{" "}
+                            {t.escalated_at || t.escalatedAt ? (t.escalatedDateTimeText || t.escalatedDateText || formatDateTime(t.escalated_at || t.escalatedAt)) : "-"}
+                          </div>
+                          <div style={{ color: t.solved_at || t.solvedAt || t.resolvedAt ? "#15803d" : "#94a3b8" }}>
+                            <span style={{ color: "#64748b", fontWeight: 600 }}>Solved:</span>{" "}
+                            {t.solved_at || t.solvedAt || t.resolvedAt ? (t.solvedDateTimeText || t.solvedDateText || formatDateTime(t.solved_at || t.solvedAt || t.resolvedAt)) : "-"}
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* 6. Aksi (Tanpa Ikon / Emoji) */}
                       <td
                         style={{ padding: "12px 16px", verticalAlign: "middle", textAlign: "right" }}
                         onClick={(e) => e.stopPropagation()}

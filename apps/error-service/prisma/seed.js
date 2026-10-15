@@ -13,7 +13,7 @@ async function main() {
   // =========================================================================
   // 1. SEED TELEGRAM USERS (Whitelist Telegram)
   // =========================================================================
-  console.log("📱 [1/4] Seeding Telegram Whitelist Users (6 akun active)...");
+  console.log("📱 [1/4] Seeding Telegram Whitelist Users (7 akun active)...");
 
   const telegramUsersToSeed = [
     {
@@ -48,6 +48,13 @@ async function main() {
       telegram_id: "918273645",
       username: "surya_software",
       full_name: "Surya Software 2",
+      division: "software",
+      is_active: true,
+    },
+    {
+      telegram_id: "6981508786",
+      username: "iniqiblat",
+      full_name: "Queen Qiblattul Qur'aini",
       division: "software",
       is_active: true,
     },
@@ -122,7 +129,7 @@ async function main() {
       rawPassword: "bayu12345",
       telegramUsername: "bayu_aftersales",
     },
-    // Coordinator Software (2 Akun)
+    // Coordinator Software (3 Akun)
     {
       email: "siti@erad.id",
       name: "Siti Software 1",
@@ -142,6 +149,16 @@ async function main() {
       must_change_password: true,
       rawPassword: "surya12345",
       telegramUsername: "surya_software",
+    },
+    {
+      email: "queenaaham@gmail.com",
+      name: "Queen Qiblattul Qur'aini",
+      role: "coordinator",
+      division: "software",
+      status: "invited",
+      must_change_password: true,
+      rawPassword: "queenaaham12345",
+      telegramUsername: "iniqiblat",
     },
     // Viewer (1 Akun, divisi none karena aftersales & software hanya dari role coordinator)
     {
@@ -435,6 +452,7 @@ async function main() {
   const bayuUser = userByEmail.get("bayu@erad.id");
   const sitiUser = userByEmail.get("siti@erad.id");
   const suryaUser = userByEmail.get("surya@erad.id");
+  const queenUser = userByEmail.get("queenaaham@gmail.com");
   const dimasUser = userByEmail.get("dimas@erad.id");
 
   // Map akun Telegram (Telegram Users)
@@ -446,404 +464,736 @@ async function main() {
   const bayuTele = telegramByUsername.get("bayu_aftersales");
   const sitiTele = telegramByUsername.get("siti_software");
   const suryaTele = telegramByUsername.get("surya_software");
+  const queenTele = telegramByUsername.get("iniqiblat");
   const dimasTele = telegramByUsername.get("dimas_viewer");
   const adminTele = telegramByUsername.get("super_admin");
 
   // =========================================================================
-  // 4. SEED TICKETS (10 Tiket Beragam: Open dari Tele, History Campur Web & Tele)
+  // 4. SEED TICKETS (40 Tiket: 15 Solved Escalated, 5 Solved Direct, 10 Escalated, 10 Open)
   // =========================================================================
-  console.log("\n🎫 [4/5] Seeding 10 Tickets (Open via Telegram, History Campur Web & Tele)...");
+  console.log("\n🎫 [4/5] Seeding 40 Tickets (15 Solved [Escalated], 5 Solved [Direct Aftersales], 10 Escalated, 10 Open)...");
 
-  const ticketsDefinition = [
-    // 1. OPEN (v0) - Dilaporkan via Telegram oleh Bruno Aftersales 1
+  // Bersihkan data tiket sebelumnya agar total tiket konsisten tepat 40 tiket
+  await prisma.ticket_assignees.deleteMany();
+  await prisma.ticket_history.deleteMany();
+  await prisma.tickets.deleteMany();
+
+  const nowMs = Date.now();
+  const HOUR = 3600 * 1000;
+  const DAY = 24 * HOUR;
+
+  // Format ID tiket: ERR-YYYYMMDD-NNNN
+  const makeTicketId = (date, seq) => {
+    const yyyy = date.getFullYear();
+    const mm = String(date.getMonth() + 1).padStart(2, "0");
+    const dd = String(date.getDate()).padStart(2, "0");
+    return `ERR-${yyyy}${mm}${dd}-${String(seq).padStart(4, "0")}`;
+  };
+
+  // 15 Tiket SOLVED: open_at sebelum hari ini, waktu penyelesaian 1 s.d. 3 hari
+  const rawSolved = [
     {
-      id: "ERR-20261009-0001",
       unitCode: "WLS-001",
       failureCode: "LDR-01",
-      severity: "sedang",
-      history: [
-        {
-          version: 0,
-          status: "open",
-          severity: "sedang",
-          telegramUser: brunoTele,
-          action: "Tiket dilaporkan via Telegram Bot",
-          notes: "Laporan otomatis dari bot Telegram teknisi lapangan",
-          damageDescription: "Sensor LiDAR mengalami dropout titik point cloud saat dump truck melintas dengan kecepatan 15 km/jam.",
-          actionTaken: "Pengecekan fisik konektor kabel M12 dan pembersihan lensa.",
-          rootCause: null,
-          changedAt: new Date(Date.now() - 3600000 * 24),
-        },
-      ],
+      severity: "tinggi",
+      daysAgo: 28,
+      durationDays: 2.5, // 60 jam
+      damage: "Sensor LiDAR mengalami dropout titik point cloud saat dump truck melintas 15 km/jam.",
+      actionOpen: "Pengecekan fisik konektor kabel M12 dan lensa.",
+      actionEscalated: "Eskalasi ke software: modul parser point cloud buffer overflow.",
+      actionSolved: "Patch parser kernel v2.4 diterapkan, filtering noise dioptimalkan, dan kalibrasi ulang selesai.",
+      rootCause: "Buffer overflow pada thread uploader point cloud saat throughput > 40MB/s",
+      leader: sitiUser,
+      leaderTele: sitiTele,
+      member: suryaUser,
+      memberTele: suryaTele,
+      escalatedHours: 4,
     },
-    // 2. OPEN (v1) - v0: Telegram (Bayu Aftersales 2) -> v1: Web Dashboard (Bruno Aftersales 1 update catatan penanganan)
     {
-      id: "ERR-20261009-0002",
       unitCode: "WLS-002",
+      failureCode: "CAM-01",
+      severity: "sedang",
+      daysAgo: 26,
+      durationDays: 1.2, // ~29 jam
+      damage: "Kamera optik mengalami overexposure parah saat terkena pantulan sinar matahari terik.",
+      actionOpen: "Pembersihan housing kaca kamera dan filter polarized.",
+      actionEscalated: "Eskalasi: auto-exposure matrix looping tanpa boundary check.",
+      actionSolved: "Update ISP parameter matrix exposure OpenCV dan pengujian bench 2 jam.",
+      rootCause: "Algoritma auto-exposure matrix looping tanpa batas atas ISO",
+      leader: suryaUser,
+      leaderTele: suryaTele,
+      escalatedHours: 3,
+    },
+    {
+      unitCode: "WLS-003",
       failureCode: "PWR-01",
       severity: "tinggi",
-      history: [
-        {
-          version: 0,
-          status: "open",
-          severity: "tinggi",
-          telegramUser: bayuTele,
-          action: "Tiket dilaporkan via Telegram Bot",
-          notes: "Laporan anomali daya baterai dari bot Telegram",
-          damageDescription: "Tegangan suplai baterai turun drastis ke 20.8V saat IPC dan LiDAR bekerja bersamaan.",
-          actionTaken: "Pengukuran resistansi internal cell baterai cadangan.",
-          rootCause: null,
-          changedAt: new Date(Date.now() - 3600000 * 20),
-        },
-        {
-          version: 1,
-          status: "open",
-          severity: "tinggi",
-          user: brunoUser,
-          action: "Pemeriksaan lanjutan diinput via Web Dashboard oleh Bruno Aftersales 1.",
-          notes: "Pemeriksaan lanjutan diinput via Web Dashboard oleh Bruno Aftersales 1: Modul regulator DC-DC cadangan sedang disiapkan untuk penggantian.",
-          damageDescription: "Tegangan suplai baterai turun drastis saat beban penuh.",
-          actionTaken: "Pengujian bench test unit regulator pengganti dan monitoring tegangan.",
-          rootCause: "Degradasi termal kapasitor filtering pada modul regulator DC-DC",
-          changedAt: new Date(Date.now() - 3600000 * 6),
-        },
-      ],
+      daysAgo: 24,
+      durationDays: 2.8, // ~67 jam
+      damage: "Tegangan suplai baterai turun drastis ke 20.8V saat IPC dan LiDAR aktif bersamaan.",
+      actionOpen: "Bench test resistansi internal cell baterai cadangan.",
+      actionEscalated: "Eskalasi: evaluasi modul regulator DC-DC dan filter kapasitor.",
+      actionSolved: "Penggantian kapasitor filter DC-DC dan kalibrasi sensor shunt baterai.",
+      rootCause: "Degradasi termal kapasitor filtering pada modul regulator DC-DC",
+      leader: sitiUser,
+      leaderTele: sitiTele,
+      escalatedHours: 5,
     },
-    // 3. OPEN (v0) - Dilaporkan via Telegram oleh Bruno Aftersales 1
     {
-      id: "ERR-20261009-0003",
-      unitCode: "WLS-003",
-      failureCode: "CAM-01",
-      severity: "rendah",
-      history: [
-        {
-          version: 0,
-          status: "open",
-          severity: "rendah",
-          telegramUser: brunoTele,
-          action: "Tiket dilaporkan via Telegram Bot",
-          notes: "Hasil capture kamera kanan overexposure pada siang hari terik.",
-          damageDescription: "Kamera kanan overexposure saat terkena pantulan sinar matahari langsung.",
-          actionTaken: "Pembersihan permukaan kaca pelindung kamera.",
-          rootCause: null,
-          changedAt: new Date(Date.now() - 3600000 * 18),
-        },
-      ],
-    },
-    // 4. OPEN (v1) - v0: Telegram (Bayu Aftersales 2) -> v1: Web Dashboard (Bayu Aftersales 2 update tindakan)
-    {
-      id: "ERR-20261009-0004",
       unitCode: "WLS-004",
       failureCode: "CMP-01",
       severity: "sedang",
-      history: [
-        {
-          version: 0,
-          status: "open",
-          severity: "sedang",
-          telegramUser: bayuTele,
-          action: "Tiket dilaporkan via Telegram Bot",
-          notes: "Suhu prosesor IPC mencapai 88°C dan frekuensi clock tertahan.",
-          damageDescription: "Suhu prosesor IPC melebihi 85°C dan menyebabkan delay pemrosesan.",
-          actionTaken: null,
-          rootCause: null,
-          changedAt: new Date(Date.now() - 3600000 * 16),
-        },
-        {
-          version: 1,
-          status: "open",
-          severity: "sedang",
-          user: bayuUser,
-          action: "Instruksi pembersihan dan penggantian pasta thermal diinput via Web Dashboard.",
-          notes: "Pembersihan sirip heatsink dan persiapan re-paste thermal paste Arctic MX-4 oleh Bayu Aftersales 2.",
-          damageDescription: "Suhu prosesor IPC panas saat siang hari.",
-          actionTaken: "Pembersihan debu filter dan penggantian thermal paste pada IPC.",
-          rootCause: "Sirkulasi udara terhambat akumulasi debu tambang",
-          changedAt: new Date(Date.now() - 3600000 * 8),
-        },
-      ],
+      daysAgo: 22,
+      durationDays: 1.5, // 36 jam
+      damage: "Suhu prosesor IPC melebihi 85°C dan terjadi throttling frekuensi clock.",
+      actionOpen: "Pembersihan filter debu sirip heatsink IPC.",
+      actionEscalated: "Eskalasi: proses daemon kalkulasi voxel memakan CPU 100%.",
+      actionSolved: "Optimasi multi-threading thread voxelizer dan re-paste thermal paste Arctic MX-4.",
+      rootCause: "Thread kalkulasi voxel tidak memiliki sleep/yield interval saat idle",
+      leader: suryaUser,
+      leaderTele: suryaTele,
+      escalatedHours: 4,
     },
-    // 5. OPEN (v1) - v0: Web Dashboard (Bruno Aftersales 1 buat tiket) -> v1: Telegram (Bayu Aftersales 2 update observasi)
     {
-      id: "ERR-20261009-0005",
       unitCode: "WLS-005",
       failureCode: "NET-01",
       severity: "rendah",
-      history: [
-        {
-          version: 0,
-          status: "open",
-          severity: "rendah",
-          user: brunoUser,
-          action: "Tiket dibuka via Web Dashboard oleh Bruno Aftersales 1",
-          notes: "Indikasi penurunan throughput transfer data berkala pada unit WLS-005.",
-          damageDescription: "Throughput transmisi data telemetri lambat pada saat shift malam.",
-          actionTaken: "Pengecekan sinyal operator seluler di site.",
-          rootCause: null,
-          changedAt: new Date(Date.now() - 3600000 * 14),
-        },
-        {
-          version: 1,
-          status: "open",
-          severity: "rendah",
-          telegramUser: bayuTele,
-          action: "Update catatan observasi lapangan via Telegram Bot",
-          notes: "Antena eksternal 4G diperiksa aman, latency ping rata-rata 110ms.",
-          damageDescription: "Throughput transmisi data telemetri lambat pada saat shift malam.",
-          actionTaken: "Pengujian swap SIM card modem sekunder.",
-          rootCause: "Kepadatan bandwidth base station BTS terdekat",
-          changedAt: new Date(Date.now() - 3600000 * 5),
-        },
-      ],
+      daysAgo: 20,
+      durationDays: 2.1, // ~50 jam
+      damage: "Throughput transmisi data telemetri 4G lambat pada shift malam (packet loss 18%).",
+      actionOpen: "Pemeriksaan konektor antena eksternal dan sinyal provider.",
+      actionEscalated: "Eskalasi: timeout socket uploader MQTT terlalu rendah (5 detik).",
+      actionSolved: "Konfigurasi retry backoff dan penambahan buffer socket menjadi 64KB.",
+      rootCause: "Socket timeout terlalu agresif saat base station BTS site padat",
+      leader: sitiUser,
+      leaderTele: sitiTele,
+      escalatedHours: 4,
     },
-    // 6. ESCALATED (v2) - v0: Tele (Bruno) -> v1: Web (Bruno eskalasi) -> v2: Web (Siti Software 1 Leader update)
-    // Assignees: Siti Software 1 (Web & Tele) sebagai Leader, Surya Software 2 (Web & Tele) sebagai Anggota
     {
-      id: "ERR-20261009-0006",
       unitCode: "WLS-001",
-      failureCode: "NET-01",
-      severity: "tinggi",
-      assignees: [
-        { user: sitiUser, telegramUser: sitiTele, isLeader: true },
-        { user: suryaUser, telegramUser: suryaTele, isLeader: false },
-      ],
-      history: [
-        {
-          version: 0,
-          status: "open",
-          severity: "tinggi",
-          telegramUser: brunoTele,
-          action: "Tiket dilaporkan via Telegram Bot",
-          notes: "Koneksi gateway telemetri 4G sering putus saat upload point cloud besar.",
-          damageDescription: "Koneksi gateway telemetri 4G sering putus dan packet loss mencapai 22%.",
-          actionTaken: "Pengecekan kabel antena eksternal normal.",
-          rootCause: null,
-          changedAt: new Date(Date.now() - 3600000 * 28),
-        },
-        {
-          version: 1,
-          status: "escalated",
-          severity: "tinggi",
-          user: brunoUser,
-          action: "Dieskalasi ke tim Software via Web Dashboard karena indikasi queue socket crash.",
-          notes: "Dieskalasi ke tim Software via Web Dashboard karena indikasi queue socket crash.",
-          damageDescription: "Koneksi gateway telemetri sering putus.",
-          actionTaken: "Eskalasi ke tim software.",
-          rootCause: null,
-          changedAt: new Date(Date.now() - 3600000 * 22),
-        },
-        {
-          version: 2,
-          status: "escalated",
-          severity: "tinggi",
-          user: sitiUser,
-          action: "Tiket diklaim & ditangani oleh Siti Software 1 di Web Dashboard. Memulai analisis crash dump.",
-          notes: "Investigasi oleh tim Software: Ditemukan buffer overflow pada modul telemetri socket saat transfer payload di atas 50MB.",
-          damageDescription: "Koneksi gateway telemetri sering putus.",
-          actionTaken: "Ekstraksi log syslog, socket profiling, dan pembuatan hotfix queue buffer.",
-          rootCause: "Memory leak pada thread uploader telemetri",
-          changedAt: new Date(Date.now() - 3600000 * 5),
-        },
-      ],
-    },
-    // 7. ESCALATED (v2) - v0: Tele (Bayu) -> v1: Tele (Bruno eskalasi) -> v2: Web (Surya Software 2 update)
-    // Assignees: Surya Software 2 (Web & Tele) sebagai Leader
-    {
-      id: "ERR-20261009-0007",
-      unitCode: "WLS-002",
-      failureCode: "LDR-01",
-      severity: "tinggi",
-      assignees: [
-        { user: suryaUser, telegramUser: suryaTele, isLeader: true },
-      ],
-      history: [
-        {
-          version: 0,
-          status: "open",
-          severity: "tinggi",
-          telegramUser: bayuTele,
-          action: "Tiket dilaporkan via Telegram Bot",
-          notes: "Stream point cloud berhenti tiba-tiba setelah 2 jam operasi.",
-          damageDescription: "Stream point cloud berhenti tiba-tiba setelah 2 jam operasi.",
-          actionTaken: "Reboot unit, kendala berulang.",
-          rootCause: null,
-          changedAt: new Date(Date.now() - 3600000 * 15),
-        },
-        {
-          version: 1,
-          status: "escalated",
-          severity: "tinggi",
-          telegramUser: brunoTele,
-          action: "Eskalasi dikirim via Telegram Bot: driver LiDAR segfault di Linux kernel log.",
-          notes: "Eskalasi dikirim via Telegram Bot: driver LiDAR segfault di Linux kernel log.",
-          damageDescription: "Driver LiDAR segfault.",
-          actionTaken: "Eskalasi ke software via bot Telegram.",
-          rootCause: null,
-          changedAt: new Date(Date.now() - 3600000 * 10),
-        },
-        {
-          version: 2,
-          status: "escalated",
-          severity: "tinggi",
-          user: suryaUser,
-          action: "Ditangani oleh Surya Software 2 via Web Dashboard: Menyiapkan patch modul kernel v2.1.",
-          notes: "Update tim Software: Buffer driver tidak kompatibel dengan firmware LiDAR 3.8. Patch sedang dikompilasi.",
-          damageDescription: "Driver LiDAR segfault.",
-          actionTaken: "Penyusunan dan pengujian patch kernel driver di lab simulasi.",
-          rootCause: "Inkompatibilitas buffer size driver dengan firmware versi 3.8",
-          changedAt: new Date(Date.now() - 3600000 * 3),
-        },
-      ],
-    },
-    // 8. ESCALATED (v2) - v0: Tele (Bruno) -> v1: Web (Bayu Aftersales eskalasi) -> v2: Tele (Siti Software 1 update via Bot)
-    // Assignees: Siti Software 1 (Web & Tele)
-    {
-      id: "ERR-20261009-0008",
-      unitCode: "WLS-003",
-      failureCode: "CAM-01",
-      severity: "sedang",
-      assignees: [
-        { user: sitiUser, telegramUser: sitiTele, isLeader: true },
-      ],
-      history: [
-        {
-          version: 0,
-          status: "open",
-          severity: "sedang",
-          telegramUser: brunoTele,
-          action: "Tiket dilaporkan via Telegram Bot",
-          notes: "Frame rate kamera turun drastis saat kondisi mendung berawan.",
-          damageDescription: "Frame rate kamera turun drastis saat kondisi mendung berawan.",
-          actionTaken: "Kabel gigabit dan port switch diperiksa dalam kondisi baik.",
-          rootCause: null,
-          changedAt: new Date(Date.now() - 3600000 * 12),
-        },
-        {
-          version: 1,
-          status: "escalated",
-          severity: "sedang",
-          user: bayuUser,
-          action: "Dieskalasi ke tim Software via Web Dashboard untuk tuning ISP exposure.",
-          notes: "Dieskalasi ke tim Software via Web Dashboard untuk tuning ISP exposure.",
-          damageDescription: "Frame rate kamera drop saat cuaca mendung.",
-          actionTaken: "Eskalasi ke tim software.",
-          rootCause: null,
-          changedAt: new Date(Date.now() - 3600000 * 6),
-        },
-        {
-          version: 2,
-          status: "escalated",
-          severity: "sedang",
-          telegramUser: sitiTele,
-          action: "Update penanganan via Telegram Bot oleh Siti Software 1",
-          notes: "Tuning algoritma auto-exposure matrix kamera sedang dijalankan via SSH remote session.",
-          damageDescription: "Frame rate kamera drop saat cuaca mendung.",
-          actionTaken: "Remote profiling OpenCV pipeline dan update konfigurasi ISP parameter.",
-          rootCause: "Algoritma exposure looping tanpa timeout batas atas",
-          changedAt: new Date(Date.now() - 3600000 * 2),
-        },
-      ],
-    },
-    // 9. ESCALATED (v2) - v0: Tele (Bayu) -> v1: Web (Bruno Aftersales eskalasi) -> v2: Web (Surya Software 2 update)
-    // Assignees: Siti Software 1 (Web & Tele), Surya Software 2 (Web & Tele)
-    {
-      id: "ERR-20261009-0009",
-      unitCode: "WLS-004",
-      failureCode: "CMP-01",
-      severity: "tinggi",
-      assignees: [
-        { user: sitiUser, telegramUser: sitiTele, isLeader: true },
-        { user: suryaUser, telegramUser: suryaTele, isLeader: false },
-      ],
-      history: [
-        {
-          version: 0,
-          status: "open",
-          severity: "tinggi",
-          telegramUser: bayuTele,
-          action: "Tiket dilaporkan via Telegram Bot",
-          notes: "Layanan kalkulasi volume muatan crash saat memindai truk bertonase panjang.",
-          damageDescription: "Layanan kalkulasi volume muatan crash saat memindai truk tronton ekstra panjang.",
-          actionTaken: "Restart service manual di site.",
-          rootCause: null,
-          changedAt: new Date(Date.now() - 3600000 * 72),
-        },
-        {
-          version: 1,
-          status: "escalated",
-          severity: "tinggi",
-          user: brunoUser,
-          action: "Dieskalasi ke tim Software via Web Dashboard karena exception index out of bounds.",
-          notes: "Dieskalasi ke tim Software via Web Dashboard karena exception index out of bounds.",
-          damageDescription: "Crash algoritma volume.",
-          actionTaken: "Eskalasi ke tim software.",
-          rootCause: null,
-          changedAt: new Date(Date.now() - 3600000 * 60),
-        },
-        {
-          version: 2,
-          status: "escalated",
-          severity: "tinggi",
-          user: suryaUser,
-          action: "Penanganan oleh Surya Software 2: Analisis alokasi voxel grid array.",
-          notes: "Penyebab teridentifikasi pada batasan buffer point cloud voxel 3D. Binary patch v1.4.2 sedang dirilis.",
-          damageDescription: "Crash algoritma volume saat truk tronton ekstra panjang.",
-          actionTaken: "Debugging array boundary check dan memory buffer resizing.",
-          rootCause: "Array boundary check melebihi alokasi memori buffer 3D",
-          changedAt: new Date(Date.now() - 3600000 * 18),
-        },
-      ],
-    },
-    // 10. ESCALATED (v2) - v0: Tele (Bayu) -> v1: Web (Bayu Aftersales eskalasi) -> v2: Tele (Surya Software 2 update via Bot)
-    // Assignees: Surya Software 2 (Web & Tele)
-    {
-      id: "ERR-20261009-0010",
-      unitCode: "WLS-005",
       failureCode: "PWR-01",
       severity: "tinggi",
-      assignees: [
-        { user: suryaUser, telegramUser: suryaTele, isLeader: true },
-      ],
-      history: [
-        {
-          version: 0,
-          status: "open",
-          severity: "tinggi",
-          telegramUser: bayuTele,
-          action: "Tiket dilaporkan via Telegram Bot",
-          notes: "Daemon sensor baterai memicu false alarm overheat secara berulang.",
-          damageDescription: "Sensor BMS melaporkan suhu 95°C padahal temperatur fisik sel baterai hanya 32°C.",
-          actionTaken: "Pengecekan fisik modul sensor termal normal.",
-          rootCause: null,
-          changedAt: new Date(Date.now() - 3600000 * 40),
-        },
-        {
-          version: 1,
-          status: "escalated",
-          severity: "tinggi",
-          user: bayuUser,
-          action: "Dieskalasi ke tim Software via Web Dashboard: Indikasi bug parsing CAN-bus daemon.",
-          notes: "Dieskalasi ke tim Software via Web Dashboard: Indikasi bug parsing CAN-bus daemon.",
-          damageDescription: "False alarm suhu baterai pada daemon.",
-          actionTaken: "Eskalasi ke tim software.",
-          rootCause: null,
-          changedAt: new Date(Date.now() - 3600000 * 25),
-        },
-        {
-          version: 2,
-          status: "escalated",
-          severity: "tinggi",
-          telegramUser: suryaTele,
-          action: "Update penanganan via Telegram Bot oleh Surya Software 2",
-          notes: "Dikonfirmasi bit masking pada frame CAN ID 0x18F salah offset 2 bit. Patch service bms-daemon sedang diuji.",
-          damageDescription: "False alarm suhu baterai pada daemon.",
-          actionTaken: "Analisis log frame CAN-bus dan perbaikan bitwise offset parser.",
-          rootCause: "Offset parsing bitwise salah pada firmware daemon v1.1",
-          changedAt: new Date(Date.now() - 3600000 * 4),
-        },
-      ],
+      daysAgo: 18,
+      durationDays: 1.8, // ~43 jam
+      damage: "Sensor BMS baterai memicu false alarm overheat (terbaca 95°C padahal fisik 32°C).",
+      actionOpen: "Inspeksi fisik modul sensor termal normal.",
+      actionEscalated: "Eskalasi: indikasi error parsing CAN-bus daemon frame 0x18F.",
+      actionSolved: "Perbaikan bitwise offset masking parser frame CAN ID 0x18F.",
+      rootCause: "Offset parsing bitwise salah 2 bit pada firmware daemon v1.1",
+      leader: suryaUser,
+      leaderTele: suryaTele,
+      escalatedHours: 3,
+    },
+    {
+      unitCode: "WLS-002",
+      failureCode: "LDR-01",
+      severity: "sedang",
+      daysAgo: 16,
+      durationDays: 2.4, // ~58 jam
+      damage: "Stream point cloud berhenti tiba-tiba setelah unit beroperasi 4 jam non-stop.",
+      actionOpen: "Reboot unit, kendala berulang pada durasi yang sama.",
+      actionEscalated: "Eskalasi: memory leak pada buffer frame driver LiDAR Linux.",
+      actionSolved: "Re-alokasi memory arena pointer dan release frame memory sesudah inferensi.",
+      rootCause: "Memory leak pointer pada pipeline integrasi SDK LiDAR",
+      leader: queenUser,
+      leaderTele: queenTele,
+      member: suryaUser,
+      memberTele: suryaTele,
+      escalatedHours: 5,
+    },
+    {
+      unitCode: "WLS-003",
+      failureCode: "CAM-01",
+      severity: "rendah",
+      daysAgo: 14,
+      durationDays: 1.1, // ~26 jam
+      damage: "Frame rate kamera turun drastis ke 8 FPS saat kondisi mendung berawan.",
+      actionOpen: "Kabel gigabit dan port switch ethernet diperiksa normal.",
+      actionEscalated: "Eskalasi: tuning auto white-balance dan ISP capture exposure.",
+      actionSolved: "Update konfigurasi profile ISP parameter low-light tanpa frame dropping.",
+      rootCause: "ISP exposure calculation thread memblokir frame capture queue",
+      leader: suryaUser,
+      leaderTele: suryaTele,
+      escalatedHours: 2,
+    },
+    {
+      unitCode: "WLS-004",
+      failureCode: "NET-01",
+      severity: "tinggi",
+      daysAgo: 13,
+      durationDays: 2.9, // ~70 jam
+      damage: "Koneksi gateway gateway telemetri sering putus saat upload dataset berukuran > 50MB.",
+      actionOpen: "Pemeriksaan antena dan penggantian kabel pigtail RF.",
+      actionEscalated: "Eskalasi: exception memory leak uploader socket.",
+      actionSolved: "Penerapan chunking upload 4MB dan chunk resume capability.",
+      rootCause: "Heap memory IPC exhausted saat transfer payload JSON point cloud utuh",
+      leader: sitiUser,
+      leaderTele: sitiTele,
+      escalatedHours: 6,
+    },
+    {
+      unitCode: "WLS-005",
+      failureCode: "CMP-01",
+      severity: "sedang",
+      daysAgo: 11,
+      durationDays: 1.6, // ~38 jam
+      damage: "Proses sinkronisasi database lokal SQLite di unit mengalami database locked.",
+      actionOpen: "Restart service lokal database SQLite.",
+      actionEscalated: "Eskalasi: multi-thread contention saat insert paralel sensor log.",
+      actionSolved: "Migrasi write mode SQLite ke WAL (Write-Ahead Logging) dengan busy_timeout 5000ms.",
+      rootCause: "Default journal mode SQLite mengalami locking contention pada multithreaded daemon",
+      leader: suryaUser,
+      leaderTele: suryaTele,
+      escalatedHours: 4,
+    },
+    {
+      unitCode: "WLS-001",
+      failureCode: "CAM-01",
+      severity: "rendah",
+      daysAgo: 9,
+      durationDays: 2.3, // ~55 jam
+      damage: "Artefak garis horizontal muncul pada hasil rekaman kamera kiri saat vibrasi tinggi.",
+      actionOpen: "Pengencangan baut mounting bracket kamera.",
+      actionEscalated: "Eskalasi: desinkronisasi rolling shutter sensor kamera dengan frame clock.",
+      actionSolved: "Pengaktifan global shutter mode emulasi dan sync clock genlock internal.",
+      rootCause: "Desinkronisasi pixel read-out clock saat terkena vibrasi guncangan jalan tambang",
+      leader: queenUser,
+      leaderTele: queenTele,
+      escalatedHours: 5,
+    },
+    {
+      unitCode: "WLS-002",
+      failureCode: "PWR-01",
+      severity: "sedang",
+      daysAgo: 8,
+      durationDays: 1.4, // ~34 jam
+      damage: "Sistem proteksi undervoltage mematikan IPC secara tiba-tiba saat start motor scanner.",
+      actionOpen: "Pengecekan relay switch daya utama.",
+      actionEscalated: "Eskalasi: inrush current motor scanner memicu voltage drop sesaat.",
+      actionSolved: "Penambahan modul soft-starter kapasitor bank dan penyesuaian delay undervoltage.",
+      rootCause: "Inrush current motor stepper melebihi kapasitas suplai sesaat regulator",
+      leader: suryaUser,
+      leaderTele: suryaTele,
+      escalatedHours: 3,
+    },
+    {
+      unitCode: "WLS-003",
+      failureCode: "LDR-01",
+      severity: "tinggi",
+      daysAgo: 7,
+      durationDays: 2.0, // 48 jam
+      damage: "Algoritma estimasi volume muatan dump truck menghasilkan deviasi volume > 15%.",
+      actionOpen: "Verifikasi dimensi fisik bak dump truck acuan.",
+      actionEscalated: "Eskalasi: kalibrasi matriks transformasi ekstrinsik sensor LiDAR ke ground plane.",
+      actionSolved: "Kalibrasi ulang rotasi pitch & roll LiDAR dan update matriks rotasi ke database unit.",
+      rootCause: "Pergeseran mekanis 1.8 derajat pada mount LiDAR akibat beban dinamis",
+      leader: sitiUser,
+      leaderTele: sitiTele,
+      member: suryaUser,
+      memberTele: suryaTele,
+      escalatedHours: 4,
+    },
+    {
+      unitCode: "WLS-004",
+      failureCode: "CMP-01",
+      severity: "sedang",
+      daysAgo: 6,
+      durationDays: 1.7, // ~41 jam
+      damage: "Partisi storage SSD IPC tersisa kurang dari 5% karena log rotasi tidak terkompresi.",
+      actionOpen: "Pembersihan manual file dump log sementara.",
+      actionEscalated: "Eskalasi: konfigurasi logrotate tidak berjalan otomatis pada cron system.",
+      actionSolved: "Perbaikan script cron logrotate dengan retensi 7 hari dan kompresi gzip.",
+      rootCause: "File permission script logrotate tidak memiliki execute flag",
+      leader: suryaUser,
+      leaderTele: suryaTele,
+      escalatedHours: 4,
+    },
+    {
+      unitCode: "WLS-005",
+      failureCode: "NET-01",
+      severity: "tinggi",
+      daysAgo: 5,
+      durationDays: 2.2, // ~53 jam
+      damage: "VPN tunnel WireGuard antara IPC dan server pusat sering terputus (handshake failure).",
+      actionOpen: "Restart modem 4G dan service WireGuard.",
+      actionEscalated: "Eskalasi: keepalive interval WireGuard terlalu lama sehingga NAT mapping expired.",
+      actionSolved: "Pengaturan PersistentKeepalive = 25 pada konfigurasi interface WireGuard.",
+      rootCause: "Stateful firewall ISP tambang mendrop inactive UDP session setelah 30 detik",
+      leader: sitiUser,
+      leaderTele: sitiTele,
+      escalatedHours: 5,
     },
   ];
+
+  // 5 Tiket SOLVED LANGSUNG (Open -> Solved, tanpa eskalasi ke Software, ditangani tuntas oleh Aftersales)
+  const rawSolvedDirect = [
+    {
+      unitCode: "WLS-001",
+      failureCode: "PWR-01",
+      severity: "sedang",
+      daysAgo: 21,
+      durationDays: 1.3, // ~31 jam
+      damage: "Kabel terminal daya aki unit WLS-001 kendor menyebabkan suplai tegangan sesekali drop.",
+      actionOpen: "Inspeksi fisik jalur perkabelan power supply dan konektor baterai.",
+      actionSolved: "Penggantian klem terminal aki, pengencangan baut torx, dan uji coba running 4 jam normal.",
+      rootCause: "Getaran operasional kendaraan tambang melonggarkan klem konektor terminal daya",
+    },
+    {
+      unitCode: "WLS-002",
+      failureCode: "CAM-01",
+      severity: "rendah",
+      daysAgo: 19,
+      durationDays: 0.9, // ~22 jam
+      damage: "Kaca pelindung luar housing kamera tertutup percikan lumpur tebal jalur hauling.",
+      actionOpen: "Pemeriksaan fungsi wiper dan semprotan washer otomatis kamera.",
+      actionSolved: "Pembersihan menyeluruh lensa optik, isi ulang tangki wiper fluid, dan uji semprot normal.",
+      rootCause: "Cairan reservoir wiper habis saat hujan lebat di area disposal tambang",
+    },
+    {
+      unitCode: "WLS-003",
+      failureCode: "NET-01",
+      severity: "rendah",
+      daysAgo: 17,
+      durationDays: 1.6, // ~38 jam
+      damage: "Konektor antena omni 4G kendor menyebabkan sinyal telemetri berfluktuasi.",
+      actionOpen: "Pengukuran VSWR kabel antena menggunakan antenna analyzer.",
+      actionSolved: "Pengencangan konektor N-type antena dan pelapisan ulang vulcanized rubber tape waterproof.",
+      rootCause: "Konektor N-type antena mengalami vibrasi berlebih pada tiang mast scanner",
+    },
+    {
+      unitCode: "WLS-004",
+      failureCode: "LDR-01",
+      severity: "sedang",
+      daysAgo: 15,
+      durationDays: 2.1, // ~50 jam
+      damage: "Bracket pelindung sensor LiDAR sedikit miring akibat tersenggol ranting pohon di jalur hauling.",
+      actionOpen: "Inspeksi visual kelurusan posisi mounting bracket scanner.",
+      actionSolved: "Realignment posisi bracket dengan waterpass digital dan pengencangan kembali baut pengunci.",
+      rootCause: "Benturan mekanis ringan ranting pohon pada jalur hauling tambang",
+    },
+    {
+      unitCode: "WLS-005",
+      failureCode: "CMP-01",
+      severity: "sedang",
+      daysAgo: 12,
+      durationDays: 1.4, // ~34 jam
+      damage: "Filter sirkulasi udara enclosure IPC tersumbat debu batubara halus meningkatkan suhu box.",
+      actionOpen: "Pengecekan suhu internal enclosure dan kondisi fisik saringan udara.",
+      actionSolved: "Penggantian spon filter udara baru dan pembersihan kisi-kisi ventilasi kipas exhaust.",
+      rootCause: "Akumulasi debu batubara halus melebihi kapasitas filtrasi sebelum jadwal maintenance rutin",
+    },
+  ];
+
+  // 10 Tiket ESCALATED: dalam penanganan tim Software
+  const rawEscalated = [
+    {
+      unitCode: "WLS-001",
+      failureCode: "LDR-01",
+      severity: "tinggi",
+      daysAgo: 8,
+      escalatedHours: 4,
+      damage: "Driver LiDAR mengalami segfault saat menerima sinyal trigger dari proximity sensor.",
+      actionOpen: "Pengecekan kabel proximity switch.",
+      actionEscalated: "Dieskalasi ke tim software: Analisis kernel panic log dan crash dump driver.",
+      leader: suryaUser,
+      leaderTele: suryaTele,
+      member: queenUser,
+      memberTele: queenTele,
+    },
+    {
+      unitCode: "WLS-002",
+      failureCode: "CAM-01",
+      severity: "sedang",
+      daysAgo: 7,
+      escalatedHours: 3,
+      damage: "Kamera kanan kehilangan sinkronisasi timestamp dengan sensor LiDAR (drift > 100ms).",
+      actionOpen: "Pengecekan kabel sync PTP IEEE 1588.",
+      actionEscalated: "Dieskalasi: Konfigurasi PTP daemon pada IPC clock synchronization.",
+      leader: sitiUser,
+      leaderTele: sitiTele,
+    },
+    {
+      unitCode: "WLS-003",
+      failureCode: "PWR-01",
+      severity: "tinggi",
+      daysAgo: 6,
+      escalatedHours: 5,
+      damage: "Inverter daya 24V-to-220V proteksi overtemperature berulang saat siang terik.",
+      actionOpen: "Pemeriksaan kipas pendingin modul daya.",
+      actionEscalated: "Dieskalasi: Penyesuaian batas suhu thermal shutdown pada firmware controller.",
+      leader: suryaUser,
+      leaderTele: suryaTele,
+    },
+    {
+      unitCode: "WLS-004",
+      failureCode: "CMP-01",
+      severity: "sedang",
+      daysAgo: 5,
+      escalatedHours: 4,
+      damage: "Service scanner-core crash saat memproses point cloud truk dengan muatan abnormal tinggi.",
+      actionOpen: "Restart service scanner-core via terminal site.",
+      actionEscalated: "Dieskalasi: Debugging penanganan exception voxel boundary array pada truk ekstra tinggi.",
+      leader: queenUser,
+      leaderTele: queenTele,
+    },
+    {
+      unitCode: "WLS-005",
+      failureCode: "NET-01",
+      severity: "tinggi",
+      daysAgo: 4,
+      escalatedHours: 3,
+      damage: "Modem 4G dual-SIM gagal melakukan failover otomatis ke SIM cadangan saat sinyal drop.",
+      actionOpen: "Pengecekan fisik kartu SIM sekunder terpasang baik.",
+      actionEscalated: "Dieskalasi: Script pemantauan koneksi network-manager butuh revisi logic ping target.",
+      leader: suryaUser,
+      leaderTele: suryaTele,
+    },
+    // 6. UNCLAIMED (Menunggu claim tim software)
+    {
+      unitCode: "WLS-001",
+      failureCode: "PWR-01",
+      severity: "sedang",
+      daysAgo: 3.5,
+      escalatedHours: 4,
+      damage: "Indikator state-of-charge (SoC) baterai melompat dari 80% ke 15% secara instan.",
+      actionOpen: "Pengukuran voltase fisik baterai 25.2V (seharusnya 80%).",
+      actionEscalated: "Dieskalasi ke tim Software: Algoritma coulomb counter BMS butuh kalibrasi ulang kurva pelepasan.",
+      leader: null,
+      leaderTele: null,
+    },
+    // 7. UNCLAIMED (Menunggu claim tim software)
+    {
+      unitCode: "WLS-002",
+      failureCode: "LDR-01",
+      severity: "tinggi",
+      daysAgo: 3,
+      escalatedHours: 5,
+      damage: "Laser transmitter LiDAR channel 16 mengalami penurunan intensitas pantulan > 40%.",
+      actionOpen: "Pembersihan optik scanner dan uji coba outdoor.",
+      actionEscalated: "Dieskalasi ke tim Software: Evaluasi degradasi diode laser dengan tim R&D software firmware.",
+      leader: null,
+      leaderTele: null,
+    },
+    // 8. UNCLAIMED (Menunggu claim tim software)
+    {
+      unitCode: "WLS-003",
+      failureCode: "CAM-01",
+      severity: "sedang",
+      daysAgo: 2,
+      escalatedHours: 3,
+      damage: "Distorsi lensa fisheye kamera bawah melebihi threshold kalibrasi visual odometry.",
+      actionOpen: "Pengecekan kelurusan bracket fisik dudukan kamera.",
+      actionEscalated: "Dieskalasi ke tim Software: Rekalibrasi parameter matriks intrinsik kamera menggunakan checkerboard.",
+      leader: null,
+      leaderTele: null,
+    },
+    // 9. UNCLAIMED (Menunggu claim tim software)
+    {
+      unitCode: "WLS-004",
+      failureCode: "NET-01",
+      severity: "tinggi",
+      daysAgo: 1.5,
+      escalatedHours: 4,
+      damage: "Koneksi WebRTC streaming video dari unit scanner ke control room lag parah (> 4 detik).",
+      actionOpen: "Pemeriksaan latency jaringan site ke BTS lokal.",
+      actionEscalated: "Dieskalasi ke tim Software: Tuning bitrate encoder H.264 dan buffer jitter pada pipeline gstreamer.",
+      leader: null,
+      leaderTele: null,
+    },
+    // 10. UNCLAIMED (Menunggu claim tim software)
+    {
+      unitCode: "WLS-005",
+      failureCode: "CMP-01",
+      severity: "sedang",
+      daysAgo: 1,
+      escalatedHours: 2,
+      damage: "Time synchronization NTP IPC meleset 1.2 detik terhadap server GPS PPS waktu tambang.",
+      actionOpen: "Pengecekan antena GPS eksternal pada atap enclosure.",
+      actionEscalated: "Dieskalasi ke tim Software: Penyesuaian konfigurasi chrony daemon untuk prefer GPS PPS source.",
+      leader: null,
+      leaderTele: null,
+    },
+  ];
+
+  // 10 Tiket OPEN: baru dilaporkan, dalam penanganan awal tim Aftersales
+  const rawOpen = [
+    {
+      unitCode: "WLS-001",
+      failureCode: "LDR-01",
+      severity: "sedang",
+      daysAgo: 4,
+      damage: "Densitas point cloud berkurang saat kondisi kabut tebal di site tambang pagi hari.",
+      actionOpen: "Pemeriksaan filter pemanas lensa (defogger heater) aktif atau tidak.",
+    },
+    {
+      unitCode: "WLS-002",
+      failureCode: "PWR-01",
+      severity: "tinggi",
+      daysAgo: 3.5,
+      damage: "Alarm suara buzzer modul power aktif menandakan temperatur enclosure > 50°C.",
+      actionOpen: "Pengecekan putaran kipas ventilasi intake dan exhaust enclosure unit.",
+    },
+    {
+      unitCode: "WLS-003",
+      failureCode: "CAM-01",
+      severity: "rendah",
+      daysAgo: 3,
+      damage: "Bercak debu menempel pada sudut lensa kamera kiri mengurangi akurasi deteksi nomor lambung.",
+      actionOpen: "Pembersihan manual menggunakan cairan optik dan kain mikrofiber.",
+    },
+    {
+      unitCode: "WLS-004",
+      failureCode: "CMP-01",
+      severity: "sedang",
+      daysAgo: 2.5,
+      damage: "Lampu indikator HDD activity pada IPC menyala konstan merah dan respon I/O melambat.",
+      actionOpen: "Pengecekan SMART status SSD via terminal Linux.",
+    },
+    {
+      unitCode: "WLS-005",
+      failureCode: "NET-01",
+      severity: "rendah",
+      daysAgo: 2,
+      damage: "Antena 4G menunjukkan indikator sinyal 2 bar dari standar minimum 3 bar.",
+      actionOpen: "Pemeriksaan posisi pengarahan antena gain tinggi ke BTS terdekat.",
+    },
+    {
+      unitCode: "WLS-001",
+      failureCode: "PWR-01",
+      severity: "tinggi",
+      daysAgo: 1.5,
+      damage: "Solar charge controller tidak mengisi daya saat kondisi cuaca berawan sebagian.",
+      actionOpen: "Pengukuran voltase open-circuit solar panel string 1 dan string 2.",
+    },
+    {
+      unitCode: "WLS-002",
+      failureCode: "LDR-01",
+      severity: "sedang",
+      daysAgo: 1,
+      damage: "Kabel pelindung conduit M12 sensor LiDAR tergores ranting pohon di jalur hauling.",
+      actionOpen: "Inspeksi fisik insulasi kabel dan penggantian corrugated conduit pembungkus.",
+    },
+    {
+      unitCode: "WLS-003",
+      failureCode: "NET-01",
+      severity: "rendah",
+      daysAgo: 0.8,
+      damage: "Ping latency ke server telemetry fluktuatif antara 80ms hingga 350ms.",
+      actionOpen: "Monitoring paket ICMP ping berkelanjutan dari router site.",
+    },
+    {
+      unitCode: "WLS-004",
+      failureCode: "CAM-01",
+      severity: "sedang",
+      daysAgo: 0.5,
+      damage: "Auto-focus kamera pengawas plat nomor truk bergeser sedikit out-of-focus.",
+      actionOpen: "Penguncian ring fokus manual pada lensa varifocal 6-22mm.",
+    },
+    {
+      unitCode: "WLS-005",
+      failureCode: "CMP-01",
+      severity: "sedang",
+      daysAgo: 0.2,
+      damage: "Sensor accelerometer IPC mendeteksi getaran berlebih di atas 2.5G saat dump truck melaju kencang.",
+      actionOpen: "Pemeriksaan karet damper anti-vibrasi pada mounting plate scanner.",
+    },
+  ];
+
+  // Bangun struktur ticketsDefinition (Total 35)
+  const ticketsDefinition = [];
+  let ticketSequence = 1;
+
+  // 1. Generate 15 Solved Tickets
+  for (const s of rawSolved) {
+    const openTime = new Date(nowMs - s.daysAgo * DAY);
+    const escalatedTime = new Date(openTime.getTime() + s.escalatedHours * HOUR);
+    const solvedTime = new Date(openTime.getTime() + s.durationDays * DAY);
+    const id = makeTicketId(openTime, ticketSequence++);
+    const aftersalesUser = ticketSequence % 2 === 0 ? brunoUser : bayuUser;
+    const aftersalesTele = ticketSequence % 2 === 0 ? brunoTele : bayuTele;
+
+    ticketsDefinition.push({
+      id,
+      unitCode: s.unitCode,
+      failureCode: s.failureCode,
+      aftersalesUserId: aftersalesUser.id,
+      assignees: [
+        { user: s.leader, telegramUser: s.leaderTele, isLeader: true },
+        ...(s.member ? [{ user: s.member, telegramUser: s.memberTele, isLeader: false }] : []),
+      ],
+      history: [
+        {
+          version: 0,
+          status: "open",
+          severity: s.severity,
+          telegramUser: aftersalesTele,
+          notes: s.damage,
+          damageDescription: s.damage,
+          actionTaken: s.actionOpen,
+          rootCause: null,
+          changedAt: openTime,
+        },
+        {
+          version: 1,
+          status: "escalated",
+          severity: s.severity,
+          user: aftersalesUser,
+          notes: s.actionEscalated,
+          damageDescription: s.damage,
+          actionTaken: s.actionEscalated,
+          rootCause: null,
+          changedAt: escalatedTime,
+        },
+        {
+          version: 2,
+          status: "solved",
+          severity: s.severity,
+          user: s.leader,
+          notes: s.actionSolved,
+          damageDescription: s.damage,
+          actionTaken: s.actionSolved,
+          rootCause: s.rootCause,
+          changedAt: solvedTime,
+        },
+      ],
+    });
+  }
+
+  // 1b. Generate 5 Solved Direct Tickets (Open -> Solved, Tanpa Escalated)
+  for (const sd of rawSolvedDirect) {
+    const openTime = new Date(nowMs - sd.daysAgo * DAY);
+    const solvedTime = new Date(openTime.getTime() + sd.durationDays * DAY);
+    const id = makeTicketId(openTime, ticketSequence++);
+    const aftersalesUser = ticketSequence % 2 === 0 ? brunoUser : bayuUser;
+    const aftersalesTele = ticketSequence % 2 === 0 ? brunoTele : bayuTele;
+
+    ticketsDefinition.push({
+      id,
+      unitCode: sd.unitCode,
+      failureCode: sd.failureCode,
+      aftersalesUserId: aftersalesUser.id,
+      assignees: [], // Tidak ada tim software karena tidak pernah dieskalasi
+      history: [
+        {
+          version: 0,
+          status: "open",
+          severity: sd.severity,
+          telegramUser: aftersalesTele,
+          notes: sd.damage,
+          damageDescription: sd.damage,
+          actionTaken: sd.actionOpen,
+          rootCause: null,
+          changedAt: openTime,
+        },
+        {
+          version: 1,
+          status: "solved",
+          severity: sd.severity,
+          user: aftersalesUser, // Diselesaikan langsung oleh Aftersales
+          notes: sd.actionSolved,
+          damageDescription: sd.damage,
+          actionTaken: sd.actionSolved,
+          rootCause: sd.rootCause,
+          changedAt: solvedTime,
+        },
+      ],
+    });
+  }
+
+  // 2. Generate 10 Escalated Tickets (5 Claimed, 5 Unclaimed)
+  for (const e of rawEscalated) {
+    const openTime = new Date(nowMs - e.daysAgo * DAY);
+    const escalatedTime = new Date(openTime.getTime() + e.escalatedHours * HOUR);
+    const id = makeTicketId(openTime, ticketSequence++);
+    const aftersalesUser = ticketSequence % 2 === 0 ? brunoUser : bayuUser;
+    const aftersalesTele = ticketSequence % 2 === 0 ? brunoTele : bayuTele;
+
+    const isClaimed = !!e.leader;
+    const assignees = isClaimed
+      ? [
+          { user: e.leader, telegramUser: e.leaderTele, isLeader: true },
+          ...(e.member ? [{ user: e.member, telegramUser: e.memberTele, isLeader: false }] : []),
+        ]
+      : [];
+
+    const history = [
+      {
+        version: 0,
+        status: "open",
+        severity: e.severity,
+        telegramUser: aftersalesTele,
+        notes: e.damage,
+        damageDescription: e.damage,
+        actionTaken: e.actionOpen,
+        rootCause: null,
+        changedAt: openTime,
+      },
+      {
+        version: 1,
+        status: "escalated",
+        severity: e.severity,
+        user: aftersalesUser,
+        notes: e.actionEscalated,
+        damageDescription: e.damage,
+        actionTaken: e.actionEscalated,
+        rootCause: null,
+        changedAt: escalatedTime,
+      },
+    ];
+
+    if (isClaimed) {
+      const updateTime = new Date(escalatedTime.getTime() + 1.5 * HOUR);
+      history.push({
+        version: 2,
+        status: "escalated",
+        severity: e.severity,
+        user: e.leader,
+        notes: `Update investigasi tim software (${e.leader.name}): modul sedang di-trace di lab pengujian.`,
+        damageDescription: e.damage,
+        actionTaken: `Investigasi lanjutan oleh ${e.leader.name}.`,
+        rootCause: null,
+        changedAt: updateTime,
+      });
+    }
+
+    ticketsDefinition.push({
+      id,
+      unitCode: e.unitCode,
+      failureCode: e.failureCode,
+      aftersalesUserId: aftersalesUser.id,
+      assignees,
+      history,
+    });
+  }
+
+  // 3. Generate 10 Open Tickets
+  for (const o of rawOpen) {
+    const openTime = new Date(nowMs - o.daysAgo * DAY);
+    const id = makeTicketId(openTime, ticketSequence++);
+    const aftersalesUser = ticketSequence % 2 === 0 ? brunoUser : bayuUser;
+    const aftersalesTele = ticketSequence % 2 === 0 ? brunoTele : bayuTele;
+
+    ticketsDefinition.push({
+      id,
+      unitCode: o.unitCode,
+      failureCode: o.failureCode,
+      aftersalesUserId: aftersalesUser.id,
+      assignees: [],
+      history: [
+        {
+          version: 0,
+          status: "open",
+          severity: o.severity,
+          telegramUser: aftersalesTele,
+          notes: o.damage,
+          damageDescription: o.damage,
+          actionTaken: o.actionOpen,
+          rootCause: null,
+          changedAt: openTime,
+        },
+      ],
+    });
+  }
 
   for (const td of ticketsDefinition) {
     const asset = assetMap.get(td.unitCode);
@@ -853,6 +1203,13 @@ async function main() {
     const latestHistory = td.history[td.history.length - 1];
     const initialHistory = td.history[0];
 
+    // Hitung lifecycle timestamps
+    const openAt = initialHistory.changedAt;
+    const firstEscalated = td.history.find((h) => h.status === "escalated");
+    const escalatedAt = firstEscalated ? firstEscalated.changedAt : null;
+    const solvedHistory = td.history.find((h) => h.status === "solved");
+    const solvedAt = solvedHistory ? solvedHistory.changedAt : null;
+
     // Create / Upsert ticket
     const ticketRecord = await prisma.tickets.upsert({
       where: { id: td.id },
@@ -861,7 +1218,9 @@ async function main() {
         failure_code_id: failureCode.id,
         aftersales_user_id: td.aftersalesUserId || brunoUser.id,
         current_version: latestHistory.version,
-        created_at: initialHistory.changedAt,
+        open_at: openAt,
+        escalated_at: escalatedAt,
+        solved_at: solvedAt,
       },
       create: {
         id: td.id,
@@ -869,7 +1228,9 @@ async function main() {
         failure_code_id: failureCode.id,
         aftersales_user_id: td.aftersalesUserId || brunoUser.id,
         current_version: latestHistory.version,
-        created_at: initialHistory.changedAt,
+        open_at: openAt,
+        escalated_at: escalatedAt,
+        solved_at: solvedAt,
       },
     });
 
@@ -896,6 +1257,12 @@ async function main() {
         },
       });
     }
+
+    // Unlink leader_assignee_id terlebih dahulu untuk mencegah FK constraint error & mereset tiket unclaimed
+    await prisma.tickets.update({
+      where: { id: td.id },
+      data: { leader_assignee_id: null },
+    });
 
     // Insert assignees if any
     await prisma.ticket_assignees.deleteMany({
@@ -925,8 +1292,15 @@ async function main() {
       }
     }
 
+    const claimTag =
+      latestHistory.status === "escalated"
+        ? td.assignees && td.assignees.length > 0
+          ? " - CLAIMED"
+          : " - UNCLAIMED"
+        : "";
+
     console.log(
-      `      ✓ Tiket ${ticketRecord.id} [${latestHistory.status.toUpperCase()}] v${latestHistory.version} (${td.unitCode} - ${td.failureCode})`
+      `      ✓ Tiket ${ticketRecord.id} [${latestHistory.status.toUpperCase()}${claimTag}] v${latestHistory.version} (${td.unitCode} - ${td.failureCode})`
     );
   }
 
@@ -938,12 +1312,13 @@ async function main() {
   console.log("==================================================");
   console.log("🔑 KREDENSIAL PENGGUNA UNTUK LOGIN & PENGUJIAN:");
   console.log("--------------------------------------------------");
-  console.log(`1. Admin (Active)                  : ${seededUsers[0].email} / ${seededUsers[0].rawPassword}`);
+  console.log(`1. Admin (Active)                     : ${seededUsers[0].email} / ${seededUsers[0].rawPassword}`);
   console.log(`2. Coordinator Aftersales 1 (Invited) : ${seededUsers[1].email} / ${seededUsers[1].rawPassword}`);
   console.log(`3. Coordinator Aftersales 2 (Invited) : ${seededUsers[2].email} / ${seededUsers[2].rawPassword}`);
   console.log(`4. Coordinator Software 1 (Invited)   : ${seededUsers[3].email} / ${seededUsers[3].rawPassword}`);
   console.log(`5. Coordinator Software 2 (Invited)   : ${seededUsers[4].email} / ${seededUsers[4].rawPassword}`);
-  console.log(`6. Viewer (Invited)                   : ${seededUsers[5].email} / ${seededUsers[5].rawPassword}`);
+  console.log(`6. Coordinator Software 3 (Invited)   : ${seededUsers[5].email} / ${seededUsers[5].rawPassword}`);
+  console.log(`7. Viewer (Invited)                   : ${seededUsers[6].email} / ${seededUsers[6].rawPassword}`);
   console.log("--------------------------------------------------");
   console.log("ℹ️  User berstatus 'invited' otomatis memicu form paksa ganti password saat login.");
   console.log("==================================================\n");

@@ -6,8 +6,9 @@ FROM node:22-alpine
 
 WORKDIR /app
 
-# Layer 1: Copy file env dari root menjadi .env (dibaca Vite saat build-time)
-COPY .env.frontend.example .env
+# Argument dan Environment variable untuk Vite saat build-time (di-pass via docker-compose args)
+ARG VITE_API_BASE_URL
+ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
 
 # Copy package dependencies dan install
 COPY apps/interfaces/package*.json ./

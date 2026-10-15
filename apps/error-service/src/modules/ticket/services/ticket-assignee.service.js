@@ -818,7 +818,14 @@ export const removeAssignee = async (ticketId, assigneeId, actor) => {
 
   // Publish ticket.member_removed event
   const leaderName = currentLeader?.user?.name || currentLeader?.telegram_user?.username || "Leader";
-  const removedMemberTelegramId = targetAssignee.telegram_user?.telegram_id || null;
+  const removedMemberTelegramId =
+    targetAssignee.telegram_user?.telegram_id ||
+    targetAssignee.user?.telegram_user?.telegram_id ||
+    null;
+  const leaderTelegramId =
+    currentLeader?.telegram_user?.telegram_id ||
+    currentLeader?.user?.telegram_user?.telegram_id ||
+    null;
 
   publishWebhook("ticket.member_removed", {
     actor: { userId: actor.id || null, telegramId: actor.telegram_user_id || null, name: actorName },
@@ -833,7 +840,7 @@ export const removeAssignee = async (ticketId, assigneeId, actor) => {
       leader: {
         name: leaderName,
         userId: currentLeader?.user_id || null,
-        telegramId: currentLeader?.telegram_user?.telegram_id || null,
+        telegramId: leaderTelegramId,
       },
     },
   });

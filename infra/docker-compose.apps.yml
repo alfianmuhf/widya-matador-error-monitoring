@@ -1,0 +1,25 @@
+services:
+  backend:
+    build:
+      context: ..
+      dockerfile: infra/backend/Dockerfile
+    container_name: after-sales-backend
+    restart: unless-stopped
+    env_file:
+      - ../../env-file/.env.backend
+    network_mode: host
+
+  frontend:
+    build:
+      context: ..
+      dockerfile: infra/frontend/Dockerfile
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-}
+    container_name: after-sales-frontend
+    restart: unless-stopped
+    env_file:
+      - ../../env-file/.env.frontend
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend

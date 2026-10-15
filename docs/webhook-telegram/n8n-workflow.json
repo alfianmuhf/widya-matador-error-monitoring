@@ -12,22 +12,73 @@
       "type": "n8n-nodes-base.rabbitmqTrigger",
       "typeVersion": 1,
       "position": [-220, 0],
-      "id": "a1000000-0000-4000-8000-000000000001",
       "name": "RabbitMQ Trigger",
       "credentials": {
-        "rabbitmq": { "id": "REPLACE_WITH_RABBITMQ_CREDENTIAL_ID", "name": "RabbitMQ account" }
+        "rabbitmq": {
+          "id": "REPLACE_WITH_RABBITMQ_CREDENTIAL_ID",
+          "name": "RabbitMQ account"
+        }
       }
     },
     {
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "const ADMIN_CHAT_ID = 'REPLACE_WITH_ADMIN_GROUP_CHAT_ID';\nconst store = $getWorkflowStaticData('global');\nstore.seen = store.seen || {};\n\nconst esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\"/g, '&quot;');\nconst out = [];\n\nfor (const item of $input.all()) {\n  const m = item.json;\n  if (!m.deliveryId || store.seen[m.deliveryId]) continue; // skip deliveryId duplikat\n  store.seen[m.deliveryId] = Date.now();\n\n  // batasi ukuran static data (simpan 500 deliveryId terakhir)\n  const keys = Object.keys(store.seen);\n  if (keys.length > 500) {\n    for (const k of keys.slice(0, keys.length - 500)) delete store.seen[k];\n  }\n\n  const d = m.data || {};\n  let chatId = null;\n  let text = null;\n  let fallbackNote = '';\n\n  if (m.event === 'user.invited') {\n    // DM invitee; bila tidak ada telegram -> fallback grup admin\n    chatId = (d.telegram && d.telegram.telegramId) || ADMIN_CHAT_ID;\n    if (!(d.telegram && d.telegram.telegramId)) {\n      fallbackNote = '<br/><i>(target DM tidak ada &mdash; diteruskan ke grup admin)</i>';\n    }\n    text = '<b>Undangan Akses</b><br/>' +\n      'Halo ' + esc(d.user && d.user.name) + ',<br/>' +\n      'Akun <b>' + esc(d.user && d.user.email) + '</b> (role: ' + esc(d.user && d.user.role) + ') telah dibuat.<br/>' +\n      'Silakan login di aplikasi After-Sales.' + fallbackNote;\n  } else if (m.event === 'ticket.claimed') {\n    // Grup client/location tiket; bila tidak ada -> fallback grup admin\n    chatId = (d.group && d.group.chatId) || ADMIN_CHAT_ID;\n    if (!(d.group && d.group.chatId)) {\n      fallbackNote = '<br/><i>(grup tiket tidak ditemukan &mdash; fallback grup admin)</i>';\n    }\n    text = '<b>Tiket diklaim</b><br/>' +\n      'Tiket <code>' + esc(m.ticketId || (d.ticketId)) + '</code> diklaim oleh <b>' + esc(d.claimer && d.claimer.name) + '</b>.' + fallbackNote;\n  } else if (m.event === 'ticket.member_added') {\n    // DM ke anggota baru saja; tanpa telegram -> TANPA pesan grup (skip)\n    chatId = d.addedMember && d.addedMember.telegram && d.addedMember.telegram.telegramId;\n    if (chatId) {\n      text = '<b>Kamu ditambahkan ke tiket</b><br/>' +\n        'Tiket <code>' + esc(d.ticketId) + '</code> &mdash; ditambahkan oleh <b>' + esc(d.addedBy) + '</b>.';\n    }\n  } else if (m.event === 'otp.password_reset') {\n    chatId = d.telegram && d.telegram.telegramId;\n    if (chatId) {\n      text = '<b>Reset Password</b><br/>' +\n        'OTP kamu: <code>' + esc(d.otp) + '</code><br/>' +\n        'Berlaku ' + esc(d.expiresInMinutes) + ' menit. Jangan bagikan ke siapa pun.';\n    }\n  }\n\n  if (chatId && text) out.push({ json: Object.assign({}, m, { _chatId: chatId, _text: text }) });\n}\n\nreturn out;"
+        "jsCode": "const store = $getWorkflowStaticData('global');\nstore.seen = store.seen || {};\n\nconst out = [];\n\nfor (const item of $input.all()) {\n  const m = item.json;\n  if (!m || !m.deliveryId || !m.event) continue;\n  if (store.seen[m.deliveryId]) continue;\n  store.seen[m.deliveryId] = Date.now();\n\n  const keys = Object.keys(store.seen);\n  if (keys.length > 500) {\n    for (const k of keys.slice(0, keys.length - 500)) delete store.seen[k];\n  }\n\n  out.push(m);\n}\n\nreturn out;"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 1,
       "position": [0, 0],
-      "id": "a1000000-0000-4000-8000-000000000002",
-      "name": "Dedup + Route"
+      "name": "Dedup"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const esc = (s) => String(s ?? \"\").replace(/&/g, \"&amp;\").replace(/</g, \"&lt;\").replace(/>/g, \"&gt;\").replace(/\"/g, \"&quot;\");\n\nconst out = [];\n\nfor (const item of $input.all()) {\n  const m = item.json;\n  if (m.event !== 'user.invited') continue;\n\n  const d = m.data || {};\n  const chatId = d.telegram && d.telegram.telegramId;\n  if (!chatId) continue;\n\n  const text = '<b>Undangan Akses</b>\\n' +\n    'Halo <b>' + esc(d.user && d.user.name) + '</b>,\\n' +\n    'Akun <b>' + esc(d.user && d.user.email) + '</b> (role: ' + esc(d.user && d.user.role) + ') telah dibuat.\\n' +\n    'Silakan login di aplikasi After-Sales.';\n\n  out.push({ json: Object.assign({}, m, { _chatId: chatId, _text: text }) });\n}\n\nreturn out;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [220, -100],
+      "name": "Route: User Invited"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const SOFTWARE_CHAT_ID = 'REPLACE_WITH_SOFTWARE_GROUP_CHAT_ID';\n\nconst esc = (s) => String(s ?? \"\").replace(/&/g, \"&amp;\").replace(/</g, \"&lt;\").replace(/>/g, \"&gt;\").replace(/\"/g, \"&quot;\");\n\nconst out = [];\n\nfor (const item of $input.all()) {\n  const m = item.json;\n  if (m.event !== 'ticket.escalated') continue;\n\n  const d = m.data || {};\n  let chatId = (d.group && d.group.chatId) || SOFTWARE_CHAT_ID;\n  let fallbackNote = '';\n  if (!(d.group && d.group.chatId)) {\n    fallbackNote = '\\n<i>(grup tiket tidak ditemukan - fallback grup software)</i>';\n  }\n  const text = '<b>Tiket Dideskalasikan</b>\\n' +\n    'Tiket <code>' + esc(d.ticketId) + '</code> dideskalasi oleh <b>' + esc(d.escalatedBy) + '</b>.' + fallbackNote;\n\n  out.push({ json: Object.assign({}, m, { _chatId: chatId, _text: text }) });\n}\n\nreturn out;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [220, 0],
+      "name": "Route: Ticket Escalated"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const esc = (s) => String(s ?? \"\").replace(/&/g, \"&amp;\").replace(/</g, \"&lt;\").replace(/>/g, \"&gt;\").replace(/\"/g, \"&quot;\");\n\nconst out = [];\n\nfor (const item of $input.all()) {\n  const m = item.json;\n  if (m.event !== 'ticket.leader_changed') continue;\n\n  const d = m.data || {};\n  const changeType = d.changeType || 'transfer';\n\n  if (changeType === 'added_as_leader') {\n    const chatId = d.newLeader && d.newLeader.telegramId;\n    if (chatId) {\n      const text = '<b>Anda Dijadikan Leader</b>\\n' +\n        'Anda ditambahkan sebagai Leader tim software pada tiket <code>' + esc(d.ticketId) + '</code> oleh <b>' + esc(d.changedBy) + '</b>.';\n      out.push({ json: Object.assign({}, m, { _chatId: chatId, _text: text }) });\n    }\n  } else {\n    if (d.oldLeader && d.oldLeader.telegramId) {\n      const text = '<b>Kepemimpinan Dialihkan</b>\\n' +\n        'Kepemimpinan tiket <code>' + esc(d.ticketId) + '</code> dialihkan dari Anda ke <b>' + esc(d.newLeader?.name) + '</b> oleh <b>' + esc(d.changedBy) + '</b>.';\n      out.push({ json: Object.assign({}, m, { _chatId: d.oldLeader.telegramId, _text: text }) });\n    }\n    if (d.newLeader && d.newLeader.telegramId) {\n      const text = '<b>Anda Menjadi Leader Baru</b>\\n' +\n        'Kepemimpinan tiket <code>' + esc(d.ticketId) + '</code> dialihkan ke Anda oleh <b>' + esc(d.changedBy) + '</b>. Leader sebelumnya: <b>' + esc(d.oldLeader?.name) + '</b>.';\n      out.push({ json: Object.assign({}, m, { _chatId: d.newLeader.telegramId, _text: text }) });\n    }\n  }\n}\n\nreturn out;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [220, 100],
+      "name": "Route: Leader Changed"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const esc = (s) => String(s ?? \"\").replace(/&/g, \"&amp;\").replace(/</g, \"&lt;\").replace(/>/g, \"&gt;\").replace(/\"/g, \"&quot;\");\n\nconst out = [];\n\nfor (const item of $input.all()) {\n  const m = item.json;\n  if (m.event !== 'ticket.member_added') continue;\n\n  const d = m.data || {};\n  const chatId = d.addedMember && d.addedMember.telegram && d.addedMember.telegram.telegramId;\n  if (!chatId) continue;\n\n  const text = '<b>Kamu Ditambahkan ke Tiket</b>\\n' +\n    'Tiket <code>' + esc(d.ticketId) + '</code> - ditambahkan oleh <b>' + esc(d.addedBy) + '</b>.';\n\n  out.push({ json: Object.assign({}, m, { _chatId: chatId, _text: text }) });\n}\n\nreturn out;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [220, 200],
+      "name": "Route: Member Added"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const esc = (s) => String(s ?? \"\").replace(/&/g, \"&amp;\").replace(/</g, \"&lt;\").replace(/>/g, \"&gt;\").replace(/\"/g, \"&quot;\");\n\nconst out = [];\n\nfor (const item of $input.all()) {\n  const m = item.json;\n  if (m.event !== 'ticket.member_removed') continue;\n\n  const d = m.data || {};\n  \n  if (d.removedMember && d.removedMember.telegramId) {\n    const text = '<b>Anda Dihapus dari Tiket</b>\\n' +\n      'Anda dihapus dari tim software tiket <code>' + esc(d.ticketId) + '</code> oleh <b>' + esc(d.removedBy) + '</b>.';\n    out.push({ json: Object.assign({}, m, { _chatId: d.removedMember.telegramId, _text: text }) });\n  }\n  \n  if (d.leader && d.leader.telegramId) {\n    const text = '<b>Anggota Dihapus</b>\\n' +\n      '<b>' + esc(d.removedMember?.name) + '</b> dihapus dari tim software tiket <code>' + esc(d.ticketId) + '</code> oleh <b>' + esc(d.removedBy) + '</b>.';\n    out.push({ json: Object.assign({}, m, { _chatId: d.leader.telegramId, _text: text }) });\n  }\n}\n\nreturn out;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [220, 300],
+      "name": "Route: Member Removed"
     },
     {
       "parameters": {
@@ -42,21 +93,116 @@
       },
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
-      "position": [220, 0],
-      "id": "a1000000-0000-4000-8000-000000000003",
+      "position": [440, 100],
       "name": "Kirim Telegram",
       "credentials": {
-        "telegramApi": { "id": "REPLACE_WITH_TELEGRAM_CREDENTIAL_ID", "name": "Telegram Bot account" }
+        "telegramApi": {
+          "id": "REPLACE_WITH_TELEGRAM_CREDENTIAL_ID",
+          "name": "Telegram Bot account"
+        }
       }
     }
   ],
   "connections": {
     "RabbitMQ Trigger": {
-      "main": [[{ "node": "Dedup + Route", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Dedup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
-    "Dedup + Route": {
-      "main": [[{ "node": "Kirim Telegram", "type": "main", "index": 0 }]]
+    "Dedup": {
+      "main": [
+        [
+          {
+            "node": "Route: User Invited",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Route: Ticket Escalated",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Route: Leader Changed",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Route: Member Added",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Route: Member Removed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route: User Invited": {
+      "main": [
+        [
+          {
+            "node": "Kirim Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route: Ticket Escalated": {
+      "main": [
+        [
+          {
+            "node": "Kirim Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route: Leader Changed": {
+      "main": [
+        [
+          {
+            "node": "Kirim Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route: Member Added": {
+      "main": [
+        [
+          {
+            "node": "Kirim Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route: Member Removed": {
+      "main": [
+        [
+          {
+            "node": "Kirim Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
-  "settings": { "executionOrder": "v1" }
+  "settings": {
+    "executionOrder": "v1"
+  }
 }

@@ -44,7 +44,7 @@ Letak: `.env.backend` (di `apps/error-service/.env` dari `.env.backend.example`)
 
 ---
 
-## Kontrak 4 Routing Key
+## Kontrak Routing Key
 
 Payload persis seperti yang dipublish kode (baca `webhook.publisher.js`, `user.service.js`, `ticket-assignee.service.js`, `auth.service.js` — jangan mengarang). Umum:
 
@@ -85,29 +85,25 @@ Per event:
 }
 ```
 
-- **Routing**: DM ke `data.telegram.telegramId` bila ada, else fallback grup admin.
+- **Routing**: DM ke `data.telegram.telegramId` bila ada, else fallback **grup software**.
 
-### `ticket.claimed`
+### `ticket.escalated`
 
 ```json
 {
   "deliveryId": "uuid",
-  "event": "ticket.claimed",
+  "event": "ticket.escalated",
   "occurredAt": "2026-01-15T03:25:30.123Z",
   "actor": { "userId": "...", "telegramId": "...", "name": "..." },
   "data": {
     "ticketId": "tk_...",
-    "claimer": {
-      "name": "...",
-      "userId": "...",
-      "telegramId": "..."
-    },
+    "escalatedBy": "...",
     "group": { "chatId": "123456789", "clientId": "cli_...", "locationId": "loc_..." }
   }
 }
 ```
 
-- **Routing**: Grup `data.group.chatId` (resolusi client+location → location → client; `chatId` bisa `null` bila tidak ada grup yang cocok) → fallback grup admin.
+- **Routing**: Grup `data.group.chatId` (resolusi client+location → location → client; `chatId` bisa `null` bila tidak ada grup yang cocok) → fallback **grup software**.
 
 ### `ticket.member_added`
 
@@ -130,6 +126,47 @@ Per event:
 ```
 
 - **Routing**: DM `data.addedMember.telegram.telegramId` saja; **tanpa telegram** → TANPA pesan (bukan grup).
+
+### `ticket.leader_changed`
+
+```json
+{
+  "deliveryId": "uuid",
+  "event": "ticket.leader_changed",
+  "occurredAt": "2026-01-15T03:25:30.123Z",
+  "actor": { "userId": "...", "telegramId": "...", "name": "..." },
+  "data": {
+    "ticketId": "tk_...",
+    "oldLeader": { "name": "...", "userId": "...", "telegramId": "..." },
+    "newLeader": { "name": "...", "userId": "...", "telegramId": "..." },
+    "changedBy": "...",
+    "changeType": "transfer"  // atau "added_as_leader"
+  }
+}
+```
+
+- **Routing**:
+  - `changeType: "transfer"` → DM ke `oldLeader.telegramId` DAN `newLeader.telegramId`
+  - `changeType: "added_as_leader"` → DM ke `newLeader.telegramId` saja (oldLeader null)
+
+### `ticket.member_removed`
+
+```json
+{
+  "deliveryId": "uuid",
+  "event": "ticket.member_removed",
+  "occurredAt": "2026-01-15T03:25:30.123Z",
+  "actor": { "userId": "...", "telegramId": "...", "name": "..." },
+  "data": {
+    "ticketId": "tk_...",
+    "removedMember": { "name": "...", "userId": "...", "telegramId": "..." },
+    "removedBy": "...",
+    "leader": { "name": "...", "userId": "...", "telegramId": "..." }
+  }
+}
+```
+
+- **Routing**: DM ke `removedMember.telegramId` DAN `leader.telegramId` (keduanya bila ada).
 
 ### `otp.password_reset`
 

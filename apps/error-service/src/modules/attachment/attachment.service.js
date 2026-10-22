@@ -196,6 +196,7 @@ export const deleteAttachment = async (ticketId, attachmentId, actor) => {
       ticketId,
       fileName: row.file_name,
       size: row.file_size,
+      mimeType: row.mime_type,
       changeSummary: `hapus lampiran '${row.file_name}' dari tiket ${ticketId}`,
     },
   });

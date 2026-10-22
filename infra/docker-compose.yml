@@ -37,5 +37,35 @@ services:
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
 
+  # Object storage lampiran tiket (S3-compatible).
+  # Container RustFS jalan sebagai UID 10001, jadi named volume harus di-chown sekali.
+  rustfs-permissions:
+    image: busybox:1.36
+    command: sh -c "mkdir -p /data /logs && chown -R 10001:10001 /data /logs"
+    volumes:
+      - rustfs_data:/data
+      - rustfs_logs:/logs
+
+  # Backend sengaja TIDAK depends_on rustfs: tanpa storage, tiket tetap jalan
+  # dan endpoint lampiran mengembalikan 503.
+  rustfs:
+    image: rustfs/rustfs:1.0.3
+    container_name: after-sales-rustfs
+    restart: unless-stopped
+    depends_on:
+      rustfs-permissions:
+        condition: service_completed_successfully
+    environment:
+      RUSTFS_ACCESS_KEY: ${RUSTFS_ACCESS_KEY:-rustfsadmin}
+      RUSTFS_SECRET_KEY: ${RUSTFS_SECRET_KEY:-rustfsadmin}
+    ports:
+      - "9000:9000"  # S3 API — harus bisa dijangkau backend
+      - "9001:9001"  # Console
+    volumes:
+      - rustfs_data:/data
+      - rustfs_logs:/logs
+
 volumes:
   rabbitmq_data:
+  rustfs_data:
+  rustfs_logs:

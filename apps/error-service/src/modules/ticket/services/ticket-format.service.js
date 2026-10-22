@@ -262,7 +262,14 @@ export const formatTicket = (t) => {
         }
       : null,
     assignees: formattedAssignees,
-    attachments: [],
+    attachments: (t.ticket_attachments || []).map((a) => ({
+      id: a.id,
+      url: `/tickets/${t.id}/attachments/${a.id}/content`,
+      fileName: a.file_name,
+      mimeType: a.mime_type,
+      size: a.file_size,
+      uploadedAt: a.uploaded_at,
+    })),
   };
 };
 

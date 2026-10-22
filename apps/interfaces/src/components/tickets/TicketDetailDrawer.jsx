@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import TicketAttachments from "./TicketAttachments.jsx";
 
 // =========================================================================
 // MINIMALIST LINE SVG ICONS (Clean, Subtle Outline)
@@ -107,19 +108,17 @@ const formatDateTime = (val) => {
 };
 
 export default function TicketDetailDrawer({ ticket, onClose }) {
-  if (!ticket) return null;
-
-  const assignedMembers = ticket.assignees || ticket.assignedMembers || [];
-
-  // Urutkan riwayat dari versi terbaru ke terlama (descending)
+  // Hooks harus dipanggil dengan urutan sama tiap render, jadi guard null
+  // dipindah ke setelah semua hook
+  const history = ticket?.history;
   const sortedHistory = useMemo(() => {
-    if (!ticket.history || !Array.isArray(ticket.history)) return [];
-    return [...ticket.history].sort((a, b) => (b.version ?? 0) - (a.version ?? 0));
-  }, [ticket.history]);
+    if (!Array.isArray(history)) return [];
+    return [...history].sort((a, b) => (b.version ?? 0) - (a.version ?? 0));
+  }, [history]);
 
   // Tim penanggung jawab saat ini dengan styling aksen yang elegan & tidak berlebihan
   const handlerInfo = useMemo(() => {
-    const rawStatus = (ticket.rawStatus || ticket.status || "").toLowerCase();
+    const rawStatus = (ticket?.rawStatus || ticket?.status || "").toLowerCase();
 
     if (rawStatus === "open") {
       return {
@@ -203,6 +202,10 @@ export default function TicketDetailDrawer({ ticket, onClose }) {
       description: "Menunggu penanganan lebih lanjut.",
     };
   }, [ticket]);
+
+  if (!ticket) return null;
+
+  const assignedMembers = ticket.assignees || ticket.assignedMembers || [];
 
   // Status Badge Helper dengan palet warna bersih & elegan
   const getStatusBadge = (st) => {
@@ -1229,7 +1232,12 @@ export default function TicketDetailDrawer({ ticket, onClose }) {
           </div>
 
           {/* ============================================================= */}
-          {/* 6. LINIMASA RIWAYAT TIKET (BERSIH DENGAN AKSEN STATUS)         */}
+          {/* 6. LAMPIRAN GAMBAR (WebP, maks 5)                             */}
+          {/* ============================================================= */}
+          <TicketAttachments key={ticket.id} ticket={ticket} />
+
+          {/* ============================================================= */}
+          {/* 7. LINIMASA RIWAYAT TIKET (BERSIH DENGAN AKSEN STATUS)         */}
           {/* ============================================================= */}
           <div
             style={{

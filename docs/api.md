@@ -1963,6 +1963,64 @@ Koneksi streaming waktu nyata (real-time) yang memancarkan event saat tiket dibu
 
 ---
 
+### Lampiran Tiket (`/tickets/:id/attachments`)
+
+Maksimal **5 gambar per tiket**, **5 MB per gambar**, satu file per request. Backend selalu mengonversi ke WebP (orientasi EXIF diterapkan, sisi terpanjang maksimal 1920 px, kualitas 82) lalu menyimpan byte di object storage; PostgreSQL hanya menyimpan key relatif.
+
+#### `POST /tickets/:id/attachments`
+
+- Auth: `Bearer` — ADMIN, COORDINATOR, assignee tiket, atau penanggung jawab Aftersales tiket
+- Content-Type: `multipart/form-data`, field `file`
+
+#### Response Sukses: `201 Created`
+
+```json
+{
+  "success": true,
+  "message": "Lampiran berhasil diunggah",
+  "data": {
+    "attachment": {
+      "id": "6f1c2b7e-1f0a-4a4e-9a4e-2f6d1c9b7a11",
+      "url": "/tickets/ERR-20261022-0001/attachments/6f1c2b7e-1f0a-4a4e-9a4e-2f6d1c9b7a11/content",
+      "fileName": "konektor.webp",
+      "mimeType": "image/webp",
+      "size": 214331,
+      "uploadedAt": "2026-10-22T04:00:00.000Z"
+    }
+  }
+}
+```
+
+#### Contoh Error
+
+| Status | Penyebab |
+|:---:|---|
+| `400` | Field `file` kosong, file bukan gambar, atau `image/svg+xml` |
+| `403` | Pengguna bukan bagian dari tim tiket |
+| `404` | Tiket tidak ditemukan |
+| `409` | Tiket sudah memiliki 5 lampiran |
+| `413` | Ukuran file melebihi 5 MB |
+| `502` | Object storage gagal menyimpan |
+| `503` | Object storage belum dikonfigurasi (`S3_BUCKET` kosong) |
+
+#### `GET /tickets/:id/attachments`
+
+Metadata seluruh lampiran, urut `uploadedAt` menaik. Response `200`:
+
+```json
+{ "success": true, "message": "Daftar lampiran berhasil diambil", "data": { "attachments": [] } }
+```
+
+#### `GET /tickets/:id/attachments/:attachmentId/content`
+
+Mengembalikan byte gambar dengan `Content-Type: image/webp`. `401` tanpa token, `404` bila lampiran bukan milik tiket tersebut.
+
+#### `DELETE /tickets/:id/attachments/:attachmentId`
+
+Hanya ADMIN dan COORDINATOR. `204 No Content` saat sukses, `403` untuk peran lain, `502` bila objek gagal dihapus dari storage.
+
+Catatan: `GET /tickets/:id` menyertakan array `attachments` dengan bentuk objek yang sama seperti di atas.
+
 ## 7. Ticket Management Module (`/ticket-management`)
 
 Modul operasional untuk mengelola alur penanganan tiket sesuai tanggung jawab peran dan divisi:

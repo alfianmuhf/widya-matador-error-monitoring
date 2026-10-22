@@ -15,6 +15,7 @@ import {
 } from "./ticket.schema.js";
 
 import { exportTicketsExcel, exportTicketsPdf } from "../export/export.controller.js";
+import attachmentRoutes from "../attachment/attachment.route.js";
 
 const router = Router();
 
@@ -35,6 +36,15 @@ router.get("/export/excel", authenticate, exportTicketsExcel);
  * Download PDF report of tickets
  */
 router.get("/export/pdf", authenticate, exportTicketsPdf);
+
+/**
+ * Attachment routes (/tickets/:id/attachments)
+ * POST   — upload one image (multipart field: file)
+ * GET    — list metadata
+ * GET    /:attachmentId/content — image bytes
+ * DELETE /:attachmentId — remove image
+ */
+router.use("/:id/attachments", attachmentRoutes);
 
 /**
  * GET /tickets

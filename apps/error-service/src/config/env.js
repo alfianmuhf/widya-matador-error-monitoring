@@ -11,6 +11,12 @@ const envSchema = z.object({
   JWT_REFRESH_SECRET: z.string().min(1, "JWT_REFRESH_SECRET is required"),
   JWT_REFRESH_EXPIRES_IN: z.string().default("1d"),
   FRONTEND_URL: z.string().default("http://localhost:5173"),
+  S3_ENDPOINT: z.string().optional(),
+  S3_REGION: z.string().optional(),
+  S3_BUCKET: z.string().optional(),
+  S3_ACCESS_KEY: z.string().optional(),
+  S3_SECRET_KEY: z.string().optional(),
+  S3_FORCE_PATH_STYLE: z.string().optional(),
 });
 
 const parseEnv = () => {

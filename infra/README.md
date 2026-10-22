@@ -9,6 +9,7 @@ Layanan di `infra/docker-compose.yml` dan konfigurasi terkait.
 | **backend** | Dibangun dari `Dockerfile` di `apps/error-service`. `network_mode: host`, `depends_on: [rabbitmq]` |
 | **frontend** | Development server, port **5173** |
 | **rabbitmq** | `rabbitmq:4-management`. Port: 5672 (AMQP) + 15672 (Management UI). Kredensial default: `guest`/`guest` |
+| **rustfs** | `rustfs/rustfs:1.0.3`. S3 API `9000`, Console `9001` (default `rustfsadmin`/`rustfsadmin`). Volume: `rustfs_data` |
 
 ## Cara Menjalankan
 
@@ -34,6 +35,67 @@ Layanan di `infra/docker-compose.yml` dan konfigurasi terkait.
 - Management UI: `http://localhost:15672` (user: `guest`, pass: `guest`).
 - Nginx conf: `nginx/after-sales.conf`.
 - Dokumentasi webhook: `../docs/webhook-telegram/`.
+
+## Migrasi Database & Deploy
+
+Backend menjalankan `npx prisma migrate deploy` saat container start. **Tidak ada reset**: data dan file lampiran lama tidak disentuh oleh restart atau redeploy. Seeder tidak lagi otomatis.
+
+### Database yang sudah ada (sekali saja)
+
+Baseline `20261022102348` dibuat dari schema yang sudah ada di database dev. Untuk database yang tabelnya sudah terlanjur dibuat (dev lokal, VPS), tandai baseline sebagai sudah diterapkan:
+
+```bash
+docker compose run --rm backend npx prisma migrate resolve --applied 20261022102348
+```
+
+Verifikasi:
+
+```sql
+SELECT migration_name, finished_at FROM _prisma_migrations;
+```
+
+Setelah itu `migrate deploy` hanya menerapkan migrasi baru. Kalau langkah ini dilewati, container gagal start (`table ... already exists`) — gagal keras, tetapi tidak merusak data.
+
+### Environment baru
+
+`migrate deploy` membuat seluruh skema. Seed dijalankan manual:
+
+```bash
+docker compose run --rm backend npm run seed
+```
+
+### Setelah deploy
+
+Buka satu tiket yang punya lampiran dan pastikan gambarnya masih tampil. Kalau jumlah baris `ticket_attachments` berubah setelah restart, ada yang masih memakai `db push --force-reset` — periksa `infra/backend/Dockerfile`.
+
+### GC lampiran
+
+`npm run attachments:gc -- --dry-run` untuk melihat, tanpa `--dry-run` untuk menghapus objek yatim. Objek yang lebih muda dari 60 menit dilewati karena bisa jadi milik upload yang sedang berjalan.
+
+## Object Storage (RustFS) — Lampiran Tiket
+
+1. Jalankan service: `docker compose up -d rustfs`
+2. Buka console `http://<IP>:9001`, login `rustfsadmin` / `rustfsadmin`, lalu buat bucket `erad-attachments`.
+   Ganti kredensial lewat `RUSTFS_ACCESS_KEY` / `RUSTFS_SECRET_KEY` sebelum dipakai produksi.
+3. Isi `.env.backend`:
+   ```ini
+   S3_ENDPOINT=http://127.0.0.1:9000
+   S3_REGION=us-east-1
+   S3_BUCKET=erad-attachments
+   S3_ACCESS_KEY=<access_key>
+   S3_SECRET_KEY=<secret_key>
+   S3_FORCE_PATH_STYLE=true
+   ```
+4. Tanpa `S3_BUCKET`, backend tetap jalan; hanya endpoint lampiran yang mengembalikan `503`.
+
+Catatan:
+
+- Port `9000` harus bisa dijangkau backend. Kalau storage dan backend beda host, pakai `http://<IP-storage>:9000` dan batasi lewat firewall — **jangan** buka `9000` ke internet.
+- Console `9001` hanya untuk admin.
+- `S3_FORCE_PATH_STYLE=true` wajib untuk RustFS, MinIO, dan SeaweedFS — tanpa itu SDK memanggil `bucket.<host>` dan gagal.
+- Volume `rustfs_data` **wajib ikut backup bersama PostgreSQL**. Tanpa itu, baris `ticket_attachments` tetap ada sementara gambarnya hilang.
+- Single-node, tanpa replikasi. Durabilitas berasal dari backup volume, bukan dari RustFS.
+- Ganti provider (MinIO/R2/S3) hanya perlu ubah `S3_*` + copy objek dengan key yang sama; skema database tidak berubah.
 
 ## Diagram Alir Ketergantungan
 

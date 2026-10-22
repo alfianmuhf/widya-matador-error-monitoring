@@ -1,6 +1,7 @@
 import createError from "http-errors";
 import { randomUUID } from "node:crypto";
 import prisma from "../../config/prisma.js";
+import { recordLog } from "../audit-log/audit-log.service.js";
 import * as storage from "./attachment.storage.js";
 import { MAX_FILE_SIZE, MAX_PER_TICKET, isSvg, sanitizeFileName, toWebp } from "./attachment.image.js";
 
@@ -132,6 +133,22 @@ export const uploadAttachment = async (ticketId, file, actor) => {
     },
   });
 
+  await recordLog({
+    actor: actor.email || actor.name || "Sistem",
+    actorUserId: actor.id || null,
+    action: "CREATE",
+    entityType: "TicketAttachment",
+    entityId: row.id,
+    details: {
+      identifier: row.file_name,
+      ticketId,
+      fileName: row.file_name,
+      size: row.file_size,
+      mimeType: row.mime_type,
+      changeSummary: `tambah lampiran '${row.file_name}' pada tiket ${ticketId}`,
+    },
+  });
+
   return formatAttachment(row);
 };
 
@@ -166,4 +183,21 @@ export const deleteAttachment = async (ticketId, attachmentId, actor) => {
   }
 
   await prisma.ticket_attachments.delete({ where: { id: row.id } });
+
+  await recordLog({
+    actor: actor.email || actor.name || "Sistem",
+    actorUserId: actor.id || null,
+    action: "DELETE",
+    deleteAction: "hard",
+    entityType: "TicketAttachment",
+    entityId: row.id,
+    details: {
+      identifier: row.file_name,
+      ticketId,
+      fileName: row.file_name,
+      size: row.file_size,
+      mimeType: row.mime_type,
+      changeSummary: `hapus lampiran '${row.file_name}' dari tiket ${ticketId}`,
+    },
+  });
 };

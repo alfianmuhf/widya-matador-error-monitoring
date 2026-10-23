@@ -108,6 +108,7 @@ export default function Ringkasan() {
     completedTickets: 0,
     completionRate: 0,
     mttrDays: "0.0",
+    mttrHours: "0.0",
     affectedUnits: 0,
     totalUnits: 0,
   };
@@ -637,8 +638,8 @@ export default function Ringkasan() {
             MTTR
           </div>
           <div style={{ fontSize: "2rem", fontWeight: 700, color: "#0f172a", lineHeight: 1.1 }}>
-            {loading ? "..." : kpis.mttrDays}{" "}
-            <span style={{ fontSize: "0.95rem", fontWeight: 500, color: "var(--text-muted)" }}>hari</span>
+            {loading ? "..." : kpis.mttrHours}{" "}
+            <span style={{ fontSize: "0.95rem", fontWeight: 500, color: "var(--text-muted)" }}>jam</span>
           </div>
           <div style={{ fontSize: "12px", color: "var(--text-muted)", marginTop: "8px" }}>
             rata-rata penyelesaian

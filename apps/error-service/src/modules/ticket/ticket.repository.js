@@ -124,6 +124,19 @@ export const ticketIncludes = {
 };
 
 /**
+ * Include for ticket detail only. The list query must not pull attachment rows:
+ * a 1000-row page would otherwise carry up to 5000 metadata rows.
+ */
+export const ticketDetailIncludes = {
+  ...ticketIncludes,
+  ticket_attachments: {
+    orderBy: {
+      uploaded_at: "asc",
+    },
+  },
+};
+
+/**
  * Find paginated list of tickets with filters
  */
 export const findMany = async ({ skip = 0, take = 10, where = {}, orderBy = { open_at: "desc" } }) => {
@@ -149,7 +162,7 @@ export const count = async (where = {}) => {
 export const findById = async (id) => {
   return prisma.tickets.findUnique({
     where: { id },
-    include: ticketIncludes,
+    include: ticketDetailIncludes,
   });
 };
 

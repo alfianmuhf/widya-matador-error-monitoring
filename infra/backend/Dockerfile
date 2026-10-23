@@ -25,5 +25,6 @@ COPY apps/error-service/src ./src/
 # Expose port backend
 EXPOSE 3000
 
-# Reset database dari schema.prisma terbaru, jalankan seeder, lalu start server
-CMD ["sh", "-c", "npx prisma db push --force-reset && node prisma/seed.js && node src/server.js"]
+# Terapkan migrasi yang tertunda (tidak pernah reset data), lalu start server.
+# Seeder dijalankan manual: docker compose run --rm backend npm run seed
+CMD ["sh", "-c", "npx prisma migrate deploy && node src/server.js"]

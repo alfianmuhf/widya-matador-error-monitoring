@@ -13,12 +13,16 @@ export const createTelegramUserSchema = z.object({
     .max(100, "Nama lengkap maksimal 100 karakter"),
   telegramId: z.string().trim().max(50, "Telegram ID maksimal 50 karakter").nullable().optional(),
   division: z
-    .enum(["none", "after_sales", "software", "NONE", "AFTER_SALES", "SOFTWARE"], {
-      errorMap: () => ({ message: "Divisi harus berupa none, after_sales, atau software" }),
+    .enum(["none", "after_sales", "rnd", "RnD", "RND", "software", "NONE", "AFTER_SALES", "SOFTWARE"], {
+      errorMap: () => ({ message: "Divisi harus berupa none, after_sales, atau rnd" }),
     })
     .optional()
     .nullable()
-    .transform((val) => (val ? val.toLowerCase() : null)),
+    .transform((val) => {
+      if (!val) return null;
+      const lower = val.toLowerCase();
+      return lower === "software" ? "rnd" : lower;
+    }),
   isActive: z.boolean().optional().default(true),
 });
 
@@ -28,12 +32,16 @@ export const updateTelegramUserSchema = z
     fullName: z.string().trim().min(1, "Nama lengkap tidak boleh kosong").max(100).optional(),
     telegramId: z.string().trim().max(50).nullable().optional(),
     division: z
-      .enum(["none", "after_sales", "software", "NONE", "AFTER_SALES", "SOFTWARE"], {
-        errorMap: () => ({ message: "Divisi harus berupa none, after_sales, atau software" }),
+      .enum(["none", "after_sales", "rnd", "RnD", "RND", "software", "NONE", "AFTER_SALES", "SOFTWARE"], {
+        errorMap: () => ({ message: "Divisi harus berupa none, after_sales, atau rnd" }),
       })
       .optional()
       .nullable()
-      .transform((val) => (val ? val.toLowerCase() : null)),
+      .transform((val) => {
+        if (!val) return null;
+        const lower = val.toLowerCase();
+        return lower === "software" ? "rnd" : lower;
+      }),
     isActive: z.boolean().optional(),
   })
   .refine((data) => Object.keys(data).length > 0, {

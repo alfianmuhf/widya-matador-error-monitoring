@@ -6,10 +6,11 @@ services:
     container_name: after-sales-backend
     restart: unless-stopped
     env_file:
-      - ../../env-file/.env.backend
+      - ../../config/.env.backend
     network_mode: host
     depends_on:
       - rabbitmq
+      - redis
 
   frontend:
     build:
@@ -20,7 +21,7 @@ services:
     container_name: after-sales-frontend
     restart: unless-stopped
     env_file:
-      - ../../env-file/.env.frontend
+      - ../../config/.env.frontend
     ports:
       - "5173:5173"
     depends_on:
@@ -55,9 +56,11 @@ services:
     depends_on:
       rustfs-permissions:
         condition: service_completed_successfully
+    secrets:
+      - rustfs_password
     environment:
-      RUSTFS_ACCESS_KEY: ${RUSTFS_ACCESS_KEY:-rustfsadmin}
-      RUSTFS_SECRET_KEY: ${RUSTFS_SECRET_KEY:-rustfsadmin}
+      RUSTFS_ACCESS_KEY: rustfsadmin
+      RUSTFS_SECRET_KEY_FILE: /run/secrets/rustfs_password
     ports:
       - "9000:9000"  # S3 API — harus bisa dijangkau backend
       - "9001:9001"  # Console
@@ -65,7 +68,37 @@ services:
       - rustfs_data:/data
       - rustfs_logs:/logs
 
+  # In-memory Cache & Session Store
+  redis:
+    image: redis:8-alpine
+    container_name: redis
+    restart: unless-stopped
+    command:
+      - sh
+      - -c
+      - 'exec redis-server --appendonly yes --requirepass "$$(cat /run/secrets/redis_password)"'
+    secrets:
+      - redis_password
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - 'redis-cli --no-auth-warning -a "$$(cat /run/secrets/redis_password)" ping | grep -q PONG'
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
 volumes:
   rabbitmq_data:
   rustfs_data:
   rustfs_logs:
+  redis_data:
+
+secrets:
+  redis_password:
+    file: ../../config/redis_pw.txt
+  rustfs_password:
+    file: ../../config/rustfs_pw.txt

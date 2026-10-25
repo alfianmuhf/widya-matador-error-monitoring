@@ -147,16 +147,40 @@ export const transferAftersalesSchema = z.object({
 });
 
 /**
- * Zod schema for adding a software team member to ticket_assignees
+ * Zod schema for claiming ticket by RnD team
+ */
+export const claimTicketSchema = z.object({
+  teamId: z.string().uuid("Format Team ID tidak valid").optional(),
+});
+
+/**
+ * Zod schema for assigning a team to a ticket
+ */
+export const assignTicketTeamSchema = z.object({
+  teamId: z.string().uuid("Format Team ID tidak valid"),
+});
+
+/**
+ * Zod schema for transferring / handing over primary responsibility to another team
+ */
+export const handoverTicketTeamSchema = z.object({
+  teamId: z.string().uuid("Format Team ID tidak valid"),
+  notes: z.string().trim().max(500, "Catatan maksimal 500 karakter").optional(),
+});
+
+/**
+ * Backward compatibility: Zod schema for adding a team member / team to ticket
  */
 export const addAssigneeSchema = z
   .object({
+    teamId: z.string().uuid("Format Team ID tidak valid").optional(),
     userId: z.string().uuid("Format User ID tidak valid").optional(),
-    email: z.string().trim().email("Format email tidak valid").optional(),
+    username: z.string().trim().optional(),
+    email: z.string().trim().optional(),
     isLeader: z.boolean().optional(),
   })
-  .refine((data) => data.userId || data.email, {
-    message: "Harus menyertakan userId atau email pengguna software",
+  .refine((data) => data.teamId || data.userId || data.username || data.email, {
+    message: "Harus menyertakan teamId, userId, atau username pengguna",
   });
 
 /**
@@ -164,34 +188,40 @@ export const addAssigneeSchema = z
  */
 export const updateAssigneeSchema = z
   .object({
+    teamId: z.string().uuid("Format Team ID tidak valid").optional(),
     userId: z.string().uuid("Format User ID tidak valid").nullable().optional(),
     telegramUserId: z.string().uuid("Format Telegram User ID tidak valid").nullable().optional(),
-    email: z.string().trim().email("Format email tidak valid").optional(),
+    username: z.string().trim().optional(),
+    email: z.string().trim().optional(),
     telegramId: z.string().trim().optional(),
   })
   .refine(
     (data) =>
+      data.teamId !== undefined ||
       data.userId !== undefined ||
       data.telegramUserId !== undefined ||
+      Boolean(data.username) ||
       Boolean(data.email) ||
       Boolean(data.telegramId),
     {
-      message: "Harus menyertakan data anggota baru (userId, telegramUserId, email, atau telegramId)",
+      message: "Harus menyertakan data tim atau anggota baru",
     }
   );
 
-
 /**
- * Zod schema for transferring leader to another assignee
+ * Zod schema for transferring leader / handover to another team or assignee
  */
 export const changeLeaderSchema = z
   .object({
+    teamId: z.string().uuid("Format Team ID tidak valid").optional(),
     assigneeId: z.string().uuid("Format Assignee ID tidak valid").optional(),
     userId: z.string().uuid("Format User ID tidak valid").optional(),
     telegramUserId: z.string().uuid("Format Telegram User ID tidak valid").optional(),
+    notes: z.string().trim().max(500, "Catatan maksimal 500 karakter").optional(),
+    removeOldTeam: z.boolean().optional(),
   })
-  .refine((data) => data.assigneeId || data.userId || data.telegramUserId, {
-    message: "Harus menyertakan assigneeId, userId, atau telegramUserId baru",
+  .refine((data) => data.teamId || data.assigneeId || data.userId || data.telegramUserId, {
+    message: "Harus menyertakan teamId, assigneeId, userId, atau telegramUserId baru",
   });
 
 /**

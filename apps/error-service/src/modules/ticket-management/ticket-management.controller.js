@@ -107,10 +107,34 @@ export const changeManagedLeader = async (req, res, next) => {
     res.status(200).json({
       success: true,
       statusCode: 200,
-      message: "Leader tim software berhasil dialihkan",
+      message: "Tanggung jawab / Leader tim RnD berhasil dialihkan",
       data: result,
     });
   } catch (error) {
     next(error);
   }
 };
+
+export const handoverManagedTeam = async (req, res, next) => {
+  return changeManagedLeader(req, res, next);
+};
+
+export const addManagedTeam = async (req, res, next) => {
+  return addManagedAssignee(req, res, next);
+};
+
+export const removeManagedTeam = async (req, res, next) => {
+  try {
+    const { id, teamId } = req.params;
+    const result = await ticketManagementService.removeManagedTeam(id, teamId, req.user);
+    res.status(200).json({
+      success: true,
+      statusCode: 200,
+      message: result.message,
+      data: result,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+

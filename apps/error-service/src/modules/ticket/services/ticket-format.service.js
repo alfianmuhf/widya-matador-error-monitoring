@@ -99,7 +99,7 @@ export const formatTicket = (t) => {
   // Determine reporter name
   let reporter = "-";
   if (initialHistory.changed_by_user) {
-    reporter = initialHistory.changed_by_user.name || initialHistory.changed_by_user.email;
+    reporter = initialHistory.changed_by_user.name || initialHistory.changed_by_user.username || initialHistory.changed_by_user.email;
   } else if (initialHistory.changed_by_telegram) {
     reporter = initialHistory.changed_by_telegram.username
       ? `@${initialHistory.changed_by_telegram.username}`
@@ -114,7 +114,7 @@ export const formatTicket = (t) => {
   const formattedHistory = (t.ticket_history || []).map((h) => {
     let author = "Sistem";
     if (h.changed_by_user) {
-      author = h.changed_by_user.name || h.changed_by_user.email;
+      author = h.changed_by_user.name || h.changed_by_user.username || h.changed_by_user.email;
     } else if (h.changed_by_telegram) {
       author = h.changed_by_telegram.username
         ? `@${h.changed_by_telegram.username}`
@@ -152,34 +152,151 @@ export const formatTicket = (t) => {
       root_cause: h.root_cause,
       severity: capitalizeStatus(h.severity),
       rawSeverity: h.severity,
+      teamId: h.team_id,
+      team_id: h.team_id,
+      team: h.team ? { id: h.team.id, name: h.team.name } : null,
     };
   });
 
-  // Format assignees
-  const formattedAssignees = (t.ticket_assignees || []).map((a) => {
-    const isLeader = a.id === t.leader_assignee_id;
-    let name = a.user?.name || "Unknown";
-    let identifier = a.user?.email || "-";
-    const tele = a.user?.telegram_user;
-    if (tele?.username) {
-      identifier = `@${tele.username}`;
+  // Format current team
+  const currentTeam = t.current_team
+    ? {
+        id: t.current_team.id,
+        name: t.current_team.name,
+        leaderUserId: t.current_team.leader_user_id,
+        leader: t.current_team.leader
+          ? {
+              id: t.current_team.leader.id,
+              name: t.current_team.leader.name,
+              username: t.current_team.leader.username,
+              email: t.current_team.leader.username,
+              role: t.current_team.leader.role,
+              division: t.current_team.leader.division,
+              telegramUser: t.current_team.leader.telegram_user || null,
+            }
+          : null,
+      }
+    : null;
+
+  // Format teams list
+  const formattedTeams = (t.ticket_teams || []).map((tt) => ({
+    id: tt.id,
+    ticketId: tt.ticket_id,
+    teamId: tt.team_id,
+    assignedAt: tt.assigned_at,
+    isCurrentTeam: tt.team_id === t.current_team_id,
+    team: tt.team
+      ? {
+          id: tt.team.id,
+          name: tt.team.name,
+          leaderUserId: tt.team.leader_user_id,
+          leader: tt.team.leader
+            ? {
+                id: tt.team.leader.id,
+                name: tt.team.leader.name,
+                username: tt.team.leader.username,
+                email: tt.team.leader.username,
+                role: tt.team.leader.role,
+                division: tt.team.leader.division,
+                telegramUser: tt.team.leader.telegram_user || null,
+              }
+            : null,
+          membersCount: tt.team.members?.length || 0,
+          members: (tt.team.members || []).map((m) => ({
+            id: m.id,
+            userId: m.user_id,
+            name: m.user?.name || "Unknown",
+            username: m.user?.username || "-",
+            email: m.user?.username || "-",
+            telegramUser: m.user?.telegram_user || null,
+          })),
+        }
+      : null,
+  }));
+
+  // Flattened assignees for backward compatibility (all unique members from all assigned teams)
+  const assigneesMap = new Map();
+  if (t.current_team?.leader) {
+    assigneesMap.set(t.current_team.leader.id, {
+      id: t.current_team.leader.id,
+      ticketId: t.id,
+      isLeader: true,
+      name: t.current_team.leader.name,
+      identifier: t.current_team.leader.username,
+      username: t.current_team.leader.username,
+      userId: t.current_team.leader.id,
+      user_id: t.current_team.leader.id,
+      telegramUserId: t.current_team.leader.telegram_user?.id || null,
+      telegram_user_id: t.current_team.leader.telegram_user?.id || null,
+      user: t.current_team.leader,
+      telegramUser: t.current_team.leader.telegram_user || null,
+      teamId: t.current_team.id,
+      teamName: t.current_team.name,
+    });
+  }
+
+  (t.current_team?.members || []).forEach((m) => {
+    if (m.user && !assigneesMap.has(m.user.id)) {
+      assigneesMap.set(m.user.id, {
+        id: m.id,
+        ticketId: t.id,
+        isLeader: m.user.id === t.current_team?.leader_user_id,
+        name: m.user.name,
+        identifier: m.user.username,
+        username: m.user.username,
+        userId: m.user.id,
+        user_id: m.user.id,
+        telegramUserId: m.user.telegram_user?.id || null,
+        telegram_user_id: m.user.telegram_user?.id || null,
+        user: m.user,
+        telegramUser: m.user.telegram_user || null,
+        teamId: t.current_team.id,
+        teamName: t.current_team.name,
+      });
     }
-
-    return {
-      id: a.id,
-      ticketId: a.ticket_id,
-      isLeader,
-      name,
-      identifier,
-      userId: a.user_id,
-      user_id: a.user_id,
-      telegramUserId: tele?.id || null,
-      telegram_user_id: tele?.id || null,
-      user: a.user || null,
-      telegramUser: tele || null,
-      createdAt: a.created_at,
-    };
   });
+
+  (t.ticket_teams || []).forEach((tt) => {
+    if (tt.team?.leader && !assigneesMap.has(tt.team.leader.id)) {
+      assigneesMap.set(tt.team.leader.id, {
+        id: tt.team.leader.id,
+        ticketId: t.id,
+        isLeader: tt.team.id === t.current_team_id,
+        name: tt.team.leader.name,
+        identifier: tt.team.leader.username,
+        username: tt.team.leader.username,
+        userId: tt.team.leader.id,
+        user_id: tt.team.leader.id,
+        telegramUserId: tt.team.leader.telegram_user?.id || null,
+        telegram_user_id: tt.team.leader.telegram_user?.id || null,
+        user: tt.team.leader,
+        telegramUser: tt.team.leader.telegram_user || null,
+        teamId: tt.team.id,
+        teamName: tt.team.name,
+      });
+    }
+    (tt.team?.members || []).forEach((m) => {
+      if (m.user && !assigneesMap.has(m.user.id)) {
+        assigneesMap.set(m.user.id, {
+          id: m.id,
+          ticketId: t.id,
+          isLeader: m.user.id === t.current_team?.leader_user_id,
+          name: m.user.name,
+          identifier: m.user.username,
+          username: m.user.username,
+          userId: m.user.id,
+          user_id: m.user.id,
+          telegramUserId: m.user.telegram_user?.id || null,
+          telegram_user_id: m.user.telegram_user?.id || null,
+          user: m.user,
+          telegramUser: m.user.telegram_user || null,
+          teamId: tt.team.id,
+          teamName: tt.team.name,
+        });
+      }
+    });
+  });
+  const formattedAssignees = Array.from(assigneesMap.values());
 
   return {
     id: t.id,
@@ -236,7 +353,8 @@ export const formatTicket = (t) => {
       ? {
           id: t.aftersales_user.id,
           name: t.aftersales_user.name,
-          email: t.aftersales_user.email,
+          username: t.aftersales_user.username,
+          email: t.aftersales_user.username,
           role: t.aftersales_user.role,
           division: t.aftersales_user.division,
           telegramUser: t.aftersales_user.telegram_user || null,
@@ -253,14 +371,15 @@ export const formatTicket = (t) => {
     root_cause: currentHistory.root_cause || null,
     resolvedAt,
     history: formattedHistory,
-    leaderAssigneeId: t.leader_assignee_id || null,
-    leaderAssignee: t.leader_assignee
-      ? {
-          id: t.leader_assignee.id,
-          user: t.leader_assignee.user,
-          telegramUser: t.leader_assignee.user?.telegram_user || null,
-        }
-      : null,
+    currentTeamId: t.current_team_id,
+    current_team_id: t.current_team_id,
+    currentTeam,
+    current_team: currentTeam,
+    teams: formattedTeams,
+    ticketTeams: formattedTeams,
+    leader: currentTeam?.leader || null,
+    leaderAssigneeId: currentTeam?.leaderUserId || null,
+    leaderAssignee: currentTeam?.leader ? { id: currentTeam.leader.id, user: currentTeam.leader } : null,
     assignees: formattedAssignees,
     attachments: (t.ticket_attachments || []).map((a) => ({
       id: a.id,
@@ -269,6 +388,22 @@ export const formatTicket = (t) => {
       mimeType: a.mime_type,
       size: a.file_size,
       uploadedAt: a.uploaded_at,
+      uploadedBy: a.uploaded_by_user
+        ? {
+            type: "user",
+            id: a.uploaded_by_user.id,
+            name: a.uploaded_by_user.name,
+            username: a.uploaded_by_user.username,
+            email: a.uploaded_by_user.username,
+          }
+        : a.uploaded_by_telegram
+        ? {
+            type: "telegram",
+            id: a.uploaded_by_telegram.id,
+            name: a.uploaded_by_telegram.full_name || a.uploaded_by_telegram.username,
+            username: a.uploaded_by_telegram.username,
+          }
+        : null,
     })),
   };
 };

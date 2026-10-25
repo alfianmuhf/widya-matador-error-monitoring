@@ -5,6 +5,7 @@ import { ticketEvents } from "../ticket.events.js";
 import { recordLog } from "../../audit-log/audit-log.service.js";
 import { publish as publishWebhook } from "../../webhook/webhook.publisher.js";
 import { formatTicket } from "./ticket-format.service.js";
+import { checkManageTicketTeamsPermission } from "../../ticket-management/ticket-permission.service.js";
 
 /**
  * Resolve grup Telegram untuk notifikasi escalated.
@@ -28,55 +29,85 @@ const resolveEscalatedGroup = async (ticket) => {
 };
 
 /**
- * Get all assignees of a ticket
+ * Get all teams and members assigned to a ticket
  */
-export const getTicketAssignees = async (ticketId) => {
+export const getTicketTeams = async (ticketId) => {
   const ticket = await ticketRepo.findById(ticketId);
   if (!ticket) {
     throw createError(404, `Tiket '${ticketId}' tidak ditemukan`);
   }
 
-  const assignees = await ticketRepo.findAssigneesByTicketId(ticketId);
-  const leaderId = ticket.leader_assignee_id;
-
+  const formatted = formatTicket(ticket);
   return {
     ticketId,
-    leaderAssigneeId: leaderId,
-    totalAssignees: assignees.length,
-    assignees: assignees.map((a) => {
-      const isLeader = a.id === leaderId;
-      let name = "Unknown";
-      let identifier = "-";
-
-      if (a.user) {
-        name = a.user.name;
-        identifier = a.user.email;
-      } else if (a.telegram_user) {
-        name = a.telegram_user.full_name || a.telegram_user.username || a.telegram_user.telegram_id;
-        identifier = a.telegram_user.username ? `@${a.telegram_user.username}` : a.telegram_user.telegram_id;
-      }
-
-      return {
-        id: a.id,
-        ticketId: a.ticket_id,
-        isLeader,
-        name,
-        identifier,
-        userId: a.user_id,
-        telegramUserId: a.telegram_user_id,
-        user: a.user || null,
-        telegramUser: a.telegram_user || null,
-        createdAt: a.created_at,
-      };
-    }),
+    currentTeamId: formatted.currentTeamId,
+    currentTeam: formatted.currentTeam,
+    leader: formatted.leader,
+    totalTeams: formatted.teams.length,
+    teams: formatted.teams,
+    assignees: formatted.assignees,
   };
 };
 
 /**
- * Claim ticket (first software team member claiming becomes Leader)
- * Note: Claiming can be executed via Telegram/n8n or API.
+ * Backward compatibility: getTicketAssignees
  */
-export const claimTicket = async (ticketId, actor) => {
+export const getTicketAssignees = async (ticketId) => {
+  return getTicketTeams(ticketId);
+};
+
+/**
+ * Helper to resolve actor's team for claiming ticket
+ */
+const resolveClaimTeam = async (actorUser, requestedTeamId) => {
+  if (requestedTeamId) {
+    const team = await prisma.teams.findUnique({
+      where: { id: requestedTeamId },
+      include: { leader: true, members: true },
+    });
+    if (!team) throw createError(404, "Tim RnD yang dipilih tidak ditemukan");
+    if (!team.is_active) throw createError(400, "Tim yang dipilih sedang tidak aktif");
+
+    const isLeader = team.leader_user_id === actorUser.id;
+    const isMember = team.members.some((m) => m.user_id === actorUser.id);
+    if (!isLeader && !isMember && actorUser.role !== "admin") {
+      throw createError(403, "Anda bukan anggota atau leader dari tim yang dipilih");
+    }
+    return team;
+  }
+
+  // Find team where actor is leader
+  const ledTeams = await prisma.teams.findMany({
+    where: { leader_user_id: actorUser.id, is_active: true },
+    include: { leader: true, members: true },
+  });
+
+  if (ledTeams.length === 1) return ledTeams[0];
+  if (ledTeams.length > 1) {
+    throw createError(400, "Anda memimpin lebih dari satu tim RnD. Silakan tentukan 'teamId' yang akan menangani tiket ini.");
+  }
+
+  // Find team where actor is member
+  const memberTeams = await prisma.teams.findMany({
+    where: {
+      is_active: true,
+      members: { some: { user_id: actorUser.id } },
+    },
+    include: { leader: true, members: true },
+  });
+
+  if (memberTeams.length === 1) return memberTeams[0];
+  if (memberTeams.length > 1) {
+    throw createError(400, "Anda terdaftar di beberapa tim RnD. Silakan tentukan 'teamId' yang akan menangani tiket ini.");
+  }
+
+  throw createError(403, "Anda belum terdaftar dalam tim RnD manapun. Silakan minta Leader tim atau Admin untuk mendaftarkan Anda ke tim.");
+};
+
+/**
+ * Claim ticket (assigns RnD Team to ticket and escalates status)
+ */
+export const claimTicket = async (ticketId, actor, data = {}) => {
   if (!actor) {
     throw createError(401, "Autentikasi diperlukan");
   }
@@ -86,7 +117,6 @@ export const claimTicket = async (ticketId, actor) => {
     throw createError(404, `Tiket '${ticketId}' tidak ditemukan`);
   }
 
-  // Actor verification: must be software team member or admin
   let actorUser = null;
   if (actor.id) {
     actorUser = await prisma.users.findUnique({ where: { id: actor.id } });
@@ -95,7 +125,7 @@ export const claimTicket = async (ticketId, actor) => {
   let actorTelegram = null;
   if (actor.telegram_user_id || actor.telegramUserId || actor.telegramId || actor.telegramUsername || actor.username) {
     const rawTeleId = actor.telegramId ? String(actor.telegramId).trim() : null;
-    const rawUsername = (actor.telegramUsername || actor.username ? String(actor.telegramUsername || actor.username).replace(/^@/, "").trim() : null);
+    const rawUsername = actor.telegramUsername || actor.username ? String(actor.telegramUsername || actor.username).replace(/^@/, "").trim() : null;
 
     actorTelegram = await prisma.telegram_users.findFirst({
       where: {
@@ -116,72 +146,64 @@ export const claimTicket = async (ticketId, actor) => {
     throw createError(403, "Akses ditolak: Admin dan Viewer tidak memiliki akses untuk mengklaim tiket.");
   }
 
-  if (division !== "software") {
-    throw createError(403, "Fitur claim tiket ditujukan khusus untuk anggota tim Software.");
+  if (division !== "software" && division !== "rnd") {
+    throw createError(403, "Fitur claim tiket ditujukan khusus untuk anggota tim RnD.");
   }
 
-  // Ambil state terakhir tiket
   const currentHistory =
     (ticket.ticket_history || []).find((h) => h.version === ticket.current_version) ||
     ticket.ticket_history?.[0] ||
     {};
   const currentStatus = (currentHistory.status || "open").toLowerCase();
 
-  // Validasi: Tim software hanya dapat mengklaim ketika tiket berstatus 'escalated'
-  if (division === "software" && currentStatus !== "escalated") {
+  if (currentStatus !== "escalated") {
     throw createError(
       400,
-      `Akses ditolak: Tim software hanya dapat mengklaim tiket ketika status tiket adalah 'escalated' (status saat ini: '${currentStatus}').`
+      `Akses ditolak: Tim RnD hanya dapat mengklaim tiket ketika status tiket adalah 'escalated' (status saat ini: '${currentStatus}').`
     );
   }
 
-  // Check if ticket already has a leader
-  if (ticket.leader_assignee_id) {
-    const existingLeader = await ticketRepo.findAssigneeById(ticket.leader_assignee_id);
-    const isCurrentLeader =
-      existingLeader &&
-      ((existingLeader.user_id && existingLeader.user_id === actorUser?.id) ||
-        (existingLeader.telegram_user_id && existingLeader.telegram_user_id === actorTelegram?.id));
+  const targetTeam = await resolveClaimTeam(actorUser, data.teamId);
 
-    if (isCurrentLeader) {
+  // If already claimed
+  if (ticket.current_team_id) {
+    if (ticket.current_team_id === targetTeam.id) {
       return formatTicket(ticket);
     }
 
-    const leaderName = existingLeader?.user?.name || existingLeader?.telegram_user?.username || "orang lain";
+    const existingTeamName = ticket.current_team?.name || "tim lain";
     throw createError(
       409,
-      `Tiket ini sudah diklaim oleh leader tim software (${leaderName}). Hanya leader yang dapat menambahkan anggota tim.`
+      `Tiket ini sudah ditangani oleh '${existingTeamName}'. Gunakan fitur pengalihan/handover oleh Leader '${existingTeamName}' untuk memindahkan tiket ke tim Anda.`
     );
   }
 
-  // Check if actor is already assigned (unlikely if no leader, but check)
-  const existingAssignee = await ticketRepo.findAssigneeByTicketAndMember(ticketId, {
-    userId: actorUser?.id,
-    telegramUserId: actorTelegram?.id,
+  // Set current team and add to ticket_teams
+  await prisma.$transaction(async (tx) => {
+    await tx.ticket_teams.upsert({
+      where: { ticket_id_team_id: { ticket_id: ticketId, team_id: targetTeam.id } },
+      update: {},
+      create: { ticket_id: ticketId, team_id: targetTeam.id },
+    });
+
+    await tx.tickets.update({
+      where: { id: ticketId },
+      data: { current_team_id: targetTeam.id },
+    });
   });
 
-  let assigneeRecord = existingAssignee;
-  if (!assigneeRecord) {
-    assigneeRecord = await ticketRepo.addAssigneeToTicket(ticketId, {
-      userId: actorUser?.id,
-      telegramUserId: actorTelegram?.id,
-      isLeader: true,
-    });
-  } else {
-    await ticketRepo.setTicketLeader(ticketId, assigneeRecord.id);
-  }
-
   const nextVersion = (ticket.current_version ?? 0) + 1;
-  const newStatus = "escalated";
-  const actorName = actorUser?.name || actorUser?.email || actorTelegram?.username || "Software Team";
+  const actorName = actorUser?.name || actorUser?.email || actorTelegram?.username || "RnD Team";
+  const leaderName = targetTeam.leader?.name || actorName;
 
   const historyData = {
-    status: newStatus,
+    status: "escalated",
+    team_id: targetTeam.id,
     damage_description: currentHistory.damage_description,
-    action_taken: currentHistory.action_taken || `Tiket diklaim oleh ${actorName} (Leader Software)`,
+    action_taken: currentHistory.action_taken || `Tiket diklaim oleh ${targetTeam.name} (Leader: ${leaderName})`,
     root_cause: currentHistory.root_cause,
     severity: currentHistory.severity,
-    notes: `Tiket diklaim oleh ${actorName} sebagai Leader tim Software`,
+    notes: `Tiket diklaim oleh ${actorName} untuk ditangani oleh ${targetTeam.name}`,
     changed_by_user_id: actorUser?.id || null,
     changed_by_telegram_user_id: actorTelegram?.id || null,
   };
@@ -199,21 +221,21 @@ export const claimTicket = async (ticketId, actor) => {
     entityId: ticketId,
     details: {
       identifier: ticketId,
-      changeSummary: `tiket diklaim oleh leader tim software '${actorName}'`,
-      leaderAssigneeId: assigneeRecord.id,
-      status: newStatus,
+      changeSummary: `tiket diklaim oleh tim '${targetTeam.name}' (Leader: ${leaderName})`,
+      teamId: targetTeam.id,
+      status: "escalated",
     },
   });
 
   ticketEvents.notifyTicketUpdated(formatted);
 
-  // Publish ticket.escalated event (replaces ticket.claimed)
   const group = await resolveEscalatedGroup(ticket);
   publishWebhook("ticket.escalated", {
     actor: { userId: actorUser?.id || null, telegramId: actorTelegram?.telegram_id || null, name: actorName },
     data: {
       ticketId,
       escalatedBy: actorName,
+      team: { id: targetTeam.id, name: targetTeam.name, leader: leaderName },
       group,
     },
   });
@@ -222,123 +244,94 @@ export const claimTicket = async (ticketId, actor) => {
 };
 
 /**
- * Add team member to ticket_assignees
- * RULE: "yang bisa menambah itu hanya leader nya"
+ * Add a collaborating team to ticket_teams
+ * RULE: Hanya Leader dari tim penanggung jawab saat ini (atau Admin) yang dapat mengelola tim tiket
  */
-export const addAssignee = async (ticketId, data, actor) => {
-  if (!actor) {
-    throw createError(401, "Autentikasi diperlukan");
-  }
+export const addTeamToTicket = async (ticketId, data, actor) => {
+  await checkManageTicketTeamsPermission(ticketId, actor);
 
   const ticket = await ticketRepo.findById(ticketId);
   if (!ticket) {
     throw createError(404, `Tiket '${ticketId}' tidak ditemukan`);
   }
 
-  // Validasi: Status tiket harus 'escalated'
+  let teamId = data.teamId;
+
+  // Backward compatibility: if data has userId, username, or email instead of teamId
+  if (!teamId && (data.userId || data.username || data.email)) {
+    let targetUser = null;
+    if (data.userId) {
+      targetUser = await prisma.users.findUnique({ where: { id: data.userId } });
+    } else if (data.username || data.email) {
+      const uName = (data.username || data.email).toLowerCase().trim();
+      targetUser = await prisma.users.findUnique({ where: { username: uName } });
+    }
+    if (targetUser) {
+      const userTeams = await prisma.teams.findMany({
+        where: {
+          is_active: true,
+          OR: [
+            { leader_user_id: targetUser.id },
+            { members: { some: { user_id: targetUser.id } } },
+          ],
+        },
+      });
+      if (userTeams.length > 0) {
+        teamId = userTeams[0].id;
+      }
+    }
+  }
+
+  if (!teamId) {
+    throw createError(400, "ID Tim ('teamId') wajib disertakan untuk menambahkan tim ke tiket");
+  }
+
+  const team = await prisma.teams.findUnique({
+    where: { id: teamId },
+    include: { leader: true },
+  });
+
+  if (!team) {
+    throw createError(404, "Tim yang akan ditambahkan tidak ditemukan");
+  }
+
+  if (!team.is_active) {
+    throw createError(400, `Tim '${team.name}' sedang tidak aktif`);
+  }
+
+  // Check if team already assigned
+  const alreadyAssigned = (ticket.ticket_teams || []).some((tt) => tt.team_id === teamId);
+  if (alreadyAssigned) {
+    throw createError(409, `Tim '${team.name}' sudah terdaftar dalam penugasan tiket ini`);
+  }
+
+  await ticketRepo.addTeamToTicket(ticketId, teamId);
+
+  let effectiveCurrentTeamId = ticket.current_team_id;
+  if (!effectiveCurrentTeamId) {
+    await prisma.tickets.update({
+      where: { id: ticketId },
+      data: { current_team_id: teamId },
+    });
+    effectiveCurrentTeamId = teamId;
+  }
+
   const currentHistory =
     (ticket.ticket_history || []).find((h) => h.version === ticket.current_version) ||
     ticket.ticket_history?.[0] ||
     {};
-  const currentStatus = (currentHistory.status || "open").toLowerCase();
 
-  const role = (actor.role || "").toLowerCase();
-  const division = (actor.division || "").toLowerCase();
-  const isAdmin = role === "admin";
-
-  if (!isAdmin && role !== "coordinator") {
-    throw createError(403, "Akses ditolak: Pengelolaan anggota tiket hanya dapat dilakukan oleh Koordinator atau Admin.");
-  }
-
-  if (!isAdmin && division !== "software") {
-    throw createError(403, "Akses ditolak: Hanya Koordinator divisi Software atau Admin yang dapat menambahkan anggota ke tiket software.");
-  }
-
-  if (currentStatus !== "escalated") {
-    throw createError(
-      403,
-      `Akses ditolak: Penambahan anggota tim software hanya dapat dilakukan ketika tiket berstatus 'escalated' (status saat ini: '${currentStatus}').`
-    );
-  }
-
-  // 1. Cek leader saat ini
-  const leaderAssignee = ticket.leader_assignee_id
-    ? await ticketRepo.findAssigneeById(ticket.leader_assignee_id)
-    : null;
-
-  const isLeader = leaderAssignee && leaderAssignee.user_id && leaderAssignee.user_id === actor.id;
-
-  // Tiket sudah memiliki leader: hanya leader tim software atau Admin yang dapat menambah
-  if (!isAdmin && ticket.leader_assignee_id && !isLeader) {
-    throw createError(403, "Akses ditolak: Hanya Leader tim software pada tiket ini atau Admin yang dapat menambahkan anggota tim.");
-  }
-
-  // 3. Resolusi anggota yang ingin ditambahkan (Web User)
-  let targetUser = null;
-  if (data.userId) {
-    targetUser = await prisma.users.findUnique({
-      where: { id: data.userId },
-      include: { telegram_user: true },
-    });
-  } else if (data.email) {
-    targetUser = await prisma.users.findUnique({
-      where: { email: data.email.toLowerCase().trim() },
-      include: { telegram_user: true },
-    });
-  }
-
-  if (!targetUser) {
-    throw createError(404, "Data pengguna software yang akan ditambahkan tidak ditemukan.");
-  }
-
-  // 4. Validasi divisi target: Harus dari divisi software
-  const targetDivision = (targetUser.division || "").toLowerCase();
-  if (targetDivision !== "software") {
-    throw createError(400, "Anggota tim yang ditambahkan harus berasal dari divisi Software.");
-  }
-
-  // 5. Cek apakah target sudah terdaftar di assignees
-  const isAlreadyAssigned = await ticketRepo.findAssigneeByTicketAndMember(ticketId, {
-    userId: targetUser.id,
-  });
-
-  if (isAlreadyAssigned) {
-    throw createError(409, "Anggota tersebut sudah terdaftar dalam ticket assignees tiket ini.");
-  }
-
-  // 6. Tambahkan ke ticket_assignees
-  const shouldBeLeader = Boolean(data.isLeader) || !ticket.leader_assignee_id;
-  const newAssignee = await ticketRepo.addAssigneeToTicket(ticketId, {
-    userId: targetUser.id,
-    isLeader: shouldBeLeader,
-  });
-
-  if (shouldBeLeader) {
-    await ticketRepo.setTicketLeader(ticketId, newAssignee.id);
-  }
-
-  const targetName =
-    targetUser?.name ||
-    targetUser?.email ||
-    targetUser?.telegram_user?.username ||
-    targetUser?.telegram_user?.full_name ||
-    "Anggota Tim";
-  const actorName =
-    leaderAssignee?.user?.name ||
-    leaderAssignee?.user?.telegram_user?.username ||
-    actor.name ||
-    actor.email ||
-    "Leader";
-
-  // 7. Catat di ticket_history & naikkan versi
   const nextVersion = (ticket.current_version ?? 0) + 1;
+  const actorName = actor.name || actor.email || "Leader";
+
   const historyData = {
     status: currentHistory.status || "escalated",
+    team_id: effectiveCurrentTeamId,
     damage_description: currentHistory.damage_description,
     action_taken: currentHistory.action_taken,
     root_cause: currentHistory.root_cause,
     severity: currentHistory.severity,
-    notes: `Anggota tim software '${targetName}' ditambahkan oleh Leader (${actorName})`,
+    notes: `Tim '${team.name}' ditambahkan ke tiket oleh ${actorName}`,
     changed_by_user_id: actor.id || null,
     changed_by_telegram_user_id: actor.telegram_user_id || null,
   };
@@ -351,197 +344,90 @@ export const addAssignee = async (ticketId, data, actor) => {
     actorUserId: actor.id || null,
     action: "update",
     deleteAction: "NONE",
-    entityType: "TicketAssignee",
-    entityId: newAssignee.id,
+    entityType: "TicketTeam",
+    entityId: teamId,
     details: {
       identifier: ticketId,
-      changeSummary: `Leader menambahkan anggota tim software '${targetName}' ke tiket ${ticketId}`,
-      ticketId,
-      addedMember: targetName,
+      changeSummary: `menambahkan tim '${team.name}' ke tiket ${ticketId}`,
+      teamId,
+      teamName: team.name,
     },
   });
 
   ticketEvents.notifyTicketUpdated(formatted);
 
-  // Always publish ticket.member_added when a member is added
   publishWebhook("ticket.member_added", {
-    actor: { userId: actor.id || null, telegramId: actor.telegram_user_id || null, name: actorName },
+    actor: { userId: actor.id || null, name: actorName },
     data: {
       ticketId,
       addedBy: actorName,
-      addedMember: {
-        name: targetName,
-        userId: targetUser?.id || null,
-        telegram: targetUser?.telegram_user
-          ? {
-              telegramId: targetUser.telegram_user.telegram_id,
-              username: targetUser.telegram_user.username || null,
-            }
-          : null,
-      },
+      team: { id: team.id, name: team.name, leader: team.leader?.name },
     },
   });
 
-  // If member is added as leader, also publish ticket.leader_changed
-  if (shouldBeLeader) {
-    publishWebhook("ticket.leader_changed", {
-      actor: { userId: actor.id || null, telegramId: actor.telegram_user_id || null, name: actorName },
-      data: {
-        ticketId,
-        oldLeader: null,
-        newLeader: {
-          name: targetName,
-          userId: targetUser?.id || null,
-          telegramId: targetUser?.telegram_user?.telegram_id || null,
-        },
-        changedBy: actorName,
-        changeType: "added_as_leader",
-      },
-    });
-  }
-
   return {
-    message: `Anggota tim software '${targetName}' berhasil ditambahkan ke tiket`,
-    assignee: {
-      id: newAssignee.id,
-      ticketId: newAssignee.ticket_id,
-      userId: newAssignee.user_id,
-      user_id: newAssignee.user_id,
-      telegramUserId: newAssignee.telegram_user_id,
-      telegram_user_id: newAssignee.telegram_user_id,
-      user: newAssignee.user,
-      telegramUser: newAssignee.telegram_user,
-      createdAt: newAssignee.created_at,
-    },
+    message: `Tim '${team.name}' berhasil ditambahkan ke tiket`,
     ticket: formatted,
   };
 };
 
 /**
- * Update / edit an existing assignee in ticket_assignees
- * RULE: Hanya Leader tiket yang dapat mengubah anggota tim
+ * Remove a collaborating team from ticket_teams
+ * RULE: Hanya Leader dari tim penanggung jawab saat ini (atau Admin) yang dapat mengelola tim tiket
  */
-export const updateAssignee = async (ticketId, assigneeId, data, actor) => {
-  if (!actor) {
-    throw createError(401, "Autentikasi diperlukan");
-  }
+export const removeTeamFromTicket = async (ticketId, teamId, actor) => {
+  await checkManageTicketTeamsPermission(ticketId, actor);
 
   const ticket = await ticketRepo.findById(ticketId);
   if (!ticket) {
     throw createError(404, `Tiket '${ticketId}' tidak ditemukan`);
   }
 
-  // 1. Validasi status tiket harus 'escalated'
+  let resolvedTeamId = teamId;
+  let team = await prisma.teams.findUnique({ where: { id: resolvedTeamId } });
+
+  if (!team) {
+    const tt = await prisma.ticket_teams.findUnique({
+      where: { id: teamId },
+      include: { team: true },
+    });
+    if (tt?.team) {
+      resolvedTeamId = tt.team_id;
+      team = tt.team;
+    }
+  }
+
+  if (!team) {
+    throw createError(404, "Tim kolaborasi yang akan dihapus tidak ditemukan");
+  }
+
+  if (ticket.current_team_id === resolvedTeamId) {
+    throw createError(
+      400,
+      "Tim penanggung jawab utama tidak dapat dihapus dari tiket. Gunakan fitur pengalihan/handover tanggung jawab ke tim lain."
+    );
+  }
+
+  const teamName = team?.name || resolvedTeamId;
+
+  await ticketRepo.removeTeamFromTicket(ticketId, resolvedTeamId);
+
   const currentHistory =
     (ticket.ticket_history || []).find((h) => h.version === ticket.current_version) ||
     ticket.ticket_history?.[0] ||
     {};
-  const currentStatus = (currentHistory.status || "open").toLowerCase();
 
-  const role = (actor.role || "").toLowerCase();
-  if (role === "admin" || role === "viewer") {
-    throw createError(403, "Akses ditolak: Admin dan Viewer tidak memiliki akses untuk mengubah anggota tim tiket.");
-  }
-
-  if (currentStatus !== "escalated") {
-    throw createError(
-      403,
-      `Akses ditolak: Pengubahan anggota tim software hanya dapat dilakukan ketika tiket berstatus 'escalated' (status saat ini: '${currentStatus}').`
-    );
-  }
-
-  // 2. Validasi target assignee di tiket ini
-  const existingAssignee = await ticketRepo.findAssigneeById(assigneeId);
-  if (!existingAssignee || existingAssignee.ticket_id !== ticketId) {
-    throw createError(404, "Assignee tidak ditemukan pada tiket ini.");
-  }
-
-  // 3. Validasi wewenang: HANYA Leader tiket
-  const currentLeader = ticket.leader_assignee_id ? await ticketRepo.findAssigneeById(ticket.leader_assignee_id) : null;
-  const isLeader =
-    currentLeader &&
-    ((currentLeader.user_id && currentLeader.user_id === actor.id) ||
-      (currentLeader.telegram_user_id && currentLeader.telegram_user_id === actor.telegram_user_id));
-
-  if (!isLeader) {
-    throw createError(403, "Hanya Leader tiket yang dapat mengubah anggota tim software.");
-  }
-
-  // 4. Resolusi data anggota baru (jika diubah)
-  let targetUser = null;
-  let targetTelegram = null;
-
-  if (data.userId) {
-    targetUser = await prisma.users.findUnique({ where: { id: data.userId } });
-  } else if (data.email) {
-    targetUser = await prisma.users.findUnique({ where: { email: data.email.toLowerCase().trim() } });
-  }
-
-  if (data.telegramUserId) {
-    targetTelegram = await prisma.telegram_users.findUnique({ where: { id: data.telegramUserId } });
-  } else if (data.telegramId) {
-    targetTelegram = await prisma.telegram_users.findFirst({
-      where: {
-        OR: [
-          { telegram_id: String(data.telegramId).trim() },
-          { username: String(data.telegramId).replace(/^@/, "").trim() },
-        ],
-      },
-    });
-  }
-
-  // 5. Validasi divisi jika ada pergantian target
-  if (targetUser) {
-    const uDiv = (targetUser.division || "").toLowerCase();
-    const uRole = (targetUser.role || "").toLowerCase();
-    if (uDiv !== "software" && uRole !== "admin") {
-      throw createError(400, "Pengguna yang ditugaskan harus berasal dari divisi software.");
-    }
-  }
-
-  if (targetTelegram) {
-    const tDiv = (targetTelegram.division || "").toLowerCase();
-    if (tDiv !== "software") {
-      throw createError(400, "User Telegram yang ditugaskan harus berasal dari divisi software.");
-    }
-  }
-
-  const finalUserId = targetUser ? targetUser.id : (data.userId === null ? null : existingAssignee.user_id);
-  const finalTelegramUserId = targetTelegram ? targetTelegram.id : (data.telegramUserId === null ? null : existingAssignee.telegram_user_id);
-
-  if (!finalUserId && !finalTelegramUserId) {
-    throw createError(400, "Assignee harus memiliki setidaknya satu User ID atau Telegram User ID.");
-  }
-
-  // 6. Cek duplikasi dengan assignee lain di tiket ini
-  const duplicate = await ticketRepo.findAssigneeByTicketAndMember(ticketId, {
-    userId: finalUserId,
-    telegramUserId: finalTelegramUserId,
-  });
-
-  if (duplicate && duplicate.id !== assigneeId) {
-    throw createError(409, "Anggota tersebut sudah terdaftar dalam ticket assignees tiket ini.");
-  }
-
-  // 7. Update assignee di database
-  const updatedAssignee = await ticketRepo.updateAssigneeInTicket(assigneeId, {
-    userId: finalUserId,
-    telegramUserId: finalTelegramUserId,
-  });
-
-  const oldName = existingAssignee.user?.name || existingAssignee.telegram_user?.username || "Anggota Tim";
-  const newName = updatedAssignee.user?.name || updatedAssignee.telegram_user?.username || "Anggota Tim";
-  const actorName = currentLeader?.user?.name || actor.name || "Leader";
-
-  // 8. Catat riwayat versi baru
   const nextVersion = (ticket.current_version ?? 0) + 1;
+  const actorName = actor.name || actor.email || "Leader";
+
   const historyData = {
     status: currentHistory.status || "escalated",
+    team_id: ticket.current_team_id,
     damage_description: currentHistory.damage_description,
     action_taken: currentHistory.action_taken,
     root_cause: currentHistory.root_cause,
     severity: currentHistory.severity,
-    notes: `Data anggota tim software '${oldName}' diubah menjadi '${newName}' oleh Leader (${actorName})`,
+    notes: `Tim '${teamName}' dikeluarkan dari tiket oleh ${actorName}`,
     changed_by_user_id: actor.id || null,
     changed_by_telegram_user_id: actor.telegram_user_id || null,
   };
@@ -554,119 +440,109 @@ export const updateAssignee = async (ticketId, assigneeId, data, actor) => {
     actorUserId: actor.id || null,
     action: "update",
     deleteAction: "NONE",
-    entityType: "TicketAssignee",
-    entityId: assigneeId,
+    entityType: "TicketTeam",
+    entityId: teamId,
     details: {
       identifier: ticketId,
-      changeSummary: `Data anggota tim software '${oldName}' diubah menjadi '${newName}' di tiket ${ticketId}`,
-      ticketId,
-      assigneeId,
-      oldMember: oldName,
-      newMember: newName,
+      changeSummary: `mengeluarkan tim '${teamName}' dari tiket ${ticketId}`,
+      teamId,
+      teamName,
     },
   });
 
   ticketEvents.notifyTicketUpdated(formatted);
 
   return {
-    message: `Data anggota tim software berhasil diperbarui`,
-    assignee: {
-      id: updatedAssignee.id,
-      ticketId: updatedAssignee.ticket_id,
-      userId: updatedAssignee.user_id,
-      user_id: updatedAssignee.user_id,
-      telegramUserId: updatedAssignee.telegram_user_id,
-      telegram_user_id: updatedAssignee.telegram_user_id,
-      user: updatedAssignee.user,
-      telegramUser: updatedAssignee.telegram_user,
-      createdAt: updatedAssignee.created_at,
-    },
+    message: `Tim '${teamName}' berhasil dikeluarkan dari tiket`,
     ticket: formatted,
   };
 };
 
 /**
- * Change leader of a ticket to another existing assignee
+ * Handover / transfer primary team responsibility to another team
+ * RULE: Leader tim penanggung jawab aktif (atau Admin) dapat melempar tanggung jawab ke divisi/tim lain
  */
-export const changeLeader = async (ticketId, data, actor) => {
-  if (!actor) {
-    throw createError(401, "Autentikasi diperlukan");
-  }
+export const handoverTicketTeam = async (ticketId, data, actor) => {
+  await checkManageTicketTeamsPermission(ticketId, actor);
 
   const ticket = await ticketRepo.findById(ticketId);
   if (!ticket) {
     throw createError(404, `Tiket '${ticketId}' tidak ditemukan`);
   }
 
-  // Validasi: Status tiket harus 'escalated'
-  const currentHistory =
-    (ticket.ticket_history || []).find((h) => h.version === ticket.current_version) ||
-    ticket.ticket_history?.[0] ||
-    {};
-  const currentStatus = (currentHistory.status || "open").toLowerCase();
-
-  const role = (actor.role || "").toLowerCase();
-  if (role === "viewer") {
-    throw createError(403, "Akses ditolak: Viewer tidak memiliki akses untuk mengalihkan kepemimpinan tiket.");
+  let targetTeamId = data.teamId;
+  if (!targetTeamId) {
+    throw createError(400, "ID Tim tujuan ('teamId') wajib disertakan");
   }
 
-  if (currentStatus !== "escalated") {
-    throw createError(
-      403,
-      `Akses ditolak: Pengalihan kepemimpinan tim software hanya dapat dilakukan ketika tiket berstatus 'escalated' (status saat ini: '${currentStatus}').`
-    );
-  }
+  let targetTeam = await prisma.teams.findUnique({
+    where: { id: targetTeamId },
+    include: { leader: true },
+  });
 
-  if (!ticket.leader_assignee_id) {
-    throw createError(400, "Tiket belum memiliki leader");
-  }
-
-  const isAdmin = role === "admin";
-  if (!isAdmin && role !== "coordinator") {
-    throw createError(403, "Akses ditolak: Pengalihan kepemimpinan tiket hanya dapat dilakukan oleh Koordinator atau Admin.");
-  }
-
-  // Validasi: hanya leader saat ini atau Admin yang dapat memindahkan kepemimpinan
-  const currentLeader = await ticketRepo.findAssigneeById(ticket.leader_assignee_id);
-  const isLeader = currentLeader && currentLeader.user_id && currentLeader.user_id === actor.id;
-
-  if (!isLeader && !isAdmin) {
-    throw createError(403, "Akses ditolak: Hanya Leader tim software saat ini atau Admin yang dapat mengalihkan kepemimpinan tiket.");
-  }
-
-  // Temukan target assignee di tiket ini
-  let targetAssignee = null;
-  if (data.assigneeId) {
-    targetAssignee = await ticketRepo.findAssigneeById(data.assigneeId);
-  } else if (data.userId) {
-    targetAssignee = await ticketRepo.findAssigneeByTicketAndMember(ticketId, {
-      userId: data.userId,
+  if (!targetTeam) {
+    const tt = await prisma.ticket_teams.findUnique({
+      where: { id: targetTeamId },
+      include: { team: { include: { leader: true } } },
     });
+    if (tt?.team) {
+      targetTeamId = tt.team_id;
+      targetTeam = tt.team;
+    }
   }
 
-  if (!targetAssignee || targetAssignee.ticket_id !== ticketId) {
-    throw createError(404, "Target anggota tidak ditemukan di daftar ticket assignees tiket ini.");
+  if (!targetTeam) {
+    throw createError(404, "Tim tujuan tidak ditemukan");
   }
 
-  if (targetAssignee.id === ticket.leader_assignee_id) {
+  if (targetTeamId === ticket.current_team_id) {
     return formatTicket(ticket);
   }
 
-  // Update leader
-  await ticketRepo.setTicketLeader(ticketId, targetAssignee.id);
+  if (!targetTeam.is_active) {
+    throw createError(400, `Tim tujuan '${targetTeam.name}' sedang tidak aktif`);
+  }
 
-  const newLeaderName = targetAssignee.user?.name || targetAssignee.telegram_user?.username || "Anggota Baru";
-  const actorName = currentLeader?.user?.name || actor.name || "Leader Lama";
+  const oldTeamId = ticket.current_team_id;
+  const oldTeamName = ticket.current_team?.name || "Tim Sebelumnya";
+  const newTeamName = targetTeam.name;
+  const actorName = actor.name || actor.email || "Leader";
+  const removeOldTeam = Boolean(data.removeOldTeam);
 
-  // Catat riwayat versi baru
+  // Update current team and ensure target team is in ticket_teams
+  await ticketRepo.setTicketCurrentTeam(ticketId, targetTeamId);
+
+  // If removeOldTeam is requested (instant handover & release old team from ticket)
+  if (removeOldTeam && oldTeamId && oldTeamId !== targetTeamId) {
+    await prisma.ticket_teams.deleteMany({
+      where: {
+        ticket_id: ticketId,
+        team_id: oldTeamId,
+      },
+    });
+  }
+
+  const currentHistory =
+    (ticket.ticket_history || []).find((h) => h.version === ticket.current_version) ||
+    ticket.ticket_history?.[0] ||
+    {};
+
   const nextVersion = (ticket.current_version ?? 0) + 1;
+  const baseNote = removeOldTeam
+    ? `Tanggung jawab dialihkan langsung ke ${newTeamName} dan ${oldTeamName} keluar dari tiket`
+    : `Tanggung jawab dialihkan dari ${oldTeamName} ke ${newTeamName}`;
+  const handoverNote = data.notes
+    ? `${baseNote} (${data.notes})`
+    : `${baseNote} oleh ${actorName}`;
+
   const historyData = {
-    status: currentHistory.status || "escalated",
+    status: "escalated",
+    team_id: targetTeamId,
     damage_description: currentHistory.damage_description,
     action_taken: currentHistory.action_taken,
     root_cause: currentHistory.root_cause,
     severity: currentHistory.severity,
-    notes: `Kepemimpinan tim software dialihkan dari ${actorName} ke ${newLeaderName}`,
+    notes: handoverNote,
     changed_by_user_id: actor.id || null,
     changed_by_telegram_user_id: actor.telegram_user_id || null,
   };
@@ -679,174 +555,47 @@ export const changeLeader = async (ticketId, data, actor) => {
     actorUserId: actor.id || null,
     action: "update",
     deleteAction: "NONE",
-    entityType: "TicketLeader",
+    entityType: "TicketHandover",
     entityId: ticketId,
     details: {
       identifier: ticketId,
-      changeSummary: `Kepemimpinan tiket dialihkan ke '${newLeaderName}'`,
+      changeSummary: `mengalihkan tanggung jawab tiket dari '${oldTeamName}' ke '${newTeamName}'`,
       ticketId,
-      newLeaderAssigneeId: targetAssignee.id,
+      oldTeam: oldTeamName,
+      newTeam: newTeamName,
+      reason: data.notes || null,
     },
   });
 
   ticketEvents.notifyTicketUpdated(formatted);
 
-  // Publish ticket.leader_changed event for leadership transfer
-  const oldLeaderName = currentLeader?.user?.name || currentLeader?.telegram_user?.username || "Leader Lama";
-  // Use existing newLeaderName and actorName variables declared above
-
   publishWebhook("ticket.leader_changed", {
-    actor: { userId: actor.id || null, telegramId: actor.telegram_user_id || null, name: actorName },
+    actor: { userId: actor.id || null, name: actorName },
     data: {
       ticketId,
-      oldLeader: {
-        name: oldLeaderName,
-        userId: currentLeader?.user_id || null,
-        telegramId: currentLeader?.telegram_user?.telegram_id || null,
-      },
-      newLeader: {
-        name: newLeaderName,
-        userId: targetAssignee.user_id || null,
-        telegramId: targetAssignee.telegram_user?.telegram_id || null,
-      },
+      oldTeam: oldTeamName,
+      newTeam: { id: targetTeam.id, name: targetTeam.name, leader: targetTeam.leader?.name },
       changedBy: actorName,
-      changeType: "transfer",
+      changeType: "handover",
     },
   });
 
   return formatted;
 };
 
-/**
- * Remove an assignee from ticket
- * RULE: Leader atau anggota bersangkutan dapat menghapus keikutsertaan.
- * Data di ticket_history tetap aman dan terrecord.
- */
+// Backward-compatible alias exports
+export const addAssignee = async (ticketId, data, actor) => {
+  return addTeamToTicket(ticketId, data, actor);
+};
+
+export const updateAssignee = async (ticketId, assigneeId, data, actor) => {
+  return handoverTicketTeam(ticketId, data, actor);
+};
+
+export const changeLeader = async (ticketId, data, actor) => {
+  return handoverTicketTeam(ticketId, data, actor);
+};
+
 export const removeAssignee = async (ticketId, assigneeId, actor) => {
-  if (!actor) {
-    throw createError(401, "Autentikasi diperlukan");
-  }
-
-  const ticket = await ticketRepo.findById(ticketId);
-  if (!ticket) {
-    throw createError(404, `Tiket '${ticketId}' tidak ditemukan`);
-  }
-
-  // Validasi: Status tiket harus 'escalated'
-  const currentHistory =
-    (ticket.ticket_history || []).find((h) => h.version === ticket.current_version) ||
-    ticket.ticket_history?.[0] ||
-    {};
-  const currentStatus = (currentHistory.status || "open").toLowerCase();
-
-  const role = (actor.role || "").toLowerCase();
-  if (role === "viewer") {
-    throw createError(403, "Akses ditolak: Viewer tidak memiliki akses untuk menghapus anggota dari tiket.");
-  }
-
-  if (currentStatus !== "escalated") {
-    throw createError(
-      403,
-      `Akses ditolak: Perubahan anggota tim software hanya dapat dilakukan ketika tiket berstatus 'escalated' (status saat ini: '${currentStatus}').`
-    );
-  }
-
-  const targetAssignee = await ticketRepo.findAssigneeById(assigneeId);
-  if (!targetAssignee || targetAssignee.ticket_id !== ticketId) {
-    throw createError(404, "Assignee tidak ditemukan pada tiket ini.");
-  }
-
-  const isAdmin = role === "admin";
-  if (!isAdmin && role !== "coordinator") {
-    throw createError(403, "Akses ditolak: Pengelolaan anggota tiket hanya dapat dilakukan oleh Koordinator atau Admin.");
-  }
-
-  // Validasi: Leader tim TIDAK BOLEH dihapus langsung. Harus dialihkan dulu kepemimpinannya ke anggota lain.
-  if (targetAssignee.id === ticket.leader_assignee_id) {
-    throw createError(
-      400,
-      "Leader tim tidak dapat langsung dihapus dari tim. Silakan alihkan tanggung jawab Leader ke anggota lain terlebih dahulu sebelum menghapus."
-    );
-  }
-
-  // Yang dapat menghapus: Leader, Admin, atau anggota itu sendiri (keluar dari tiket)
-  const currentLeader = ticket.leader_assignee_id ? await ticketRepo.findAssigneeById(ticket.leader_assignee_id) : null;
-  const isLeader = currentLeader && currentLeader.user_id === actor.id;
-  const isSelf = targetAssignee.user_id === actor.id;
-
-  if (!isLeader && !isSelf && !isAdmin) {
-    throw createError(403, "Akses ditolak: Hanya Leader tim software, Admin, atau anggota bersangkutan yang dapat menghapus keikutsertaan dari tiket.");
-  }
-
-  await ticketRepo.removeAssigneeFromTicket(ticketId, assigneeId);
-
-  const memberName = targetAssignee.user?.name || targetAssignee.telegram_user?.username || "Anggota Tim";
-  const actorName = actor.name || actor.email || "Leader";
-
-  // Catat riwayat versi baru
-  const nextVersion = (ticket.current_version ?? 0) + 1;
-  const historyData = {
-    status: currentHistory.status || "escalated",
-    damage_description: currentHistory.damage_description,
-    action_taken: currentHistory.action_taken,
-    root_cause: currentHistory.root_cause,
-    severity: currentHistory.severity,
-    notes: `${memberName} ${isSelf ? "keluar dari" : "dihapus oleh Leader dari"} tim software tiket`,
-    changed_by_user_id: actor.id || null,
-    changed_by_telegram_user_id: actor.telegram_user_id || null,
-  };
-
-  const updatedRaw = await ticketRepo.updateWithHistory(ticketId, nextVersion, historyData);
-  const formatted = formatTicket(updatedRaw);
-
-  await recordLog({
-    actor: actorName,
-    actorUserId: actor.id || null,
-    action: "delete",
-    deleteAction: "SOFT",
-    entityType: "TicketAssignee",
-    entityId: assigneeId,
-    details: {
-      identifier: ticketId,
-      changeSummary: `${memberName} dihapus dari tim software tiket ${ticketId}`,
-      ticketId,
-      removedMember: memberName,
-    },
-  });
-
-  ticketEvents.notifyTicketUpdated(formatted);
-
-  // Publish ticket.member_removed event
-  const leaderName = currentLeader?.user?.name || currentLeader?.telegram_user?.username || "Leader";
-  const removedMemberTelegramId =
-    targetAssignee.telegram_user?.telegram_id ||
-    targetAssignee.user?.telegram_user?.telegram_id ||
-    null;
-  const leaderTelegramId =
-    currentLeader?.telegram_user?.telegram_id ||
-    currentLeader?.user?.telegram_user?.telegram_id ||
-    null;
-
-  publishWebhook("ticket.member_removed", {
-    actor: { userId: actor.id || null, telegramId: actor.telegram_user_id || null, name: actorName },
-    data: {
-      ticketId,
-      removedMember: {
-        name: memberName,
-        userId: targetAssignee.user_id || null,
-        telegramId: removedMemberTelegramId,
-      },
-      removedBy: actorName,
-      leader: {
-        name: leaderName,
-        userId: currentLeader?.user_id || null,
-        telegramId: leaderTelegramId,
-      },
-    },
-  });
-
-  return {
-    message: `Anggota '${memberName}' berhasil dihapus dari tiket`,
-    ticket: formatted,
-  };
+  return removeTeamFromTicket(ticketId, assigneeId, actor);
 };

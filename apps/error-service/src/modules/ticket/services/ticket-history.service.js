@@ -20,7 +20,7 @@ export const getTicketHistory = async (ticketId, query = {}) => {
     let authorDivision = null;
 
     if (h.changed_by_user) {
-      author = h.changed_by_user.name || h.changed_by_user.email;
+      author = h.changed_by_user.name || h.changed_by_user.username || h.changed_by_user.email;
       authorRole = h.changed_by_user.role;
       authorDivision = h.changed_by_user.division;
     } else if (h.changed_by_telegram) {
@@ -71,7 +71,7 @@ export const getTicketHistoryDetail = async (ticketId, version) => {
 
   let author = "Sistem";
   if (history.changed_by_user) {
-    author = history.changed_by_user.name || history.changed_by_user.email;
+    author = history.changed_by_user.name || history.changed_by_user.username || history.changed_by_user.email;
   } else if (history.changed_by_telegram) {
     author = history.changed_by_telegram.username
       ? `@${history.changed_by_telegram.username}`

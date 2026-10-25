@@ -54,8 +54,8 @@ export default function UpdateTicketModal({ isOpen, onClose, ticket, onSuccess }
     });
     statusOptions.push({
       value: "escalated",
-      label: "Eskalasi ke Software",
-      desc: "Alihkan penanganan ke tim software untuk investigasi bug/sistem",
+      label: "Eskalasi ke RnD",
+      desc: "Alihkan penanganan ke tim RnD untuk investigasi bug/sistem",
       color: "#d97706",
       bg: "#fffbeb",
       border: "#fde68a",
@@ -71,16 +71,16 @@ export default function UpdateTicketModal({ isOpen, onClose, ticket, onSuccess }
   } else if (currentStatusLower === "escalated") {
     statusOptions.push({
       value: "escalated",
-      label: "Tetap Escalated (Progress Software)",
-      desc: "Perbarui progres investigasi, debugging, atau modul patch software",
+      label: "Tetap Escalated (Progress RnD)",
+      desc: "Perbarui progres investigasi, debugging, atau modul patch RnD",
       color: "#d97706",
       bg: "#fffbeb",
       border: "#fde68a",
     });
     statusOptions.push({
       value: "solved",
-      label: "Selesai / Solved (Software)",
-      desc: "Perbaikan bug/patch software berhasil diselesaikan dan terverifikasi",
+      label: "Selesai / Solved (RnD)",
+      desc: "Perbaikan bug/patch RnD berhasil diselesaikan dan terverifikasi",
       color: "#16a34a",
       bg: "#f0fdf4",
       border: "#bbf7d0",
@@ -98,7 +98,7 @@ export default function UpdateTicketModal({ isOpen, onClose, ticket, onSuccess }
     statusOptions.push({
       value: "escalated",
       label: "Escalated",
-      desc: "Alihkan ke tim software",
+      desc: "Alihkan ke tim RnD",
       color: "#d97706",
       bg: "#fffbeb",
       border: "#fde68a",

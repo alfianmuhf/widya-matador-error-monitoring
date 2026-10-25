@@ -50,6 +50,18 @@ router.patch(
 );
 
 /**
+ * PATCH /ticket-management/:id/team
+ * Mengalihkan tanggung jawab ke tim RnD lain (handover) oleh Leader tim aktif atau Admin
+ */
+router.patch(
+  "/:id/team",
+  authenticate,
+  authorize("admin", "coordinator"),
+  validate(changeLeaderSchema, "body"),
+  ticketManagementController.handoverManagedTeam
+);
+
+/**
  * PATCH /ticket-management/:id/leader
  * Mengalihkan leader tim software (khusus status escalated) oleh Leader atau Admin
  */
@@ -59,6 +71,29 @@ router.patch(
   authorize("admin", "coordinator"),
   validate(changeLeaderSchema, "body"),
   ticketManagementController.changeManagedLeader
+);
+
+/**
+ * POST /ticket-management/:id/teams
+ * Menambahkan tim kolaborasi ke tiket oleh leader tim aktif atau admin
+ */
+router.post(
+  "/:id/teams",
+  authenticate,
+  authorize("admin", "coordinator"),
+  validate(addAssigneeSchema, "body"),
+  ticketManagementController.addManagedTeam
+);
+
+/**
+ * DELETE /ticket-management/:id/teams/:teamId
+ * Menghapus tim kolaborasi dari tiket oleh leader tim aktif atau admin
+ */
+router.delete(
+  "/:id/teams/:teamId",
+  authenticate,
+  authorize("admin", "coordinator"),
+  ticketManagementController.removeManagedTeam
 );
 
 /**

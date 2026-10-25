@@ -1,4 +1,5 @@
 import { EventEmitter } from "events";
+import { invalidateDashboardCaches } from "../../config/redis.js";
 
 /**
  * Global EventEmitter instance for Ticket realtime events (SSE)
@@ -11,6 +12,7 @@ class TicketEventEmitter extends EventEmitter {
   }
 
   notifyTicketUpdated(ticket) {
+    invalidateDashboardCaches().catch(() => {});
     this.emit("ticket_event", {
       event: "ticket_updated",
       data: ticket,
@@ -19,6 +21,7 @@ class TicketEventEmitter extends EventEmitter {
   }
 
   notifyTicketCreated(ticket) {
+    invalidateDashboardCaches().catch(() => {});
     this.emit("ticket_event", {
       event: "ticket_created",
       data: ticket,

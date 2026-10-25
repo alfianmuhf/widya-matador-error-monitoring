@@ -42,14 +42,61 @@ export const getTickets = async (query = {}) => {
   const statusFilter = query.status ? query.status.toLowerCase() : null;
   const severityFilter = query.severity ? query.severity.toLowerCase() : null;
 
+  // Order By
+  const sortByMap = {
+    openAt: "open_at",
+    open_at: "open_at",
+    createdAt: "open_at",
+    created_at: "open_at",
+    escalatedAt: "escalated_at",
+    escalated_at: "escalated_at",
+    solvedAt: "solved_at",
+    solved_at: "solved_at",
+    ticketId: "id",
+    id: "id",
+  };
+  const sortBy = sortByMap[query.sortBy] || "open_at";
+  const sortOrder = (query.sortOrder || "desc").toLowerCase();
+  const orderBy = { [sortBy]: sortOrder };
+
+  // When filtering by status or severity (which reside in versioned ticket_history),
+  // use findFilteredTicketIdsAndCount to prevent query parameter limit overflow when tens of thousands of tickets match.
   if (statusFilter || severityFilter) {
-    const matchingIds = await ticketRepo.findTicketIdsByCurrentHistory({
+    const { total, ids } = await ticketRepo.findFilteredTicketIdsAndCount({
       status: statusFilter,
       severity: severityFilter,
+      componentId: query.componentId,
+      unitCode: query.unitCode,
+      clientId: query.clientId,
+      locationId: query.locationId,
+      startDate: query.startDate,
+      endDate: query.endDate,
+      search: query.search,
+      sortBy,
+      sortOrder,
+      skip,
+      take: limit,
     });
-    if (matchingIds) {
-      where.id = { in: matchingIds };
-    }
+
+    const rawTickets =
+      ids.length > 0
+        ? await ticketRepo.findMany({
+            where: { id: { in: ids } },
+            orderBy,
+          })
+        : [];
+
+    const tickets = rawTickets.map(formatTicket);
+
+    return {
+      tickets,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit) || 1,
+      },
+    };
   }
 
   // Component filter (via failure_code)
@@ -105,22 +152,6 @@ export const getTickets = async (query = {}) => {
     ];
   }
 
-  // Order By
-  const sortByMap = {
-    openAt: "open_at",
-    open_at: "open_at",
-    createdAt: "open_at",
-    created_at: "open_at",
-    escalatedAt: "escalated_at",
-    escalated_at: "escalated_at",
-    solvedAt: "solved_at",
-    solved_at: "solved_at",
-    ticketId: "id",
-    id: "id",
-  };
-  const sortBy = sortByMap[query.sortBy] || "open_at";
-  const sortOrder = query.sortOrder || "desc";
-  const orderBy = { [sortBy]: sortOrder };
 
   const [rawTickets, total] = await Promise.all([
     ticketRepo.findMany({ skip, take: limit, where, orderBy }),
@@ -178,6 +209,7 @@ export const updateTicket = async (ticketId, data, actor = {}) => {
 
   const historyData = {
     status: targetStatus,
+    team_id: currentTicket.current_team_id || null,
     damage_description: data.damageDescription !== undefined ? data.damageDescription : currentHistory.damage_description,
     action_taken: data.actionTaken !== undefined ? data.actionTaken : (handlingNote || currentHistory.action_taken),
     root_cause: data.rootCause !== undefined ? data.rootCause : currentHistory.root_cause,

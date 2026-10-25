@@ -19,8 +19,11 @@ export function AuthProvider({ children }) {
     return userData;
   };
 
-  const login = async (email, password) => {
-    const res = await api.post("/auth/login", { email, password });
+  const login = async (username, password) => {
+    const payload = typeof username === "object"
+      ? username
+      : { username, email: username, password };
+    const res = await api.post("/auth/login", payload);
     const token = res.data?.data?.accessToken;
     const initialUser = res.data?.data?.user;
     if (initialUser) {

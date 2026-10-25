@@ -80,7 +80,7 @@ export const findTelegramUsers = async ({ skip = 0, take = 10, search, division,
           select: {
             id: true,
             name: true,
-            email: true,
+            username: true,
           },
         },
       },

@@ -1,14 +1,16 @@
 import { prisma } from "../../config/prisma.js";
 
 /**
- * Find user by email
- * @param {string} email
+ * Find user by username (or email alias)
+ * @param {string} username
  */
-export const findUserByEmail = async (email) => {
+export const findUserByUsername = async (username) => {
   return prisma.users.findUnique({
-    where: { email },
+    where: { username },
   });
 };
+
+export const findUserByEmail = findUserByUsername;
 
 /**
  * Find user by ID (excluding password hash by selection)
@@ -19,7 +21,7 @@ export const findUserById = async (id) => {
     where: { id },
     select: {
       id: true,
-      email: true,
+      username: true,
       name: true,
       role: true,
       division: true,
@@ -42,7 +44,7 @@ export const findUserById = async (id) => {
 export const createUser = async (data) => {
   return prisma.users.create({
     data: {
-      email: data.email,
+      username: data.username || data.email,
       name: data.name,
       password_hash: data.password_hash || data.passwordHash,
       role: data.role || "viewer",
@@ -52,7 +54,7 @@ export const createUser = async (data) => {
     },
     select: {
       id: true,
-      email: true,
+      username: true,
       name: true,
       role: true,
       division: true,
@@ -189,7 +191,7 @@ export const updateUserPassword = async (id, passwordHash) => {
     },
     select: {
       id: true,
-      email: true,
+      username: true,
       name: true,
       role: true,
       division: true,

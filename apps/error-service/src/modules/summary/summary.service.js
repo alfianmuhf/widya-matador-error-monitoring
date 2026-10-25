@@ -1,5 +1,6 @@
+import { Prisma } from "@prisma/client";
 import prisma from "../../config/prisma.js";
-import { findTicketIdsByCurrentHistory } from "../ticket/ticket.repository.js";
+import { getCache, setCache } from "../../config/redis.js";
 
 const MONTH_NAMES_ID = [
   "Jan", "Feb", "Mar", "Apr", "Mei", "Jun",
@@ -17,7 +18,36 @@ function formatMonthYear(date) {
 }
 
 /**
- * Service to aggregate & calculate summary metrics
+ * Build dynamic Prisma.sql conditions for SQL aggregation queries
+ */
+function buildConditions({ startDate, endDate, componentId, clientId, locationId, status }) {
+  const conditions = [Prisma.sql`1=1`];
+
+  if (startDate) {
+    conditions.push(Prisma.sql`t.open_at >= ${startDate}`);
+  }
+  if (endDate) {
+    conditions.push(Prisma.sql`t.open_at < ${endDate}`);
+  }
+  if (status && status !== "all") {
+    const st = status.toLowerCase() === "monitor" ? "escalated" : status.toLowerCase();
+    conditions.push(Prisma.sql`th.status = ${st}::ticket_status`);
+  }
+  if (componentId && componentId !== "all") {
+    conditions.push(Prisma.sql`fc.component_id = ${componentId}::uuid`);
+  }
+  if (clientId && clientId !== "all") {
+    conditions.push(Prisma.sql`a.client_id = ${clientId}::uuid`);
+  }
+  if (locationId && locationId !== "all") {
+    conditions.push(Prisma.sql`a.location_id = ${locationId}::uuid`);
+  }
+
+  return Prisma.join(conditions, " AND ");
+}
+
+/**
+ * Service to aggregate & calculate summary metrics using PostgreSQL aggregation & Redis caching
  */
 export async function getSummaryData(query = {}) {
   const {
@@ -27,6 +57,13 @@ export async function getSummaryData(query = {}) {
     locationId,
     status,
   } = query;
+
+  // 1. Check Redis Cache
+  const cacheKey = `summary:${timeRange}:${componentId || "all"}:${clientId || "all"}:${locationId || "all"}:${status || "all"}`;
+  const cachedData = await getCache(cacheKey);
+  if (cachedData) {
+    return cachedData;
+  }
 
   const now = new Date();
   let startDate = null;
@@ -57,214 +94,124 @@ export async function getSummaryData(query = {}) {
     monthCount = 12;
   }
 
-  // 1. Build Where Clause
-  const where = {};
-  if (startDate) {
-    where.open_at = { gte: startDate };
-  }
-  if (status && status !== "all") {
-    const st = status.toLowerCase() === "monitor" ? "escalated" : status.toLowerCase();
-    const matchingIds = await findTicketIdsByCurrentHistory({ status: st });
-    if (matchingIds) {
-      where.id = { in: matchingIds };
-    }
-  }
-  if (componentId && componentId !== "all") {
-    where.failure_code = { component_id: componentId };
-  }
-  if ((clientId && clientId !== "all") || (locationId && locationId !== "all")) {
-    where.asset = {};
-    if (clientId && clientId !== "all") {
-      where.asset.client_id = clientId;
-    }
-    if (locationId && locationId !== "all") {
-      where.asset.location_id = locationId;
-    }
-  }
-
-  // 2. Fetch Tickets for Current Period
-  const tickets = await prisma.tickets.findMany({
-    where,
-    include: {
-      failure_code: {
-        select: {
-          id: true,
-          code: true,
-          name: true,
-          description: true,
-          component: {
-            select: {
-              id: true,
-              name: true,
-              prefix: true,
-            },
-          },
-        },
-      },
-      asset: {
-        select: {
-          unit_code: true,
-          client_id: true,
-          location_id: true,
-        },
-      },
-      ticket_history: {
-        orderBy: { version: "desc" },
-        select: {
-          version: true,
-          status: true,
-          changed_at: true,
-        },
-      },
-    },
-    orderBy: {
-      open_at: "asc",
-    },
+  const whereSql = buildConditions({
+    startDate,
+    componentId,
+    clientId,
+    locationId,
+    status,
   });
 
-  // 3. Previous Period for "vs periode lalu" comparison
-  let prevTotalTickets = 0;
-  if (prevStartDate && prevEndDate) {
-    const prevWhere = {
-      ...where,
-      open_at: {
-        gte: prevStartDate,
-        lt: prevEndDate,
-      },
-    };
-    prevTotalTickets = await prisma.tickets.count({ where: prevWhere });
-  }
+  // 2. Run Database Aggregations in parallel for maximum speed
+  const [
+    kpiRows,
+    prevKpiRows,
+    mttrRows,
+    monthlyTrendRows,
+    topFailureCodesRaw,
+    problematicUnitsRaw,
+    totalAssetsCount,
+    filterComponents,
+    filterClients,
+    filterLocations,
+  ] = await Promise.all([
+    // Core KPIs
+    prisma.$queryRaw(Prisma.sql`
+      SELECT 
+        COUNT(t.id)::int as total_tickets,
+        COUNT(CASE WHEN th.status = 'open' THEN 1 END)::int as open_tickets,
+        COUNT(CASE WHEN th.status = 'escalated' THEN 1 END)::int as monitor_tickets,
+        COUNT(CASE WHEN th.status = 'solved' THEN 1 END)::int as solved_tickets,
+        COUNT(DISTINCT a.unit_code)::int as affected_units
+      FROM tickets t
+      JOIN ticket_history th ON th.ticket_id = t.id AND th.version = t.current_version
+      JOIN failure_codes fc ON fc.id = t.failure_code_id
+      JOIN assets a ON a.id = t.asset_id
+      WHERE ${whereSql}
+    `),
 
-  const totalTickets = tickets.length;
-  let vsPrevText = "vs periode lalu";
-  if (prevTotalTickets > 0 && totalTickets > 0) {
-    const diffPct = Math.round(((totalTickets - prevTotalTickets) / prevTotalTickets) * 100);
-    vsPrevText = `${diffPct >= 0 ? "+" : ""}${diffPct}% vs periode lalu`;
-  }
+    // Previous Period Tickets Count (for vs periode lalu)
+    prevStartDate && prevEndDate
+      ? prisma.$queryRaw(Prisma.sql`
+          SELECT COUNT(t.id)::int as prev_total
+          FROM tickets t
+          JOIN ticket_history th ON th.ticket_id = t.id AND th.version = t.current_version
+          JOIN failure_codes fc ON fc.id = t.failure_code_id
+          JOIN assets a ON a.id = t.asset_id
+          WHERE ${buildConditions({
+            startDate: prevStartDate,
+            endDate: prevEndDate,
+            componentId,
+            clientId,
+            locationId,
+            status,
+          })}
+        `)
+      : Promise.resolve([{ prev_total: 0 }]),
 
-  // 4. Status Counts (derived from current_version)
-  let openTickets = 0;
-  let monitorTickets = 0;
-  let solvedTickets = 0;
+    // MTTR calculation
+    prisma.$queryRaw(Prisma.sql`
+      SELECT 
+        COUNT(*)::int as resolved_count,
+        COALESCE(AVG(EXTRACT(EPOCH FROM (COALESCE(t.solved_at, th.changed_at) - t.open_at)) / 3600), 0)::float as avg_hours
+      FROM tickets t
+      JOIN ticket_history th ON th.ticket_id = t.id AND th.version = t.current_version
+      JOIN failure_codes fc ON fc.id = t.failure_code_id
+      JOIN assets a ON a.id = t.asset_id
+      WHERE ${whereSql}
+        AND (th.status = 'solved' OR t.solved_at IS NOT NULL)
+        AND (COALESCE(t.solved_at, th.changed_at) >= t.open_at)
+    `),
 
-  for (const t of tickets) {
-    const currentHistory =
-      (t.ticket_history || []).find((h) => h.version === t.current_version) ||
-      t.ticket_history?.[0] ||
-      {};
-    const st = (currentHistory.status || "open").toLowerCase();
-    if (st === "open") openTickets++;
-    else if (st === "escalated") monitorTickets++;
-    else if (st === "solved") solvedTickets++;
-  }
+    // Monthly Trend
+    prisma.$queryRaw(Prisma.sql`
+      SELECT 
+        TO_CHAR(t.open_at, 'YYYY-MM') as month_key,
+        COUNT(t.id)::int as count
+      FROM tickets t
+      JOIN ticket_history th ON th.ticket_id = t.id AND th.version = t.current_version
+      JOIN failure_codes fc ON fc.id = t.failure_code_id
+      JOIN assets a ON a.id = t.asset_id
+      WHERE ${whereSql}
+      GROUP BY TO_CHAR(t.open_at, 'YYYY-MM')
+      ORDER BY month_key ASC
+    `),
 
-  const completedTickets = solvedTickets;
-  const completionRate = totalTickets > 0 ? Math.round((completedTickets / totalTickets) * 100) : 0;
+    // Top 5 failure codes
+    prisma.$queryRaw(Prisma.sql`
+      SELECT 
+        fc.code,
+        COALESCE(fc.description, fc.name, 'Kerusakan tidak terdefinisi') as description,
+        COUNT(t.id)::int as count
+      FROM tickets t
+      JOIN ticket_history th ON th.ticket_id = t.id AND th.version = t.current_version
+      JOIN failure_codes fc ON fc.id = t.failure_code_id
+      JOIN assets a ON a.id = t.asset_id
+      WHERE ${whereSql}
+      GROUP BY fc.code, fc.description, fc.name
+      ORDER BY count DESC
+      LIMIT 5
+    `),
 
-  // 5. MTTR (Mean Time to Resolution)
-  // Rumus: SUM(Time to Solve) / COUNT(Ticket ID solved)
-  // Time to Solve = solved_at - open_at
-  let totalResolutionHours = 0;
-  let resolvedCount = 0;
-  for (const t of tickets) {
-    if (t.solved_at && t.open_at) {
-      const diffHours = (new Date(t.solved_at).getTime() - new Date(t.open_at).getTime()) / (1000 * 60 * 60);
-      if (diffHours >= 0) {
-        totalResolutionHours += diffHours;
-        resolvedCount++;
-      }
-    } else {
-      const solvedRow = (t.ticket_history || []).find((h) => h.status === "solved");
-      const openTime = t.open_at;
-      if (solvedRow && openTime) {
-        const diffHours = (new Date(solvedRow.changed_at).getTime() - new Date(openTime).getTime()) / (1000 * 60 * 60);
-        if (diffHours >= 0) {
-          totalResolutionHours += diffHours;
-          resolvedCount++;
-        }
-      }
-    }
-  }
+    // Top 5 problematic units
+    prisma.$queryRaw(Prisma.sql`
+      SELECT 
+        a.unit_code as "unitCode",
+        COUNT(t.id)::int as count
+      FROM tickets t
+      JOIN ticket_history th ON th.ticket_id = t.id AND th.version = t.current_version
+      JOIN failure_codes fc ON fc.id = t.failure_code_id
+      JOIN assets a ON a.id = t.asset_id
+      WHERE ${whereSql}
+      GROUP BY a.unit_code
+      ORDER BY count DESC
+      LIMIT 5
+    `),
 
-  let mttrDays = 0;
-  let mttrHours = 0;
-  if (resolvedCount > 0) {
-    mttrHours = Number((totalResolutionHours / resolvedCount).toFixed(1));
-    mttrDays = Number((totalResolutionHours / resolvedCount / 24).toFixed(1));
-  }
+    // Total active assets
+    prisma.assets.count({ where: { is_active: true } }),
 
-  // 6. Unit Terdampak
-  const distinctUnitsInTickets = new Set(tickets.map((t) => t.asset?.unit_code).filter(Boolean));
-  const totalAssetsCount = await prisma.assets.count({ where: { is_active: true } });
-  const totalOperationalUnits = Math.max(totalAssetsCount, distinctUnitsInTickets.size, 1);
-  const affectedUnits = distinctUnitsInTickets.size;
-
-  // 7. Monthly Trend Series
-  const monthlyMap = new Map();
-  for (let i = monthCount - 1; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    const key = formatMonthYear(d);
-    monthlyMap.set(key, 0);
-  }
-
-  for (const t of tickets) {
-    const key = formatMonthYear(t.open_at);
-    if (monthlyMap.has(key)) {
-      monthlyMap.set(key, monthlyMap.get(key) + 1);
-    } else if (timeRange === "all") {
-      monthlyMap.set(key, (monthlyMap.get(key) || 0) + 1);
-    }
-  }
-
-  const monthlyTrend = Array.from(monthlyMap.entries()).map(([month, count]) => ({
-    month,
-    count,
-  }));
-
-  // 8. Status Distribution Data
-  const statusDistribution = [
-    { status: "Solved", count: solvedTickets, color: "#10b981", percent: totalTickets ? Math.round((solvedTickets / totalTickets) * 100) : 0 },
-    { status: "Open", count: openTickets, color: "#ef4444", percent: totalTickets ? Math.round((openTickets / totalTickets) * 100) : 0 },
-    { status: "Escalated", count: monitorTickets, color: "#f59e0b", percent: totalTickets ? Math.round((monitorTickets / totalTickets) * 100) : 0 },
-  ];
-
-  // 9. Top 5 Failure Codes
-  const failureCodeMap = new Map();
-  for (const t of tickets) {
-    const code = t.failure_code?.code || "UNKNOWN";
-    const description = t.failure_code?.description || t.failure_code?.name || "Kerusakan tidak terdefinisi";
-    if (!failureCodeMap.has(code)) {
-      failureCodeMap.set(code, { code, description, count: 0 });
-    }
-    failureCodeMap.get(code).count++;
-  }
-
-  const topFailureCodes = Array.from(failureCodeMap.values())
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 5);
-
-  // 10. Top 5 Problematic Units
-  const unitMap = new Map();
-  for (const t of tickets) {
-    const u = t.asset?.unit_code;
-    if (u) {
-      unitMap.set(u, (unitMap.get(u) || 0) + 1);
-    }
-  }
-
-  const sortedUnits = Array.from(unitMap.entries())
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 5);
-
-  const maxUnitCount = sortedUnits.length > 0 ? sortedUnits[0][1] : 1;
-  const topUnits = sortedUnits.map(([unitCode, count]) => ({
-    unitCode,
-    count,
-    percentage: Math.round((count / maxUnitCount) * 100),
-  }));
-
-  // 11. Dropdown Filter Options
-  const [components, clients, locations] = await Promise.all([
+    // Dropdown options
     prisma.components.findMany({
       where: { is_active: true },
       select: { id: true, name: true, prefix: true },
@@ -282,7 +229,99 @@ export async function getSummaryData(query = {}) {
     }),
   ]);
 
-  return {
+  // 3. Process KPI values
+  const kpi = kpiRows[0] || {};
+  const totalTickets = Number(kpi.total_tickets || 0);
+  const openTickets = Number(kpi.open_tickets || 0);
+  const monitorTickets = Number(kpi.monitor_tickets || 0);
+  const solvedTickets = Number(kpi.solved_tickets || 0);
+  const completedTickets = solvedTickets;
+  const completionRate = totalTickets > 0 ? Math.round((completedTickets / totalTickets) * 100) : 0;
+  const affectedUnits = Number(kpi.affected_units || 0);
+  const totalOperationalUnits = Math.max(totalAssetsCount, affectedUnits, 1);
+
+  // Previous period comparison
+  const prevTotalTickets = Number(prevKpiRows[0]?.prev_total || 0);
+  let vsPrevText = "vs periode lalu";
+  if (prevTotalTickets > 0 && totalTickets > 0) {
+    const diffPct = Math.round(((totalTickets - prevTotalTickets) / prevTotalTickets) * 100);
+    vsPrevText = `${diffPct >= 0 ? "+" : ""}${diffPct}% vs periode lalu`;
+  }
+
+  // MTTR values
+  const mttr = mttrRows[0] || {};
+  const resolvedCount = Number(mttr.resolved_count || 0);
+  const avgHours = Number(mttr.avg_hours || 0);
+  const mttrHours = resolvedCount > 0 ? Number(avgHours.toFixed(1)) : 0;
+  const mttrDays = resolvedCount > 0 ? Number((avgHours / 24).toFixed(1)) : 0;
+
+  // 4. Monthly Trend Mapping
+  const monthlyMap = new Map();
+  for (let i = monthCount - 1; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const key = formatMonthYear(d);
+    monthlyMap.set(key, 0);
+  }
+
+  for (const row of monthlyTrendRows) {
+    if (row.month_key) {
+      const [y, m] = row.month_key.split("-").map(Number);
+      const d = new Date(y, m - 1, 1);
+      const key = formatMonthYear(d);
+      if (monthlyMap.has(key)) {
+        monthlyMap.set(key, monthlyMap.get(key) + Number(row.count));
+      } else if (timeRange === "all") {
+        monthlyMap.set(key, Number(row.count));
+      }
+    }
+  }
+
+  const monthlyTrend = Array.from(monthlyMap.entries()).map(([month, count]) => ({
+    month,
+    count,
+  }));
+
+  // 5. Status Distribution Data
+  const statusDistribution = [
+    {
+      status: "Solved",
+      count: solvedTickets,
+      color: "#10b981",
+      percent: totalTickets ? Math.round((solvedTickets / totalTickets) * 100) : 0,
+    },
+    {
+      status: "Open",
+      count: openTickets,
+      color: "#ef4444",
+      percent: totalTickets ? Math.round((openTickets / totalTickets) * 100) : 0,
+    },
+    {
+      status: "Escalated",
+      count: monitorTickets,
+      color: "#f59e0b",
+      percent: totalTickets ? Math.round((monitorTickets / totalTickets) * 100) : 0,
+    },
+  ];
+
+  // 6. Top 5 Failure Codes
+  const topFailureCodes = topFailureCodesRaw.map((fc) => ({
+    code: fc.code,
+    description: fc.description,
+    count: Number(fc.count),
+  }));
+
+  // 7. Top 5 Problematic Units with percentage calculation
+  const maxUnitCount = problematicUnitsRaw.length > 0 ? Number(problematicUnitsRaw[0].count) : 1;
+  const topUnits = problematicUnitsRaw.map((u) => {
+    const c = Number(u.count);
+    return {
+      unitCode: u.unitCode,
+      count: c,
+      percentage: Math.round((c / maxUnitCount) * 100),
+    };
+  });
+
+  const result = {
     kpis: {
       totalTickets,
       vsPrevPeriodText: vsPrevText,
@@ -305,9 +344,12 @@ export async function getSummaryData(query = {}) {
       topUnits,
     },
     filterOptions: {
-      components: components.map((c) => ({ id: c.id, label: `${c.prefix ? c.prefix + " - " : ""}${c.name}` })),
-      clients: clients.map((c) => ({ id: c.id, label: c.name })),
-      locations: locations.map((l) => ({ id: l.id, label: l.name })),
+      components: filterComponents.map((c) => ({
+        id: c.id,
+        label: `${c.prefix ? c.prefix + " - " : ""}${c.name}`,
+      })),
+      clients: filterClients.map((c) => ({ id: c.id, label: c.name })),
+      locations: filterLocations.map((l) => ({ id: l.id, label: l.name })),
       statuses: [
         { value: "all", label: "Semua status" },
         { value: "open", label: "Open" },
@@ -316,4 +358,9 @@ export async function getSummaryData(query = {}) {
       ],
     },
   };
+
+  // Cache in Redis for 60 seconds
+  await setCache(cacheKey, result, 60);
+
+  return result;
 }

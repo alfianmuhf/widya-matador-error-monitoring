@@ -12,15 +12,20 @@ import { linkTelegram } from "../auth/otp.store.js";
  * Example: joko@gmail.com -> joko12345
  */
 export const createUser = async (
-  { email, name, role, division, telegramId, username, telegram_user_id, telegramUserId },
+  { username, email, name, role, division, telegramId, telegramUsername, telegram_user_id, telegramUserId },
   adminUser = null
 ) => {
   const adminId = adminUser?.id || null;
+  const targetUsername = (username || email || "").toLowerCase().trim();
 
-  // 1. Check if email already registered
-  const existingUser = await userRepository.findUserByEmail(email);
+  if (!targetUsername) {
+    throw createError(400, "Username wajib diisi");
+  }
+
+  // 1. Check if username already registered
+  const existingUser = await userRepository.findUserByUsername(targetUsername);
   if (existingUser) {
-    throw createError(409, "Email sudah terdaftar. Silakan gunakan email lain.");
+    throw createError(409, "Username sudah terdaftar. Silakan gunakan username lain.");
   }
 
   // 1b. Resolusi dan validasi telegram_user_id (Whitelist)
@@ -45,9 +50,8 @@ export const createUser = async (
     }
   }
 
-  // 2. Generate initial password: nama email sebelum @ + "12345"
-  const emailPrefix = email.split("@")[0];
-  const initialPassword = `${emailPrefix}12345`;
+  // 2. Generate initial password: username + "12345"
+  const initialPassword = `${targetUsername}12345`;
 
   // 3. Hash the generated password
   const hashedPassword = await hashPassword(initialPassword);
@@ -57,7 +61,7 @@ export const createUser = async (
 
   // 4. Save new user to database (no createdById column; tracked via audit log)
   const newUser = await userRepository.createUser({
-    email,
+    username: targetUsername,
     name,
     role: normalizedRole,
     division: normalizedDivision,
@@ -75,7 +79,7 @@ export const createUser = async (
       username: whitelisted.username,
       whitelisted: true,
     };
-    linkTelegram(email, telegram); // link in-memory untuk reset password via OTP
+    linkTelegram(targetUsername, telegram); // link in-memory untuk reset password via OTP
   } else {
     const teleId = telegramId ? String(telegramId).trim() : null;
     const teleUsername = username ? String(username).replace(/^@/, "").trim() : null;
@@ -93,23 +97,23 @@ export const createUser = async (
         username: legacyWhitelisted?.username || teleUsername || null,
         whitelisted: Boolean(legacyWhitelisted),
       };
-      linkTelegram(email, telegram);
+      linkTelegram(targetUsername, telegram);
     }
   }
 
   // 5. Track who created the account in audit log
   await recordLog({
-    actor: adminUser?.email || adminUser?.name || "Sistem",
+    actor: adminUser?.username || adminUser?.name || "Sistem",
     actorUserId: adminId,
     action: "CREATE",
     deleteAction: "NONE",
     entityType: "User",
     entityId: newUser.id,
     details: {
-      identifier: newUser.email,
-      changeSummary: `tambah user baru '${newUser.name}' (${newUser.role}) dibuat oleh ${adminUser?.email || adminUser?.name || "admin"}`,
-      createdBy: adminUser?.email || adminUser?.name || adminId || "Sistem",
-      email: newUser.email,
+      identifier: newUser.username,
+      changeSummary: `tambah user baru '${newUser.name}' (${newUser.role}) dibuat oleh ${adminUser?.username || adminUser?.name || "admin"}`,
+      createdBy: adminUser?.username || adminUser?.name || adminId || "Sistem",
+      username: newUser.username,
       name: newUser.name,
       role: newUser.role,
       division: newUser.division,
@@ -120,11 +124,11 @@ export const createUser = async (
   // 6. Notifikasi invite via Telegram (DM ke yang diinvite; bila tidak ada,
   //    n8n kirim fallback ke grup admin). Password awal TIDAK ikut dikirim.
   publishWebhook("user.invited", {
-    actor: { id: adminId, email: adminUser?.email || null, name: adminUser?.name || null },
+    actor: { id: adminId, username: adminUser?.username || null, name: adminUser?.name || null },
     data: {
       user: {
         id: newUser.id,
-        email: newUser.email,
+        username: newUser.username,
         name: newUser.name,
         role: newUser.role,
         division: newUser.division,
@@ -223,11 +227,12 @@ export const updateUser = async (id, data, adminUser) => {
     }
   }
 
-  // 3. If email changed, check for conflicts
-  if (data.email && data.email !== existingUser.email) {
-    const emailOwner = await userRepository.findUserByEmail(data.email);
-    if (emailOwner && emailOwner.id !== id) {
-      throw createError(409, "Email sudah terdaftar. Silakan gunakan email lain.");
+  // 3. If username changed, check for conflicts
+  const targetUsername = data.username !== undefined ? data.username.toLowerCase().trim() : (data.email !== undefined ? data.email.toLowerCase().trim() : undefined);
+  if (targetUsername && targetUsername !== existingUser.username) {
+    const usernameOwner = await userRepository.findUserByUsername(targetUsername);
+    if (usernameOwner && usernameOwner.id !== id) {
+      throw createError(409, "Username sudah terdaftar. Silakan gunakan username lain.");
     }
   }
 
@@ -263,7 +268,7 @@ export const updateUser = async (id, data, adminUser) => {
 
   // 4. Construct update payload
   const updatePayload = {};
-  if (data.email !== undefined) updatePayload.email = data.email;
+  if (targetUsername !== undefined) updatePayload.username = targetUsername;
   if (data.name !== undefined) updatePayload.name = data.name;
   if (data.role !== undefined) updatePayload.role = data.role.toLowerCase();
   if (data.division !== undefined) updatePayload.division = data.division ? data.division.toLowerCase() : null;
@@ -299,8 +304,8 @@ export const updateUser = async (id, data, adminUser) => {
   if (data.name && data.name !== existingUser.name) {
     changes.push(`nama: ${existingUser.name} → ${data.name}`);
   }
-  if (data.email && data.email !== existingUser.email) {
-    changes.push(`email: ${existingUser.email} → ${data.email}`);
+  if (targetUsername && targetUsername !== existingUser.username) {
+    changes.push(`username: ${existingUser.username} → ${targetUsername}`);
   }
   if (teleUserIdProvided && targetTelegramUserId !== existingUser.telegram_user_id) {
     changes.push(`telegram_user_id: ${existingUser.telegram_user_id || "tidak ada"} → ${targetTelegramUserId || "dihapus"}`);
@@ -311,16 +316,16 @@ export const updateUser = async (id, data, adminUser) => {
   const changeSummary = changes.length > 0 ? changes.join(", ") : "perubahan profil pengguna";
 
   await recordLog({
-    actor: typeof adminUser === "object" ? (adminUser?.email || adminUser?.name) : adminName,
+    actor: typeof adminUser === "object" ? (adminUser?.username || adminUser?.name) : adminName,
     actorUserId: adminId || null,
     action: "UPDATE",
     deleteAction: "NONE",
     entityType: "User",
     entityId: updatedUser.id,
     details: {
-      identifier: updatedUser.email,
+      identifier: updatedUser.username,
       changeSummary,
-      before: { email: existingUser.email, role: existingUser.role, status: existingUser.status },
+      before: { username: existingUser.username, role: existingUser.role, status: existingUser.status },
       updatedFields: Object.keys(updatePayload),
     },
   });
@@ -364,7 +369,7 @@ export const deleteUser = async (id, adminUser) => {
       entityType: "User",
       entityId: id,
       details: {
-        identifier: existingUser.email,
+        identifier: existingUser.username,
         changeSummary: `soft delete: akun dinonaktifkan (${dep.ticketHistories} riwayat tiket terikat)`,
         reason: `Pengguna memiliki riwayat perubahan tiket (${dep.ticketHistories} riwayat tiket) sehingga akun dinonaktifkan (Soft Delete / suspended) untuk integritas audit.`,
         dependencies: dep,
@@ -389,16 +394,16 @@ export const deleteUser = async (id, adminUser) => {
     entityType: "User",
     entityId: id,
     details: {
-      identifier: existingUser.email,
-      changeSummary: `hapus permanen user '${existingUser.email}'`,
+      identifier: existingUser.username,
+      changeSummary: `hapus permanen user '${existingUser.username}'`,
       reason: "Tidak ada riwayat terhubung. Pengguna dihapus secara permanen dari basis data.",
-      email: existingUser.email,
+      username: existingUser.username,
       name: existingUser.name,
     },
   });
 
   return {
-    user: { id, email: existingUser.email, name: existingUser.name },
+    user: { id, username: existingUser.username, name: existingUser.name },
     deleteAction: "HARD",
     message: "Pengguna berhasil dihapus secara permanen (Hard Delete)",
   };

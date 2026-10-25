@@ -52,17 +52,17 @@ const fetchBlob = async (url) => {
   }
 };
 
-export default function TicketAttachments({ ticket }) {
+export default function TicketAttachments({ ticket, allowUpload = false, onAttachmentChange }) {
   const { user } = useAuth();
   const currentUser = user?.user || user;
   const role = (currentUser?.role || "").toLowerCase();
-  const canDelete = role === "admin" || role === "coordinator";
-  // Samakan dengan assertCanUpload di backend supaya tidak menawarkan aksi yang ditolak
+  const canDelete = allowUpload && (role === "admin" || role === "coordinator");
+  // Upload hanya diizinkan jika allowUpload aktif dan user adalah admin/tim tiket
   const isTeamMember =
     (ticket.assignees || []).some(
       (a) => (a.userId || a.user_id) === currentUser?.id
     ) || ticket.aftersalesUserId === currentUser?.id;
-  const canUpload = Boolean(currentUser?.id) && (canDelete || isTeamMember);
+  const canUpload = Boolean(currentUser?.id) && allowUpload && (role === "admin" || role === "coordinator" || isTeamMember);
 
   // Komponen memegang daftarnya sendiri: drawer bisa dibuka dari baris list yang
   // tidak membawa lampiran, jadi prop saja tidak cukup dan bisa basi.
@@ -227,31 +227,35 @@ export default function TicketAttachments({ ticket }) {
           </h3>
         </div>
 
-        {canUpload && (
-        <label
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: "6px",
-            padding: "7px 12px",
-            borderRadius: "8px",
-            border: `1px solid ${isFull || uploading ? "#e2e8f0" : "#0e8587"}`,
-            backgroundColor: isFull || uploading ? "#f8fafc" : "#0e8587",
-            color: isFull || uploading ? "#94a3b8" : "#ffffff",
-            fontSize: "12px",
-            fontWeight: 650,
-            cursor: isFull || uploading ? "not-allowed" : "pointer",
-          }}
-        >
-          {uploading ? `Mengunggah ${progress}%` : "Unggah Gambar"}
-          <input
-            type="file"
-            accept="image/*"
-            disabled={isFull || uploading}
-            onChange={handleUpload}
-            style={{ display: "none" }}
-          />
-        </label>
+        {canUpload ? (
+          <label
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "6px",
+              padding: "7px 12px",
+              borderRadius: "8px",
+              border: `1px solid ${isFull || uploading ? "#e2e8f0" : "#0e8587"}`,
+              backgroundColor: isFull || uploading ? "#f8fafc" : "#0e8587",
+              color: isFull || uploading ? "#94a3b8" : "#ffffff",
+              fontSize: "12px",
+              fontWeight: 650,
+              cursor: isFull || uploading ? "not-allowed" : "pointer",
+            }}
+          >
+            {uploading ? `Mengunggah ${progress}%` : "Unggah Gambar"}
+            <input
+              type="file"
+              accept="image/*"
+              disabled={isFull || uploading}
+              onChange={handleUpload}
+              style={{ display: "none" }}
+            />
+          </label>
+        ) : (
+          <span style={{ fontSize: "11px", color: "#64748b", backgroundColor: "#f1f5f9", padding: "3px 8px", borderRadius: "4px", border: "1px solid #e2e8f0" }}>
+            Read-only (Unggah via Manajemen Tiket)
+          </span>
         )}
       </div>
 
@@ -349,11 +353,44 @@ export default function TicketAttachments({ ticket }) {
 
       <Modal isOpen={Boolean(preview)} onClose={() => setPreview(null)} title={preview?.fileName} maxWidth="720px">
         {preview && blobUrls[preview.id] ? (
-          <img
-            src={blobUrls[preview.id]}
-            alt={preview.fileName}
-            style={{ width: "100%", height: "auto", borderRadius: "8px", display: "block" }}
-          />
+          <div>
+            <img
+              src={blobUrls[preview.id]}
+              alt={preview.fileName}
+              style={{ width: "100%", height: "auto", borderRadius: "8px", display: "block" }}
+            />
+            {preview.uploadedBy && (
+              <div
+                style={{
+                  marginTop: "12px",
+                  padding: "10px 14px",
+                  backgroundColor: "#f8fafc",
+                  border: "1px solid #e2e8f0",
+                  borderRadius: "8px",
+                  fontSize: "12px",
+                  color: "#475569",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                }}
+              >
+                <div>
+                  Pengunggah:{" "}
+                  <strong style={{ color: "#0f172a" }}>
+                    {preview.uploadedBy.name || preview.uploadedBy.email || "Petugas"}
+                  </strong>{" "}
+                  <span style={{ fontSize: "11px", color: "#64748b" }}>
+                    ({preview.uploadedBy.division?.toUpperCase() || preview.uploadedBy.role?.toUpperCase() || "RnD"})
+                  </span>
+                </div>
+                {preview.createdAt && (
+                  <span style={{ fontSize: "11.5px", color: "#94a3b8" }}>
+                    {new Date(preview.createdAt).toLocaleString("id-ID")}
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
         ) : (
           <div style={{ textAlign: "center", color: "#64748b", fontSize: "12.5px" }}>Gambar tidak tersedia.</div>
         )}

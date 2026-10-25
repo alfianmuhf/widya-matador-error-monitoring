@@ -71,7 +71,7 @@ export default function UserTable({
                 Nama
               </th>
               <th style={{ padding: "12px 14px", fontSize: "13px", fontWeight: 600, color: "var(--text-muted)", width: canManageUsers ? "20%" : "22%" }}>
-                Email
+                Username
               </th>
               <th style={{ padding: "12px 14px", fontSize: "13px", fontWeight: 600, color: "var(--text-muted)", width: canManageUsers ? "16%" : "18%" }}>
                 Telegram
@@ -114,8 +114,8 @@ export default function UserTable({
                 const divisionLabel =
                   div === "after_sales"
                     ? "After Sales"
-                    : div === "software"
-                    ? "Software"
+                    : div === "rnd" || div === "software"
+                    ? "RnD"
                     : "-";
 
                 const status = (item.status || "").toLowerCase();
@@ -149,7 +149,7 @@ export default function UserTable({
                       {item.name}
                     </td>
                     <td style={{ padding: "16px 14px", color: "var(--text-muted)", fontSize: "var(--text-sm)" }}>
-                      {item.email}
+                      {item.username || item.email || "-"}
                     </td>
                     <td style={{ padding: "16px 14px", fontSize: "var(--text-sm)" }}>
                       {item.telegram_user ? (

@@ -139,7 +139,7 @@ export default function TicketDetailDrawer({ ticket, onClose }) {
 
     if (rawStatus === "escalated") {
       return {
-        team: "Tim Software",
+        team: "Tim RnD",
         borderLeft: "4px solid #f59e0b",
         borderColor: "#fed7aa",
         cardBg: "linear-gradient(90deg, #fffbeb 0%, #ffffff 100%)",
@@ -150,7 +150,7 @@ export default function TicketDetailDrawer({ ticket, onClose }) {
         badgeColor: "#b45309",
         badgeBorder: "#fde68a",
         icon: <IconTerminal size={18} color="#d97706" />,
-        description: "Tiket telah dieskalasi ke Tim Software untuk investigasi teknis & perbaikan sistem.",
+        description: "Tiket telah dieskalasi ke Tim RnD untuk investigasi teknis & perbaikan sistem.",
       };
     }
 
@@ -166,7 +166,7 @@ export default function TicketDetailDrawer({ ticket, onClose }) {
             sortedAsc[solvedIndex - 1].rawStatus || sortedAsc[solvedIndex - 1].status || ""
           ).toLowerCase();
           if (prevStatus === "escalated") {
-            solvedByTeam = "Tim Software";
+            solvedByTeam = "Tim RnD";
           }
         }
       }
@@ -1088,11 +1088,11 @@ export default function TicketDetailDrawer({ ticket, onClose }) {
                   }}
                 />
                 <h3 style={{ fontSize: "14.5px", fontWeight: 750, color: "#0f172a", margin: 0 }}>
-                  Tim Penanganan Software ({assignedMembers.length})
+                  Tim Penanganan RnD ({assignedMembers.length} Personel)
                 </h3>
               </div>
 
-              {assignedMembers.some((m) => m.isLeader) && (
+              {ticket.currentTeam?.leader && (
                 <span
                   style={{
                     fontSize: "11.5px",
@@ -1104,10 +1104,41 @@ export default function TicketDetailDrawer({ ticket, onClose }) {
                     border: "1px solid #99f6e4",
                   }}
                 >
-                  Leader Terdaftar
+                  Leader: {ticket.currentTeam.leader.name}
                 </span>
               )}
             </div>
+
+            {ticket.currentTeam && (
+              <div
+                style={{
+                  marginBottom: "12px",
+                  padding: "10px 14px",
+                  backgroundColor: "#f0fdfa",
+                  border: "1px solid #ccfbf1",
+                  borderRadius: "8px",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  flexWrap: "wrap",
+                  gap: "8px",
+                }}
+              >
+                <div>
+                  <span style={{ fontSize: "11px", fontWeight: 700, color: "#0f766e", textTransform: "uppercase" }}>
+                    Tim Penanggung Jawab Utama:
+                  </span>
+                  <div style={{ fontSize: "13.5px", fontWeight: 750, color: "#042f2e" }}>
+                    {ticket.currentTeam.name}
+                  </div>
+                </div>
+                {ticket.teams && ticket.teams.length > 1 && (
+                  <div style={{ fontSize: "12px", color: "#0f766e" }}>
+                    Kolaborasi: <strong>{ticket.teams.map((t) => t.name).join(", ")}</strong>
+                  </div>
+                )}
+              </div>
+            )}
 
             {assignedMembers.length === 0 ? (
               <div
@@ -1123,11 +1154,11 @@ export default function TicketDetailDrawer({ ticket, onClose }) {
               >
                 {(ticket.rawStatus || ticket.status || "").toLowerCase() === "escalated" ? (
                   <div>
-                    <strong style={{ color: "#d97706" }}>Tiket berstatus Escalated.</strong> Belum ada anggota tim Software yang mengklaim tiket ini.
+                    <strong style={{ color: "#d97706" }}>Tiket berstatus Escalated.</strong> Belum ada anggota tim RnD yang mengklaim tiket ini.
                   </div>
                 ) : (
                   <div>
-                    Tiket sedang ditangani secara internal oleh <strong>Tim Aftersales</strong> (belum dieskalasi ke tim Software).
+                    Tiket sedang ditangani secara internal oleh <strong>Tim Aftersales</strong> (belum dieskalasi ke tim RnD).
                   </div>
                 )}
               </div>
@@ -1234,7 +1265,7 @@ export default function TicketDetailDrawer({ ticket, onClose }) {
           {/* ============================================================= */}
           {/* 6. LAMPIRAN GAMBAR (WebP, maks 5)                             */}
           {/* ============================================================= */}
-          <TicketAttachments key={ticket.id} ticket={ticket} />
+          <TicketAttachments key={ticket.id} ticket={ticket} allowUpload={false} />
 
           {/* ============================================================= */}
           {/* 7. LINIMASA RIWAYAT TIKET (BERSIH DENGAN AKSEN STATUS)         */}

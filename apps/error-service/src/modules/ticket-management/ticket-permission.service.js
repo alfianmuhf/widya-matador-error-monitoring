@@ -29,7 +29,7 @@ export const checkUpdateTicketPermission = async (ticketId, actor, currentTicket
   if (actor.id) {
     actorUser = await prisma.users.findUnique({
       where: { id: actor.id },
-      select: { id: true, role: true, division: true, name: true, email: true },
+      select: { id: true, role: true, division: true, name: true, username: true },
     });
   }
 
@@ -95,40 +95,36 @@ export const checkUpdateTicketPermission = async (ticketId, actor, currentTicket
     return { actorUser, actorTelegram, division, role, currentStatus };
   }
 
-  // 4. Tim Software: HANYA bisa melakukan perubahan ketika tiket berstatus 'escalated'
+  // 4. Tim RnD: HANYA bisa melakukan perubahan ketika tiket berstatus 'escalated'
   // dan WAJIB terdaftar dalam ticket_assignees tiket ini
-  if (division === "software") {
+  if (division === "rnd" || division === "software") {
     if (currentStatus !== "escalated") {
       throw createError(
         403,
-        `Akses ditolak: Tim software hanya dapat melakukan perubahan ketika tiket berstatus 'escalated' (status saat ini: '${currentStatus}').`
+        `Akses ditolak: Tim RnD hanya dapat melakukan perubahan ketika tiket berstatus 'escalated' (status saat ini: '${currentStatus}').`
       );
     }
 
-    const isAssigned = await ticketRepo.findAssigneeByTicketAndMember(ticketId, {
-      userId: actorUser?.id,
-    });
+    const isAssigned = await ticketRepo.isUserAssignedToTicket(ticketId, actorUser?.id);
 
     if (!isAssigned) {
       throw createError(
         403,
-        "Akses ditolak: Hanya anggota tim software yang terdaftar pada tiket ini yang dapat melakukan perubahan tiket. Silakan minta leader tim software untuk menambahkan Anda ke tiket."
+        "Akses ditolak: Hanya anggota atau leader dari tim yang ditugaskan pada tiket ini yang dapat melakukan perubahan tiket."
       );
     }
 
     return { actorUser, actorTelegram, division, role, isAssigned, currentStatus };
   }
 
-  // 5. Divisi lainnya / belum diset: jika terdaftar sebagai assignee diizinkan hanya jika tiket berstatus 'escalated'
-  const isAssigned = await ticketRepo.findAssigneeByTicketAndMember(ticketId, {
-    userId: actorUser?.id,
-  });
+  // 5. Divisi lainnya / fallback: jika terdaftar sebagai anggota/leader tim tiket diizinkan hanya jika tiket berstatus 'escalated'
+  const isAssigned = await ticketRepo.isUserAssignedToTicket(ticketId, actorUser?.id);
 
   if (isAssigned) {
     if (currentStatus !== "escalated") {
       throw createError(
         403,
-        `Akses ditolak: Perubahan tiket oleh assignee hanya dapat dilakukan ketika tiket berstatus 'escalated' (status saat ini: '${currentStatus}').`
+        `Akses ditolak: Perubahan tiket oleh tim hanya dapat dilakukan ketika tiket berstatus 'escalated' (status saat ini: '${currentStatus}').`
       );
     }
     return { actorUser, actorTelegram, division, role, isAssigned, currentStatus };
@@ -138,4 +134,48 @@ export const checkUpdateTicketPermission = async (ticketId, actor, currentTicket
     403,
     "Akses ditolak: Anda tidak memiliki wewenang untuk memperbarui tiket ini."
   );
+};
+
+/**
+ * Permission checker for managing teams on a ticket (handover, add team, remove team):
+ * - Admin can manage teams on any ticket.
+ * - Coordinator: Must be the Leader of the ticket's current_team!
+ */
+export const checkManageTicketTeamsPermission = async (ticketId, actor) => {
+  if (!actor) {
+    throw createError(401, "Autentikasi diperlukan");
+  }
+
+  const role = (actor.role || "").toLowerCase();
+  if (role === "admin") return true;
+
+  if (role !== "coordinator") {
+    throw createError(403, "Akses ditolak: Hanya Koordinator Leader atau Admin yang dapat mengelola tim tiket.");
+  }
+
+  const ticket = await ticketRepo.findById(ticketId);
+  if (!ticket) {
+    throw createError(404, `Tiket '${ticketId}' tidak ditemukan`);
+  }
+
+  // Jika tiket belum memiliki tim penanggung jawab, koordinator leader tim RnD mana pun boleh menetapkan tim
+  if (!ticket.current_team_id) {
+    return true;
+  }
+
+  // Cek apakah actor adalah leader dari tim penanggung jawab utama saat ini di tabel tickets (current_team_id)
+  const isPrimaryLeader =
+    ticket.current_team?.leader_user_id === actor.id ||
+    ticket.current_team?.leader?.id === actor.id;
+
+  if (!isPrimaryLeader) {
+    const leaderName = ticket.current_team?.leader?.name || "Leader tim utama";
+    const teamName = ticket.current_team?.name || "Tim Utama";
+    throw createError(
+      403,
+      `Akses ditolak: Hanya Leader dari tim penanggung jawab utama tiket (${teamName} - ${leaderName}) atau Admin yang berwenang mengelola tim tiket.`
+    );
+  }
+
+  return true;
 };

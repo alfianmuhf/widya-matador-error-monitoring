@@ -10,8 +10,11 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "seed": "node prisma/seed.js",
+    "seed:admin": "node prisma/seed_admin.js",
+    "seed:data": "node prisma/seed_data.js",
+    "seed:ticket": "node prisma/seed_ticket.js",
+    "stress": "node prisma/stress_test.js",
     "truncate": "node prisma/truncate.js",
-    "attachments:gc": "node scripts/attachments-gc.mjs",
     "test": "node --test src/modules/attachment/*.test.js"
   },
   "prisma": {
@@ -29,6 +32,7 @@
     "exceljs": "^4.4.0",
     "express": "^5.2.1",
     "http-errors": "^2.0.1",
+    "ioredis": "^6.0.0",
     "jsonwebtoken": "^9.0.3",
     "multer": "^2.4.0",
     "pdfkit": "^0.20.2",

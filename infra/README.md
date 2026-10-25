@@ -10,6 +10,7 @@ Layanan di `infra/docker-compose.yml` dan konfigurasi terkait.
 | **frontend** | Development server, port **5173** |
 | **rabbitmq** | `rabbitmq:4-management`. Port: 5672 (AMQP) + 15672 (Management UI). Kredensial default: `guest`/`guest` |
 | **rustfs** | `rustfs/rustfs:1.0.3`. S3 API `9000`, Console `9001` (default `rustfsadmin`/`rustfsadmin`). Volume: `rustfs_data` |
+| **redis** | `redis:8-alpine`. Port: 6379 (bind `127.0.0.1`). Password via Docker secret `redis_password.txt`. Volume: `redis_data` |
 
 ## Cara Menjalankan
 
@@ -17,12 +18,17 @@ Layanan di `infra/docker-compose.yml` dan konfigurasi terkait.
    - `aidev/dev/env-file/.env.backend` (salin dari `.env.backend.example`)
    - `aidev/dev/env-file/.env.frontend` (salin dari `.env.frontend.example`)
 2. Tanpa `RABBITMQ_URL` di `.env` Backend → notifikasi Telegram mati tapi sistem tetap jalan (publish dilewati + warning).
-3. Dari direktori `infra/`:
+3. Pilihan Cara Menjalankan (Dari direktori `infra/`):
+
+   **Opsi A — Deploy Lengkap (Backend, Frontend, dan RabbitMQ):**
    ```bash
-   # Jalankan semua service sekaligus (backend, frontend, rabbitmq)
    docker compose --env-file ../../env-file/.env.frontend up -d --build
    ```
-   - Atau cukup `docker compose up -d rabbitmq` hanya untuk menyiapkan RabbitMQ saja.
+
+   **Opsi B — Deploy Aplikasi Saja (Hanya Backend & Frontend, tanpa RabbitMQ/DB):**
+   ```bash
+   docker compose -f docker-compose.apps.yml --env-file ../../env-file/.env.frontend up -d --build
+   ```
 
 ## Catatan Penting
 

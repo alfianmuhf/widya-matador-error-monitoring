@@ -14,6 +14,7 @@ import exportRoutes from "../modules/export/export.route.js";
 import auditLogRoutes from "../modules/audit-log/audit-log.route.js";
 import summaryRoutes from "../modules/summary/summary.route.js";
 import errorAnalyticsRoutes from "../modules/error-analytics/error-analytics.route.js";
+import teamRoutes from "../modules/team/team.route.js";
 
 const router = Router();
 
@@ -48,6 +49,9 @@ router.use("/locations", locationRoutes);
 router.use("/components", componentRoutes);
 router.use("/failure-codes", failureCodeRoutes);
 router.use("/assets", assetRoutes);
+
+// Team Management Service (/teams)
+router.use("/teams", teamRoutes);
 
 // Ticket Service (/tickets)
 router.use("/tickets", ticketRoutes);

@@ -1,5 +1,6 @@
 import * as exportService from "./export.service.js";
 import * as ticketService from "../ticket/ticket.service.js";
+import { recordLog } from "../audit-log/audit-log.service.js";
 
 const getDateSlug = () => {
   const now = new Date();
@@ -28,6 +29,21 @@ export const exportTicketsExcel = async (req, res, next) => {
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
     res.setHeader("Content-Length", buffer.length);
+
+    await recordLog({
+      actor: req.user?.username || req.user?.name || "User",
+      actorUserId: req.user?.id || null,
+      action: "EXPORT",
+      entityType: "Ticket",
+      entityId: filename,
+      details: {
+        identifier: filename,
+        format: "excel",
+        totalTickets: tickets.length,
+        changeSummary: `ekspor ${tickets.length} tiket ke file Excel '${filename}'`,
+      },
+    });
+
     res.send(buffer);
   } catch (error) {
     next(error);
@@ -52,6 +68,21 @@ export const exportTicketsPdf = async (req, res, next) => {
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
     res.setHeader("Content-Length", buffer.length);
+
+    await recordLog({
+      actor: req.user?.username || req.user?.name || "User",
+      actorUserId: req.user?.id || null,
+      action: "EXPORT",
+      entityType: "Ticket",
+      entityId: filename,
+      details: {
+        identifier: filename,
+        format: "pdf",
+        totalTickets: tickets.length,
+        changeSummary: `ekspor ${tickets.length} tiket ke file PDF '${filename}'`,
+      },
+    });
+
     res.send(buffer);
   } catch (error) {
     next(error);

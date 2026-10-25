@@ -48,10 +48,10 @@ Backend menjalankan `npx prisma migrate deploy` saat container start. **Tidak ad
 
 ### Database yang sudah ada (sekali saja)
 
-Baseline `20261022102348` dibuat dari schema yang sudah ada di database dev. Untuk database yang tabelnya sudah terlanjur dibuat (dev lokal, VPS), tandai baseline sebagai sudah diterapkan:
+Baseline `20261026000000_init` dibuat dari schema database terbaru (mencakup teams, ticket_teams, dan username). Untuk database yang tabelnya sudah terlanjur dibuat (dev lokal, VPS), tandai baseline sebagai sudah diterapkan:
 
 ```bash
-docker compose run --rm backend npx prisma migrate resolve --applied 20261022102348
+docker compose run --rm backend npx prisma migrate resolve --applied 20261026000000_init
 ```
 
 Verifikasi:

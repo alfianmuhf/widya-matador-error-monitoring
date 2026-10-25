@@ -1,3 +1,6 @@
+-- CreateSchema
+CREATE SCHEMA IF NOT EXISTS "public";
+
 -- CreateEnum
 CREATE TYPE "user_role" AS ENUM ('admin', 'coordinator', 'viewer');
 
@@ -5,7 +8,7 @@ CREATE TYPE "user_role" AS ENUM ('admin', 'coordinator', 'viewer');
 CREATE TYPE "user_status" AS ENUM ('invited', 'active', 'suspended');
 
 -- CreateEnum
-CREATE TYPE "division" AS ENUM ('none', 'after_sales', 'software');
+CREATE TYPE "division" AS ENUM ('none', 'after_sales', 'rnd');
 
 -- CreateEnum
 CREATE TYPE "bot_state" AS ENUM ('idle', 'await_asset', 'await_component', 'await_failure_code', 'await_detail', 'await_update', 'committed');
@@ -35,7 +38,7 @@ CREATE TYPE "severity" AS ENUM ('rendah', 'sedang', 'tinggi');
 CREATE TABLE "users" (
     "id" UUID NOT NULL DEFAULT gen_random_uuid(),
     "telegram_user_id" UUID,
-    "email" VARCHAR(100) NOT NULL,
+    "username" VARCHAR(100) NOT NULL,
     "name" VARCHAR(100) NOT NULL,
     "password_hash" TEXT NOT NULL,
     "role" "user_role" NOT NULL DEFAULT 'viewer',
@@ -220,10 +223,10 @@ CREATE TABLE "tickets" (
     "failure_code_id" UUID NOT NULL,
     "aftersales_user_id" UUID NOT NULL,
     "current_version" INTEGER NOT NULL DEFAULT 1,
+    "current_team_id" UUID,
     "open_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "escalated_at" TIMESTAMPTZ,
     "solved_at" TIMESTAMPTZ,
-    "leader_assignee_id" UUID,
 
     CONSTRAINT "tickets_pkey" PRIMARY KEY ("id")
 );
@@ -234,10 +237,11 @@ CREATE TABLE "ticket_history" (
     "ticket_id" VARCHAR(50) NOT NULL,
     "version" INTEGER NOT NULL,
     "status" "ticket_status" NOT NULL DEFAULT 'open',
+    "severity" "severity" NOT NULL DEFAULT 'rendah',
+    "team_id" UUID,
     "damage_description" TEXT,
     "action_taken" TEXT,
     "root_cause" TEXT,
-    "severity" "severity" NOT NULL DEFAULT 'rendah',
     "notes" TEXT,
     "changed_by_user_id" UUID,
     "changed_by_telegram_user_id" UUID,
@@ -247,13 +251,35 @@ CREATE TABLE "ticket_history" (
 );
 
 -- CreateTable
-CREATE TABLE "ticket_assignees" (
+CREATE TABLE "teams" (
+    "id" UUID NOT NULL DEFAULT gen_random_uuid(),
+    "name" VARCHAR(100) NOT NULL,
+    "leader_user_id" UUID NOT NULL,
+    "is_active" BOOLEAN NOT NULL DEFAULT true,
+    "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "teams_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "team_members" (
+    "id" UUID NOT NULL DEFAULT gen_random_uuid(),
+    "team_id" UUID NOT NULL,
+    "user_id" UUID NOT NULL,
+    "joined_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "team_members_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "ticket_teams" (
     "id" UUID NOT NULL DEFAULT gen_random_uuid(),
     "ticket_id" VARCHAR(50) NOT NULL,
-    "user_id" UUID NOT NULL,
-    "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "team_id" UUID NOT NULL,
+    "assigned_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
-    CONSTRAINT "ticket_assignees_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "ticket_teams_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -264,6 +290,8 @@ CREATE TABLE "ticket_attachments" (
     "file_name" VARCHAR(255) NOT NULL,
     "mime_type" VARCHAR(100) NOT NULL,
     "file_size" INTEGER NOT NULL,
+    "uploaded_by_user_id" UUID,
+    "uploaded_by_telegram_user_id" UUID,
     "uploaded_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "ticket_attachments_pkey" PRIMARY KEY ("id")
@@ -273,7 +301,7 @@ CREATE TABLE "ticket_attachments" (
 CREATE UNIQUE INDEX "users_telegram_user_id_key" ON "users"("telegram_user_id");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "users_email_key" ON "users"("email");
+CREATE UNIQUE INDEX "users_username_key" ON "users"("username");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "telegram_users_telegram_id_key" ON "telegram_users"("telegram_id");
@@ -321,9 +349,6 @@ CREATE UNIQUE INDEX "failure_codes_component_id_code_key" ON "failure_codes"("co
 CREATE UNIQUE INDEX "telegram_groups_chat_id_key" ON "telegram_groups"("chat_id");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "tickets_leader_assignee_id_key" ON "tickets"("leader_assignee_id");
-
--- CreateIndex
 CREATE INDEX "tickets_asset_id_idx" ON "tickets"("asset_id");
 
 -- CreateIndex
@@ -333,22 +358,52 @@ CREATE INDEX "tickets_failure_code_id_idx" ON "tickets"("failure_code_id");
 CREATE INDEX "tickets_aftersales_user_id_idx" ON "tickets"("aftersales_user_id");
 
 -- CreateIndex
+CREATE INDEX "tickets_current_team_id_idx" ON "tickets"("current_team_id");
+
+-- CreateIndex
 CREATE INDEX "tickets_open_at_idx" ON "tickets"("open_at");
 
 -- CreateIndex
 CREATE INDEX "ticket_history_status_changed_at_idx" ON "ticket_history"("status", "changed_at");
 
 -- CreateIndex
+CREATE INDEX "ticket_history_team_id_idx" ON "ticket_history"("team_id");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "ticket_history_ticket_id_version_key" ON "ticket_history"("ticket_id", "version");
 
 -- CreateIndex
-CREATE INDEX "ticket_assignees_user_id_idx" ON "ticket_assignees"("user_id");
+CREATE UNIQUE INDEX "teams_name_key" ON "teams"("name");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "ticket_assignees_ticket_id_user_id_key" ON "ticket_assignees"("ticket_id", "user_id");
+CREATE INDEX "teams_leader_user_id_idx" ON "teams"("leader_user_id");
+
+-- CreateIndex
+CREATE INDEX "team_members_user_id_idx" ON "team_members"("user_id");
+
+-- CreateIndex
+CREATE INDEX "team_members_team_id_idx" ON "team_members"("team_id");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "team_members_team_id_user_id_key" ON "team_members"("team_id", "user_id");
+
+-- CreateIndex
+CREATE INDEX "ticket_teams_ticket_id_idx" ON "ticket_teams"("ticket_id");
+
+-- CreateIndex
+CREATE INDEX "ticket_teams_team_id_idx" ON "ticket_teams"("team_id");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "ticket_teams_ticket_id_team_id_key" ON "ticket_teams"("ticket_id", "team_id");
 
 -- CreateIndex
 CREATE INDEX "ticket_attachments_ticket_id_idx" ON "ticket_attachments"("ticket_id");
+
+-- CreateIndex
+CREATE INDEX "ticket_attachments_uploaded_by_user_id_idx" ON "ticket_attachments"("uploaded_by_user_id");
+
+-- CreateIndex
+CREATE INDEX "ticket_attachments_uploaded_by_telegram_user_id_idx" ON "ticket_attachments"("uploaded_by_telegram_user_id");
 
 -- AddForeignKey
 ALTER TABLE "users" ADD CONSTRAINT "users_telegram_user_id_fkey" FOREIGN KEY ("telegram_user_id") REFERENCES "telegram_users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
@@ -393,10 +448,13 @@ ALTER TABLE "tickets" ADD CONSTRAINT "tickets_failure_code_id_fkey" FOREIGN KEY 
 ALTER TABLE "tickets" ADD CONSTRAINT "tickets_aftersales_user_id_fkey" FOREIGN KEY ("aftersales_user_id") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "tickets" ADD CONSTRAINT "tickets_leader_assignee_id_fkey" FOREIGN KEY ("leader_assignee_id") REFERENCES "ticket_assignees"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "tickets" ADD CONSTRAINT "tickets_current_team_id_fkey" FOREIGN KEY ("current_team_id") REFERENCES "teams"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "ticket_history" ADD CONSTRAINT "ticket_history_ticket_id_fkey" FOREIGN KEY ("ticket_id") REFERENCES "tickets"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ticket_history" ADD CONSTRAINT "ticket_history_team_id_fkey" FOREIGN KEY ("team_id") REFERENCES "teams"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "ticket_history" ADD CONSTRAINT "ticket_history_changed_by_user_id_fkey" FOREIGN KEY ("changed_by_user_id") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -405,10 +463,25 @@ ALTER TABLE "ticket_history" ADD CONSTRAINT "ticket_history_changed_by_user_id_f
 ALTER TABLE "ticket_history" ADD CONSTRAINT "ticket_history_changed_by_telegram_user_id_fkey" FOREIGN KEY ("changed_by_telegram_user_id") REFERENCES "telegram_users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "ticket_assignees" ADD CONSTRAINT "ticket_assignees_ticket_id_fkey" FOREIGN KEY ("ticket_id") REFERENCES "tickets"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "teams" ADD CONSTRAINT "teams_leader_user_id_fkey" FOREIGN KEY ("leader_user_id") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "ticket_assignees" ADD CONSTRAINT "ticket_assignees_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "team_members" ADD CONSTRAINT "team_members_team_id_fkey" FOREIGN KEY ("team_id") REFERENCES "teams"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "team_members" ADD CONSTRAINT "team_members_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ticket_teams" ADD CONSTRAINT "ticket_teams_ticket_id_fkey" FOREIGN KEY ("ticket_id") REFERENCES "tickets"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ticket_teams" ADD CONSTRAINT "ticket_teams_team_id_fkey" FOREIGN KEY ("team_id") REFERENCES "teams"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "ticket_attachments" ADD CONSTRAINT "ticket_attachments_ticket_id_fkey" FOREIGN KEY ("ticket_id") REFERENCES "tickets"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ticket_attachments" ADD CONSTRAINT "ticket_attachments_uploaded_by_user_id_fkey" FOREIGN KEY ("uploaded_by_user_id") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ticket_attachments" ADD CONSTRAINT "ticket_attachments_uploaded_by_telegram_user_id_fkey" FOREIGN KEY ("uploaded_by_telegram_user_id") REFERENCES "telegram_users"("id") ON DELETE SET NULL ON UPDATE CASCADE;

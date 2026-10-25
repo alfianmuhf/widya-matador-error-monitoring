@@ -1,14 +1,16 @@
 import { prisma } from "../../config/prisma.js";
 
 /**
- * Find user by email
- * @param {string} email
+ * Find user by username
+ * @param {string} username
  */
-export const findUserByEmail = async (email) => {
+export const findUserByUsername = async (username) => {
   return prisma.users.findUnique({
-    where: { email },
+    where: { username },
   });
 };
+
+export const findUserByEmail = findUserByUsername;
 
 /**
  * Find single user by ID (excluding password_hash)
@@ -19,7 +21,7 @@ export const findUserById = async (id) => {
     where: { id },
     select: {
       id: true,
-      email: true,
+      username: true,
       name: true,
       role: true,
       division: true,
@@ -53,7 +55,7 @@ export const findUserById = async (id) => {
 export const createUser = async (data) => {
   return prisma.users.create({
     data: {
-      email: data.email,
+      username: data.username || data.email,
       name: data.name,
       role: data.role || "viewer",
       division: data.division || null,
@@ -64,7 +66,7 @@ export const createUser = async (data) => {
     },
     select: {
       id: true,
-      email: true,
+      username: true,
       name: true,
       role: true,
       division: true,
@@ -96,7 +98,7 @@ export const findUsers = async ({ skip = 0, take = 10, search, role, division, s
       ? {
           OR: [
             { name: { contains: search, mode: "insensitive" } },
-            { email: { contains: search, mode: "insensitive" } },
+            { username: { contains: search, mode: "insensitive" } },
           ],
         }
       : {}),
@@ -113,7 +115,7 @@ export const findUsers = async ({ skip = 0, take = 10, search, role, division, s
       orderBy: { created_at: "desc" },
       select: {
         id: true,
-        email: true,
+        username: true,
         name: true,
         role: true,
         division: true,
@@ -154,7 +156,7 @@ export const updateUser = async (id, data) => {
     data,
     select: {
       id: true,
-      email: true,
+      username: true,
       name: true,
       role: true,
       division: true,

@@ -149,10 +149,10 @@ export const claimTicket = async (req, res, next) => {
       ...(req.user || {}),
       ...(req.body || {}),
     };
-    const ticket = await ticketService.claimTicket(req.params.id, actor);
+    const ticket = await ticketService.claimTicket(req.params.id, actor, req.body);
     res.status(200).json({
       success: true,
-      message: "Tiket berhasil diklaim sebagai Leader tim Software",
+      message: "Tiket berhasil diklaim untuk tim RnD",
       data: ticket,
     });
   } catch (error) {

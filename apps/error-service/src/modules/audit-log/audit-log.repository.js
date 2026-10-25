@@ -5,7 +5,7 @@ const auditLogIncludes = {
     select: {
       id: true,
       name: true,
-      email: true,
+      username: true,
       role: true,
     },
   },

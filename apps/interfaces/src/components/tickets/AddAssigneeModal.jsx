@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import api from "../../lib/api.js";
 import { useAuth } from "../../context/AuthContext.jsx";
+import DeleteConfirmModal from "../common/DeleteConfirmModal.jsx";
 
 export default function AddAssigneeModal({ isOpen, onClose, ticket, onSuccess }) {
   const { user } = useAuth();
@@ -8,242 +9,316 @@ export default function AddAssigneeModal({ isOpen, onClose, ticket, onSuccess })
   const userRole = (currentUser?.role || "").toLowerCase();
   const isAdmin = userRole === "admin";
 
-  // Selection state
-  const [selectedUserId, setSelectedUserId] = useState("");
-  const [isLeader, setIsLeader] = useState(false);
+  // Tab State: 'collaborate' (Tim Kolaborasi) | 'directHandover' (Alih Tanggung Jawab Langsung)
+  const [activeTab, setActiveTab] = useState("collaborate");
 
-  // Available software users list
-  const [softwareUsers, setSoftwareUsers] = useState([]);
-  const [fetchingUsers, setFetchingUsers] = useState(false);
+  // All Available Teams
+  const [allTeams, setAllTeams] = useState([]);
+  const [loadingTeams, setLoadingTeams] = useState(false);
 
-  // Form states
+  // Form States: Tim Kolaborasi
+  const [collaborateTeamId, setCollaborateTeamId] = useState("");
+
+  // States: Alih Tanggung Jawab ke Tim Kolaborator (Promote)
+  const [promoteTeamTarget, setPromoteTeamTarget] = useState(null);
+  const [promoteNotes, setPromoteNotes] = useState("");
+
+  // Form States: Alih Tanggung Jawab Langsung (Direct Handover & Remove Current Team)
+  const [directTargetTeamId, setDirectTargetTeamId] = useState("");
+  const [directHandoverNotes, setDirectHandoverNotes] = useState("");
+  const [confirmDirectHandover, setConfirmDirectHandover] = useState(false);
+
+  // Form States: Remove Collaborating Team
+  const [removingTeamTarget, setRemovingTeamTarget] = useState(null);
+
+  // Submitting & Feedback states
   const [submitting, setSubmitting] = useState(false);
-  const [transferringLeaderId, setTransferringLeaderId] = useState(null);
-  const [removingId, setRemovingId] = useState(null);
   const [errorMessage, setErrorMessage] = useState(null);
   const [successMessage, setSuccessMessage] = useState(null);
 
-  // Custom Popup Dialog states (Menggantikan alert & confirm bawaan browser)
-  const [confirmModal, setConfirmModal] = useState(null);
-  const [alertModal, setAlertModal] = useState(null);
+  // Local active ticket state to allow instant reactive updates within the modal
+  const [activeTicket, setActiveTicket] = useState(ticket);
 
-  // Current assignees of the ticket
-  const currentAssignees = useMemo(() => {
-    if (!ticket) return [];
-    return (ticket.assignees || ticket.assignedMembers || []).map((a) => {
-      const tgUsername = a.user?.telegram_user?.username || a.telegramUser?.username;
-      const teleTag = tgUsername ? `@${tgUsername}` : null;
-      return {
-        id: a.id,
-        name: a.name || a.user?.name || a.telegramUser?.full_name || "Anggota Tim",
-        email: a.identifier || a.email || a.user?.email || "-",
-        telegramTag: teleTag,
-        isLeader: Boolean(a.isLeader || a.isLead),
-        userId: a.userId || a.user_id,
-        role: a.user?.role || a.role || "TEKNISI",
-        division: a.user?.division || "software",
-      };
-    });
+  useEffect(() => {
+    setActiveTicket(ticket);
   }, [ticket]);
 
-  // Set of assigned user IDs for fast lookup & disabling in dropdown
-  const assignedUserIds = useMemo(() => {
-    return new Set(currentAssignees.map((a) => a.userId).filter(Boolean));
-  }, [currentAssignees]);
+  // Primary team and teams associated with ticket
+  const currentTeam = activeTicket?.currentTeam || activeTicket?.current_team;
+  const currentTeamId =
+    activeTicket?.currentTeamId ||
+    activeTicket?.current_team_id ||
+    currentTeam?.id ||
+    null;
 
-  const hasLeader = useMemo(() => {
-    return currentAssignees.some((a) => a.isLeader);
-  }, [currentAssignees]);
+  // Additional collaborating teams ONLY:
+  // RULE: Tim yang id team-nya masuk di tabel tickets (current_team_id) TIDAK BOLEH ditampilkan di kolaborator!
+  const collaboratingTeams = useMemo(() => {
+    if (!activeTicket) return [];
 
-  // Fetch available software users when modal opens
+    const rawList =
+      (Array.isArray(activeTicket.teams) && activeTicket.teams) ||
+      (Array.isArray(activeTicket.ticket_teams) && activeTicket.ticket_teams) ||
+      [];
+
+    const result = [];
+    const seenTeamIds = new Set();
+
+    for (const item of rawList) {
+      if (!item) continue;
+
+      // Extract the underlying team object
+      const teamObj = item.team || item;
+      const actualTeamId = item.teamId || item.team_id || teamObj?.id;
+
+      if (!actualTeamId) continue;
+
+      // RULE: Tim yang id team-nya masuk di tabel tickets (current_team_id) TIDAK BOLEH ditampilkan di kolaborator!
+      if (currentTeamId && actualTeamId === currentTeamId) {
+        continue;
+      }
+
+      // Avoid duplicate entries
+      if (seenTeamIds.has(actualTeamId)) {
+        continue;
+      }
+      seenTeamIds.add(actualTeamId);
+
+      result.push({
+        id: actualTeamId, // Guarantee: teams table ID!
+        teamId: actualTeamId,
+        ticketTeamRowId: item.id,
+        name: teamObj?.name || item.name || "Tim RnD",
+        leader: teamObj?.leader || item.leader || null,
+      });
+    }
+
+    return result;
+  }, [activeTicket, currentTeamId]);
+
+  // Set of already assigned team IDs (Primary Team + All Collaborating Teams)
+  const assignedTeamIds = useMemo(() => {
+    const ids = new Set();
+    if (currentTeamId) ids.add(currentTeamId);
+    collaboratingTeams.forEach((t) => ids.add(t.id));
+    return ids;
+  }, [collaboratingTeams, currentTeamId]);
+
+  // Check if current user is the Leader of this ticket's primary team (tickets.current_team_id)
+  const isLeaderOfCurrentTeam = useMemo(() => {
+    if (!currentUser?.id) return false;
+    if (isAdmin) return true;
+
+    // HANYA Leader dari tim utama penanggung jawab (tickets.current_team_id)
+    if (
+      currentTeam?.leader_user_id === currentUser.id ||
+      currentTeam?.leader?.id === currentUser.id ||
+      currentTeam?.leaderUserId === currentUser.id
+    ) {
+      return true;
+    }
+
+    // Jika belum ada tim penanggung jawab di tiket, koordinator leader tim RnD boleh claim pertama
+    if (!currentTeamId) {
+      return allTeams.some(
+        (t) =>
+          t.leader_user_id === currentUser.id ||
+          t.leaderUserId === currentUser.id ||
+          t.leader?.id === currentUser.id
+      );
+    }
+
+    return false;
+  }, [currentUser, isAdmin, currentTeam, currentTeamId, allTeams]);
+
+  // Fetch all master teams when modal opens
   useEffect(() => {
     if (!isOpen) return;
 
     setErrorMessage(null);
     setSuccessMessage(null);
-    setConfirmModal(null);
-    setAlertModal(null);
-    setSelectedUserId("");
-    setIsLeader(!hasLeader); // default true if ticket has no leader yet
+    setCollaborateTeamId("");
+    setDirectTargetTeamId("");
+    setDirectHandoverNotes("");
+    setConfirmDirectHandover(false);
+    setPromoteTeamTarget(null);
+    setPromoteNotes("");
+    setRemovingTeamTarget(null);
 
-    setFetchingUsers(true);
+    setLoadingTeams(true);
     api
-      .get("/users?limit=100")
+      .get("/teams?limit=100")
       .then((res) => {
-        const rawUsers = res.data?.data?.users || (Array.isArray(res.data?.data) ? res.data?.data : []);
-        // Filter: software division users
-        const softwareOnly = rawUsers.filter((u) => {
-          const div = (u.division || "").toLowerCase();
-          const r = (u.role || "").toLowerCase();
-          return div === "software" || r === "coordinator" || r === "admin";
-        });
-        setSoftwareUsers(softwareOnly);
+        const teams = res.data?.data || [];
+        setAllTeams(teams);
       })
       .catch((err) => {
-        console.error("Gagal memuat daftar pengguna software:", err);
+        console.error("Gagal memuat master tim:", err);
       })
       .finally(() => {
-        setFetchingUsers(false);
+        setLoadingTeams(false);
       });
-  }, [isOpen, hasLeader]);
+  }, [isOpen]);
 
   if (!isOpen || !ticket) return null;
 
-  // Handle submit add assignee
-  const handleSubmit = async (e) => {
+  // --------------------------------------------------------------------------
+  // HANDLER: TAMBAH TIM KOLABORASI
+  // --------------------------------------------------------------------------
+  const handleAddCollaborateTeam = async (e) => {
     e.preventDefault();
     setErrorMessage(null);
     setSuccessMessage(null);
 
-    if (!selectedUserId) {
-      setAlertModal({
-        type: "warning",
-        title: "Perhatian",
-        message: "Silakan pilih akun anggota tim Software terlebih dahulu sebelum menyimpan.",
-      });
+    if (!collaborateTeamId) {
+      setErrorMessage("Pilih tim RnD yang ingin diajak berkolaborasi.");
       return;
     }
 
     try {
       setSubmitting(true);
-      const payload = {
-        userId: selectedUserId,
-        isLeader: Boolean(isLeader),
-      };
-
-      const res = await api.post(`/ticket-management/${ticket.id}/assignees`, payload);
-      const updated = res.data?.data?.ticket || res.data?.data;
-
-      const successText = res.data?.message || "Anggota tim Software berhasil ditambahkan ke tiket!";
-      setSuccessMessage(successText);
-      setSelectedUserId("");
-
-      setAlertModal({
-        type: "success",
-        title: "Berhasil",
-        message: successText,
+      const res = await api.post(`/ticket-management/${activeTicket.id}/teams`, {
+        teamId: collaborateTeamId,
       });
 
+      const updated = res.data?.data?.ticket || res.data?.data;
+      const addedTeam = allTeams.find((t) => t.id === collaborateTeamId);
+      const msg = res.data?.message || `Tim '${addedTeam?.name || "RnD"}' berhasil ditambahkan ke tim kolaborasi!`;
+      setSuccessMessage(msg);
+      setCollaborateTeamId("");
+
+      if (updated && updated.id) {
+        setActiveTicket(updated);
+      }
       if (onSuccess) {
         onSuccess(updated);
       }
     } catch (err) {
-      console.error("Gagal menambah anggota ke tiket:", err);
-      const detailMsg = err.response?.data?.details?.[0]?.message;
-      const msg = detailMsg || err.response?.data?.message || "Gagal menambahkan anggota ke tiket.";
+      console.error("Gagal menambah tim kolaborasi:", err);
+      const msg = err.response?.data?.message || "Gagal menambahkan tim kolaborasi.";
       setErrorMessage(msg);
-      setAlertModal({
-        type: "error",
-        title: "Gagal Menambahkan Anggota",
-        message: msg,
-      });
     } finally {
       setSubmitting(false);
     }
   };
 
-  // Trigger popup konfirmasi alihkan leader
-  const handleRequestChangeLeader = (assignee) => {
-    setConfirmModal({
-      title: "Alihkan Tanggung Jawab Leader",
-      message: `Alihkan tanggung jawab Leader tim Software tiket ini kepada "${assignee.name}"?`,
-      subMessage:
-        "Status anggota ini akan berubah menjadi Leader, dan Leader sebelumnya otomatis menjadi anggota biasa.",
-      confirmText: "Ya, Alihkan Leader",
-      confirmBg: "#0e8587",
-      icon: null,
-      onConfirm: async () => {
-        try {
-          setTransferringLeaderId(assignee.id);
-          setConfirmModal(null);
-          setErrorMessage(null);
+  // --------------------------------------------------------------------------
+  // HANDLER: ALIH TANGGUNG JAWAB KE TIM KOLABORATOR (Promote Team)
+  // Tim baru jadi Tim Utama, tim lama tetap ada sebagai kolaborator
+  // --------------------------------------------------------------------------
+  const handlePromoteTeamConfirm = async () => {
+    if (!promoteTeamTarget) return;
 
-          const res = await api.patch(`/ticket-management/${ticket.id}/leader`, {
-            assigneeId: assignee.id,
-            userId: assignee.userId,
-          });
-          const updated = res.data?.data?.ticket || res.data?.data;
+    try {
+      setSubmitting(true);
+      const res = await api.patch(`/ticket-management/${activeTicket.id}/team`, {
+        teamId: promoteTeamTarget.id,
+        notes: promoteNotes.trim() || undefined,
+        removeOldTeam: false,
+      });
 
-          const msg = `Tanggung jawab Leader tim Software berhasil dialihkan kepada '${assignee.name}'!`;
-          setSuccessMessage(msg);
-          setAlertModal({
-            type: "success",
-            title: "Leader Berhasil Dialihkan",
-            message: msg,
-          });
+      const updated = res.data?.data?.ticket || res.data?.data;
+      const msg = res.data?.message || `Tanggung jawab utama berhasil dialihkan ke tim '${promoteTeamTarget.name}'!`;
+      setSuccessMessage(msg);
+      setPromoteTeamTarget(null);
+      setPromoteNotes("");
 
-          if (onSuccess) {
-            onSuccess(updated);
-          }
-        } catch (err) {
-          console.error("Gagal mengalihkan leader:", err);
-          const msg = err.response?.data?.message || "Gagal mengalihkan leader tim Software.";
-          setErrorMessage(msg);
-          setAlertModal({
-            type: "error",
-            title: "Gagal Mengalihkan Leader",
-            message: msg,
-          });
-        } finally {
-          setTransferringLeaderId(null);
-        }
-      },
-    });
+      if (updated && updated.id) {
+        setActiveTicket(updated);
+      }
+      if (onSuccess) {
+        onSuccess(updated);
+      }
+    } catch (err) {
+      console.error("Gagal mengalihkan tanggung jawab:", err);
+      const msg = err.response?.data?.message || "Gagal mengalihkan tanggung jawab tiket.";
+      setErrorMessage(msg);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  // Trigger popup konfirmasi hapus anggota (Leader dilarang dihapus, hanya anggota)
-  const handleRequestRemoveMember = (assignee) => {
-    if (assignee.isLeader) {
-      setAlertModal({
-        type: "warning",
-        title: "Leader Tidak Dapat Dihapus",
-        message:
-          "Leader tim tidak dapat langsung dihapus dari tim. Silakan alihkan tanggung jawab Leader ke anggota lain terlebih dahulu, kemudian hapus setelah statusnya menjadi anggota biasa.",
-      });
-      return;
+  // --------------------------------------------------------------------------
+  // HANDLER: HAPUS TIM KOLABORASI
+  // --------------------------------------------------------------------------
+  const handleRemoveTeamConfirm = async () => {
+    if (!removingTeamTarget) return;
+
+    try {
+      setSubmitting(true);
+      const res = await api.delete(`/ticket-management/${activeTicket.id}/teams/${removingTeamTarget.id}`);
+      const updated = res.data?.data?.ticket || res.data?.data;
+      setSuccessMessage(`Tim '${removingTeamTarget.name}' berhasil dikeluarkan dari tiket.`);
+      setRemovingTeamTarget(null);
+
+      if (updated && updated.id) {
+        setActiveTicket(updated);
+      } else {
+        setActiveTicket((prev) => {
+          if (!prev) return prev;
+          const nextTeams = (prev.teams || []).filter(
+            (t) => (t.teamId || t.team?.id || t.id) !== removingTeamTarget.id
+          );
+          const nextTicketTeams = (prev.ticket_teams || []).filter(
+            (tt) => (tt.team_id || tt.team?.id || tt.id) !== removingTeamTarget.id
+          );
+          return {
+            ...prev,
+            teams: nextTeams,
+            ticket_teams: nextTicketTeams,
+          };
+        });
+      }
+      if (onSuccess) {
+        onSuccess(updated || { id: activeTicket.id });
+      }
+    } catch (err) {
+      console.error("Gagal menghapus tim:", err);
+      const msg = err.response?.data?.message || "Gagal menghapus tim dari tiket.";
+      setErrorMessage(msg);
+    } finally {
+      setSubmitting(false);
     }
+  };
 
-    setConfirmModal({
-      title: "Hapus Anggota dari Tim",
-      message: `Apakah Anda yakin ingin menghapus "${assignee.name}" dari penugasan tiket ini?`,
-      subMessage: "Anggota ini tidak akan lagi memiliki akses tugas pengerjaan untuk tiket ini.",
-      confirmText: "Ya, Hapus Anggota",
-      confirmBg: "#dc2626",
-      icon: "🗑️",
-      onConfirm: async () => {
-        try {
-          setRemovingId(assignee.id);
-          setConfirmModal(null);
-          setErrorMessage(null);
+  // --------------------------------------------------------------------------
+  // HANDLER: ALIH TANGGUNG JAWAB LANGSUNG & HAPUS TIM PENGALIH
+  // Tim baru langsung jadi leader, tim lama langsung dikeluarkan dari tiket
+  // --------------------------------------------------------------------------
+  const handleDirectHandoverConfirm = async () => {
+    if (!directTargetTeamId) return;
 
-          const res = await api.delete(`/ticket-management/${ticket.id}/assignees/${assignee.id}`);
-          const updated = res.data?.data?.ticket || res.data?.data;
+    try {
+      setSubmitting(true);
+      const res = await api.patch(`/ticket-management/${activeTicket.id}/team`, {
+        teamId: directTargetTeamId,
+        notes: directHandoverNotes.trim() || undefined,
+        removeOldTeam: true,
+      });
 
-          const msg = res.data?.message || `Anggota '${assignee.name}' berhasil dihapus dari tim tiket.`;
-          setSuccessMessage(msg);
-          setAlertModal({
-            type: "success",
-            title: "Anggota Dihapus",
-            message: msg,
-          });
+      const updated = res.data?.data?.ticket || res.data?.data;
+      const selectedTeam = allTeams.find((t) => t.id === directTargetTeamId);
+      const msg =
+        res.data?.message ||
+        `Tanggung jawab berhasil diserahkan ke '${selectedTeam?.name || "Tim Baru"}' dan tim Anda telah dilepaskan dari tiket.`;
+      setSuccessMessage(msg);
+      setConfirmDirectHandover(false);
+      setDirectTargetTeamId("");
+      setDirectHandoverNotes("");
 
-          if (onSuccess) {
-            onSuccess(updated);
-          }
-        } catch (err) {
-          console.error("Gagal menghapus anggota:", err);
-          const msg = err.response?.data?.message || "Gagal menghapus anggota dari tiket.";
-          setErrorMessage(msg);
-          setAlertModal({
-            type: "error",
-            title: "Gagal Menghapus Anggota",
-            message: msg,
-          });
-        } finally {
-          setRemovingId(null);
-        }
-      },
-    });
+      if (updated && updated.id) {
+        setActiveTicket(updated);
+      }
+      if (onSuccess) {
+        onSuccess(updated);
+      }
+    } catch (err) {
+      console.error("Gagal melakukan serah terima langsung:", err);
+      const msg = err.response?.data?.message || "Gagal melakukan serah terima langsung.";
+      setErrorMessage(msg);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -251,704 +326,748 @@ export default function AddAssigneeModal({ isOpen, onClose, ticket, onSuccess })
       style={{
         position: "fixed",
         inset: 0,
-        backgroundColor: "rgba(15, 23, 42, 0.65)",
-        backdropFilter: "blur(4px)",
+        zIndex: 9999,
+        backgroundColor: "rgba(11, 30, 39, 0.65)",
+        backdropFilter: "blur(3px)",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        zIndex: 9999,
         padding: "16px",
       }}
-      onClick={(e) => {
-        if (e.target === e.currentTarget && !submitting) onClose();
-      }}
+      onClick={onClose}
     >
       <div
         style={{
           backgroundColor: "#ffffff",
-          borderRadius: "16px",
+          borderRadius: "14px",
           width: "100%",
-          maxWidth: "600px",
-          maxHeight: "90vh",
+          maxWidth: "640px",
+          maxHeight: "92vh",
           display: "flex",
           flexDirection: "column",
           boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
           overflow: "hidden",
-          animation: "scaleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1)",
         }}
+        onClick={(e) => e.stopPropagation()}
       >
         {/* MODAL HEADER */}
         <div
           style={{
-            padding: "20px 24px",
+            padding: "18px 22px",
             borderBottom: "1px solid #e2e8f0",
-            backgroundColor: "#f8fafc",
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
+            backgroundColor: "#ffffff",
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-            <div
-              style={{
-                width: "42px",
-                height: "42px",
-                borderRadius: "10px",
-                backgroundColor: "#e8f7f6",
-                color: "#0e8587",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontSize: "20px",
-                flexShrink: 0,
-              }}
-            >
-              👥
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <span style={{ width: "3.5px", height: "16px", backgroundColor: "#0e8587", borderRadius: "2px" }} />
+              <h2 style={{ fontSize: "16px", fontWeight: 750, color: "#0f172a", margin: 0 }}>
+                Kelola Tim & Handover Tiket
+              </h2>
+              <span
+                style={{
+                  fontSize: "11px",
+                  fontWeight: 750,
+                  padding: "2px 7px",
+                  borderRadius: "4px",
+                  backgroundColor: "#e0f2fe",
+                  color: "#0369a1",
+                  fontFamily: "monospace",
+                }}
+              >
+                {ticket.id}
+              </span>
             </div>
-            <div>
-              <h3 style={{ margin: 0, fontSize: "17px", fontWeight: 750, color: "var(--text-dark)" }}>
-                Kelola Tim Software & Leader
-              </h3>
-              <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "3px" }}>
-                <span style={{ fontSize: "12.5px", fontFamily: "monospace", fontWeight: 700, color: "#0e8587" }}>
-                  {ticket.id}
-                </span>
-                <span style={{ fontSize: "12px", color: "var(--text-muted)" }}>•</span>
-                <span style={{ fontSize: "12px", color: "var(--text-muted)" }}>
-                  Unit: <b>{ticket.unit || ticket.unitCode || "-"}</b>
-                </span>
-              </div>
-            </div>
+            <p style={{ fontSize: "12.5px", color: "#64748b", marginTop: "3px" }}>
+              Kelola kolaborasi tim lintas divisi atau alihkan tanggung jawab utama penanganan tiket.
+            </p>
           </div>
 
           <button
             type="button"
             onClick={onClose}
-            disabled={submitting}
             style={{
-              background: "none",
+              background: "transparent",
               border: "none",
-              cursor: submitting ? "not-allowed" : "pointer",
-              padding: "8px",
-              borderRadius: "8px",
-              color: "#64748b",
+              color: "#94a3b8",
+              cursor: "pointer",
+              padding: "6px",
+              borderRadius: "6px",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
             }}
           >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M18 6L6 18M6 6l12 12" />
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
             </svg>
           </button>
         </div>
 
-        {/* MODAL BODY (SCROLLABLE) */}
-        <div style={{ padding: "24px", overflowY: "auto", display: "flex", flexDirection: "column", gap: "20px" }}>
-          {/* ALERT MESSAGES */}
-          {errorMessage && (
-            <div
-              style={{
-                padding: "12px 16px",
-                borderRadius: "8px",
-                backgroundColor: "#fef2f2",
-                border: "1px solid #fecaca",
-                color: "#991b1b",
-                fontSize: "13px",
-                display: "flex",
-                alignItems: "center",
-                gap: "8px",
-              }}
-            >
-              <span style={{ fontSize: "16px" }}>⚠️</span>
-              <span style={{ flex: 1 }}>{errorMessage}</span>
-            </div>
-          )}
-
-          {successMessage && (
-            <div
-              style={{
-                padding: "12px 16px",
-                borderRadius: "8px",
-                backgroundColor: "#f0fdf4",
-                border: "1px solid #bbf7d0",
-                color: "#166534",
-                fontSize: "13px",
-                display: "flex",
-                alignItems: "center",
-                gap: "8px",
-              }}
-            >
-              <span style={{ fontSize: "16px" }}>✓</span>
-              <span style={{ flex: 1 }}>{successMessage}</span>
-            </div>
-          )}
-
-          {/* SECTION 1: DAFTAR ANGGOTA SAAT INI */}
+        {/* CURRENT PRIMARY TEAM INFO BANNER */}
+        <div
+          style={{
+            padding: "12px 22px",
+            backgroundColor: "#f8fafc",
+            borderBottom: "1px solid #e2e8f0",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            flexWrap: "wrap",
+            gap: "10px",
+          }}
+        >
           <div>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "10px" }}>
-              <span style={{ fontSize: "13px", fontWeight: 700, color: "#334155" }}>
-                Anggota Tim Software Terdaftar ({currentAssignees.length})
-              </span>
-              {hasLeader && (
-                <span
-                  style={{
-                    fontSize: "11px",
-                    fontWeight: 700,
-                    padding: "2px 8px",
-                    borderRadius: "9999px",
-                    backgroundColor: "#fef3c7",
-                    color: "#b45309",
-                    border: "1px solid #fde68a",
-                  }}
-                >
-                  Leader Terdaftar
-                </span>
-              )}
+            <span style={{ fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+              Tim Penanggung Jawab Utama (Claimer):
+            </span>
+            <div style={{ fontSize: "14px", fontWeight: 750, color: "#0f172a", marginTop: "1px" }}>
+              {currentTeam ? currentTeam.name : "Belum Ditugaskan"}
             </div>
-
-            {currentAssignees.length === 0 ? (
-              <div
-                style={{
-                  padding: "16px",
-                  borderRadius: "10px",
-                  backgroundColor: "#f8fafc",
-                  border: "1px dashed #cbd5e1",
-                  textAlign: "center",
-                  color: "#64748b",
-                  fontSize: "12.5px",
-                }}
-              >
-                Belum ada anggota tim software yang ditugaskan pada tiket ini.
-              </div>
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                {currentAssignees.map((assignee) => (
-                  <div
-                    key={assignee.id}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      padding: "10px 14px",
-                      borderRadius: "10px",
-                      backgroundColor: assignee.isLeader ? "#f0fdfa" : "#f8fafc",
-                      border: assignee.isLeader ? "1.5px solid #0e8587" : "1px solid #e2e8f0",
-                    }}
-                  >
-                    <div style={{ display: "flex", alignItems: "center", gap: "10px", minWidth: 0, flex: 1 }}>
-                      <div
-                        style={{
-                          width: "34px",
-                          height: "34px",
-                          borderRadius: "50%",
-                          backgroundColor: assignee.isLeader ? "#0e8587" : "#cbd5e1",
-                          color: assignee.isLeader ? "#ffffff" : "#1e293b",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          fontWeight: 700,
-                          fontSize: "13px",
-                          flexShrink: 0,
-                        }}
-                      >
-                        {assignee.name ? assignee.name.charAt(0).toUpperCase() : "U"}
-                      </div>
-                      <div style={{ minWidth: 0, flex: 1 }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                          <span
-                            style={{
-                              fontSize: "13px",
-                              fontWeight: 700,
-                              color: "#0f172a",
-                              whiteSpace: "nowrap",
-                              overflow: "hidden",
-                              textOverflow: "ellipsis",
-                            }}
-                          >
-                            {assignee.name}
-                          </span>
-                          {assignee.isLeader && (
-                            <span
-                              style={{
-                                fontSize: "10px",
-                                fontWeight: 750,
-                                padding: "2px 6px",
-                                borderRadius: "4px",
-                                backgroundColor: "#0e8587",
-                                color: "#ffffff",
-                              }}
-                            >
-                              LEADER
-                            </span>
-                          )}
-                        </div>
-                        <div style={{ fontSize: "11.5px", color: "#64748b", marginTop: "1px" }}>
-                          {assignee.email} {assignee.telegramTag && <b style={{ color: "#0284c7" }}>• {assignee.telegramTag}</b>}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div style={{ display: "flex", alignItems: "center", gap: "6px", marginLeft: "10px", flexShrink: 0 }}>
-                      {/* Tombol Jadikan Leader (jika bukan leader saat ini) */}
-                      {!assignee.isLeader && (
-                        <button
-                          type="button"
-                          onClick={() => handleRequestChangeLeader(assignee)}
-                          disabled={transferringLeaderId === assignee.id}
-                          style={{
-                            padding: "5px 9px",
-                            borderRadius: "6px",
-                            border: "1px solid #fde68a",
-                            backgroundColor: "#fffbeb",
-                            color: "#b45309",
-                            fontSize: "11.5px",
-                            fontWeight: 700,
-                            cursor: transferringLeaderId === assignee.id ? "not-allowed" : "pointer",
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: "4px",
-                            transition: "all 0.15s ease",
-                          }}
-                          title="Alihkan tanggung jawab Leader software ke anggota ini"
-                        >
-                          Jadikan Leader
-                        </button>
-                      )}
-
-                      {/* Tombol Hapus Anggota - HANYA ANGGOTA BIASA (LEADER TIDAK BOLEH ADA OPSI HAPUS) */}
-                      {!assignee.isLeader && (
-                        <button
-                          type="button"
-                          onClick={() => handleRequestRemoveMember(assignee)}
-                          disabled={removingId === assignee.id}
-                          style={{
-                            padding: "5px 8px",
-                            borderRadius: "6px",
-                            border: "1px solid #fecaca",
-                            backgroundColor: "#fef2f2",
-                            color: "#dc2626",
-                            fontSize: "11.5px",
-                            fontWeight: 600,
-                            cursor: removingId === assignee.id ? "not-allowed" : "pointer",
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: "4px",
-                          }}
-                          title="Hapus anggota dari tiket"
-                        >
-                          {removingId === assignee.id ? (
-                            "..."
-                          ) : (
-                            <>
-                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                <polyline points="3 6 5 6 21 6" />
-                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                              </svg>
-                              Hapus
-                            </>
-                          )}
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
 
-          <hr style={{ border: "none", borderTop: "1px solid #e2e8f0", margin: "4px 0" }} />
-
-          {/* SECTION 2: FORM TAMBAH ANGGOTA BARU */}
-          <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-            <div>
-              <label style={{ display: "block", fontSize: "13px", fontWeight: 700, color: "#334155", marginBottom: "6px" }}>
-                Pilih Akun Pengguna Software
-              </label>
-
-              <select
-                value={selectedUserId}
-                onChange={(e) => setSelectedUserId(e.target.value)}
-                disabled={fetchingUsers || submitting}
-                style={{
-                  width: "100%",
-                  padding: "10px 14px",
-                  borderRadius: "8px",
-                  border: "1.5px solid #cbd5e1",
-                  fontSize: "13px",
-                  backgroundColor: "#f8fafc",
-                  outline: "none",
-                  color: "#0f172a",
-                  cursor: "pointer",
-                }}
-              >
-                <option value="">-- Pilih Akun dari Divisi Software --</option>
-                {softwareUsers.map((u) => {
-                  const already = assignedUserIds.has(u.id);
-                  const tgUser = u.telegram_user ? `@${u.telegram_user.username || u.telegram_user.full_name}` : "";
-                  return (
-                    <option key={u.id} value={u.id} disabled={already}>
-                      {u.name} ({u.email}) {tgUser ? `• ${tgUser}` : ""} {already ? "✓ [Sudah Terdaftar]" : ""}
-                    </option>
-                  );
-                })}
-              </select>
-              <span style={{ fontSize: "11.5px", color: "#64748b", marginTop: "4px", display: "block" }}>
-                Akun yang dipilih otomatis tersambung dengan akun Telegram pengguna yang berelasi.
-              </span>
+          <div style={{ textAlign: "right" }}>
+            <span style={{ fontSize: "11px", color: "#64748b" }}>Leader Penanggung Jawab:</span>
+            <div style={{ fontSize: "13px", fontWeight: 700, color: "#0e8587", display: "flex", alignItems: "center", gap: "4px" }}>
+              ⭐ {currentTeam?.leader?.name || "Belum ada Leader"}
             </div>
+          </div>
+        </div>
 
-            {/* CHECKBOX LEADER */}
-            <div
-              style={{
-                backgroundColor: isLeader ? "#f0fdfa" : "#f8fafc",
-                border: isLeader ? "1.5px solid #0e8587" : "1px solid #e2e8f0",
-                borderRadius: "10px",
-                padding: "12px 14px",
-                display: "flex",
-                alignItems: "flex-start",
-                gap: "10px",
-                cursor: "pointer",
-              }}
-              onClick={() => setIsLeader(!isLeader)}
-            >
-              <input
-                type="checkbox"
-                id="isLeaderCheckbox"
-                checked={isLeader}
-                onChange={(e) => setIsLeader(e.target.checked)}
-                style={{ marginTop: "2px", cursor: "pointer", accentColor: "#0e8587" }}
-                onClick={(e) => e.stopPropagation()}
-              />
-              <div style={{ flex: 1 }}>
-                <label
-                  htmlFor="isLeaderCheckbox"
-                  style={{
-                    fontSize: "13px",
-                    fontWeight: 700,
-                    color: isLeader ? "#0e8587" : "#334155",
-                    cursor: "pointer",
-                    display: "block",
-                  }}
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  Tetapkan sebagai Leader Tim Software
-                </label>
-                <span style={{ fontSize: "11.5px", color: "#64748b", marginTop: "2px", display: "block" }}>
-                  {!hasLeader
-                    ? "Tiket ini belum memiliki Leader. Menandai opsi ini akan menetapkan anggota tersebut sebagai Leader penanganan."
-                    : "Perhatian: Menandai ini akan mengalihkan peran Leader tim Software tiket ini ke anggota baru tersebut."}
-                </span>
-              </div>
-            </div>
+        {/* FEEDBACK BANNERS */}
+        {errorMessage && (
+          <div style={{ margin: "14px 22px 0", padding: "10px 14px", borderRadius: "8px", backgroundColor: "#fef2f2", border: "1px solid #fee2e2", color: "#dc2626", fontSize: "12.5px" }}>
+            {errorMessage}
+          </div>
+        )}
 
-            {/* MODAL ACTIONS */}
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "8px" }}>
-              <button
-                type="button"
-                onClick={onClose}
-                disabled={submitting}
-                style={{
-                  padding: "10px 18px",
-                  borderRadius: "8px",
-                  fontSize: "13px",
-                  fontWeight: 650,
-                  border: "1px solid #cbd5e1",
-                  backgroundColor: "#ffffff",
-                  color: "#475569",
-                  cursor: submitting ? "not-allowed" : "pointer",
-                }}
-              >
-                Tutup
-              </button>
+        {successMessage && (
+          <div style={{ margin: "14px 22px 0", padding: "10px 14px", borderRadius: "8px", backgroundColor: "#f0fdf4", border: "1px solid #dcfce7", color: "#16a34a", fontSize: "12.5px", fontWeight: 600 }}>
+            {successMessage}
+          </div>
+        )}
 
-              <button
-                type="submit"
-                disabled={submitting || fetchingUsers || !selectedUserId}
-                style={{
-                  padding: "10px 20px",
-                  borderRadius: "8px",
-                  fontSize: "13px",
-                  fontWeight: 700,
-                  border: "none",
-                  backgroundColor: selectedUserId ? "#0e8587" : "#94a3b8",
-                  color: "#ffffff",
-                  cursor: submitting || fetchingUsers || !selectedUserId ? "not-allowed" : "pointer",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "6px",
-                  boxShadow: "0 2px 4px rgba(14, 133, 135, 0.25)",
-                  transition: "background-color 0.15s ease",
-                }}
-              >
-                {submitting ? (
-                  <>
-                    <svg
-                      width="14"
-                      height="14"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2.5"
-                      style={{ animation: "spin 1s linear infinite" }}
-                    >
-                      <circle cx="12" cy="12" r="10" strokeDasharray="32" strokeDashoffset="10" />
-                    </svg>
-                    Menyimpan...
-                  </>
+        {/* TAB BUTTONS (HANYA 2 TAB: TIM KOLABORASI & ALIH TANGGUNG JAWAB LANGSUNG) */}
+        <div
+          style={{
+            display: "flex",
+            borderBottom: "1px solid #e2e8f0",
+            padding: "0 22px",
+            marginTop: "10px",
+            gap: "24px",
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => {
+              setActiveTab("collaborate");
+              setErrorMessage(null);
+            }}
+            style={{
+              padding: "10px 4px",
+              border: "none",
+              borderBottom: activeTab === "collaborate" ? "2.5px solid #0e8587" : "2.5px solid transparent",
+              backgroundColor: "transparent",
+              color: activeTab === "collaborate" ? "#0e8587" : "#64748b",
+              fontSize: "13px",
+              fontWeight: 700,
+              cursor: "pointer",
+            }}
+          >
+            Tim Kolaborasi
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setActiveTab("directHandover");
+              setErrorMessage(null);
+            }}
+            style={{
+              padding: "10px 4px",
+              border: "none",
+              borderBottom: activeTab === "directHandover" ? "2.5px solid #0e8587" : "2.5px solid transparent",
+              backgroundColor: "transparent",
+              color: activeTab === "directHandover" ? "#0e8587" : "#64748b",
+              fontSize: "13px",
+              fontWeight: 700,
+              cursor: "pointer",
+            }}
+          >
+            Alih Tanggung Jawab Langsung
+          </button>
+        </div>
+
+        {/* TAB CONTENTS (SCROLLABLE BODY) */}
+        <div style={{ padding: "18px 22px", overflowY: "auto", flex: 1, display: "flex", flexDirection: "column", gap: "16px" }}>
+          {/* ============================================================== */}
+          {/* TAB 1: TIM KOLABORASI                                          */}
+          {/* ============================================================== */}
+          {activeTab === "collaborate" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+              <div>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
+                  <span style={{ fontSize: "12.5px", fontWeight: 700, color: "#475569", textTransform: "uppercase" }}>
+                    Daftar Tim Kolaborator
+                  </span>
+                  {collaboratingTeams.length > 0 && (
+                    <span style={{ fontSize: "11px", fontWeight: 700, padding: "2px 8px", backgroundColor: "#e0f2fe", color: "#0369a1", borderRadius: "10px" }}>
+                      {collaboratingTeams.length} Tim Kolaborator
+                    </span>
+                  )}
+                </div>
+
+                {collaboratingTeams.length === 0 ? (
+                  <div
+                    style={{
+                      padding: "16px 18px",
+                      borderRadius: "8px",
+                      backgroundColor: "#f8fafc",
+                      border: "1px dashed #cbd5e1",
+                      textAlign: "center",
+                    }}
+                  >
+                    <div style={{ fontSize: "13px", fontWeight: 650, color: "#334155" }}>
+                      Belum Ada Tim Kolaborator
+                    </div>
+                    <p style={{ fontSize: "12px", color: "#64748b", margin: "4px 0 0", lineHeight: 1.5 }}>
+                      Tiket ini saat ini hanya ditangani oleh tim utama (<strong>{currentTeam?.name || "RnD"}</strong>).<br />
+                      Gunakan form di bawah untuk mengajak tim RnD lain berkolaborasi atau sebelum mengalihkan tanggung jawab tiket.
+                    </p>
+                  </div>
                 ) : (
-                  <>
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                      <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-                      <circle cx="8.5" cy="7" r="4" />
-                      <line x1="20" y1="8" x2="20" y2="14" />
-                      <line x1="23" y1="11" x2="17" y2="11" />
-                    </svg>
-                    Tambah Anggota
-                  </>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                    {collaboratingTeams.map((t) => (
+                      <div
+                        key={t.id}
+                        style={{
+                          padding: "12px 14px",
+                          borderRadius: "8px",
+                          backgroundColor: "#ffffff",
+                          border: "1px solid #e2e8f0",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          gap: "10px",
+                        }}
+                      >
+                        <div>
+                          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                            <span style={{ fontSize: "13.5px", fontWeight: 750, color: "#0f172a" }}>
+                              {t.name}
+                            </span>
+                            <span style={{ fontSize: "10px", fontWeight: 700, padding: "2px 6px", backgroundColor: "#ecfdf5", color: "#047857", borderRadius: "3px" }}>
+                              KOLABORATOR
+                            </span>
+                          </div>
+                          <div style={{ fontSize: "12px", color: "#64748b", marginTop: "2px" }}>
+                            Leader: <strong>{t.leader?.name || "Belum ada leader"}</strong>
+                          </div>
+                        </div>
+
+                        {/* TOMBOL AKSI UNTUK TIM KOLABORASI */}
+                        {isLeaderOfCurrentTeam && (
+                          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                            {/* Alihkan Tanggung Jawab Utama ke Tim Kolaborasi ini */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setPromoteTeamTarget(t);
+                                setPromoteNotes("");
+                              }}
+                              style={{
+                                padding: "6px 12px",
+                                borderRadius: "6px",
+                                border: "1px solid #ccfbf1",
+                                backgroundColor: "#f0fdfa",
+                                color: "#0e8587",
+                                fontSize: "12px",
+                                fontWeight: 700,
+                                cursor: "pointer",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "4px",
+                              }}
+                              title="Jadikan tim ini sebagai Tim Utama penanggung jawab tiket"
+                            >
+                              ⭐ Jadikan Tim Utama
+                            </button>
+
+                            {/* Keluarkan Tim Kolaborasi */}
+                            <button
+                              type="button"
+                              onClick={() => setRemovingTeamTarget(t)}
+                              style={{
+                                padding: "6px 10px",
+                                borderRadius: "6px",
+                                border: "1px solid #fecaca",
+                                backgroundColor: "#fef2f2",
+                                color: "#dc2626",
+                                fontSize: "12px",
+                                fontWeight: 600,
+                                cursor: "pointer",
+                              }}
+                              title="Keluarkan tim ini dari tiket"
+                            >
+                              Keluarkan
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                 )}
-              </button>
+              </div>
+
+              {/* FORM TAMBAH TIM KOLABORASI */}
+              {isLeaderOfCurrentTeam ? (
+                <form onSubmit={handleAddCollaborateTeam} style={{ marginTop: "6px", paddingTop: "14px", borderTop: "1px solid #edf2f7" }}>
+                  <label style={{ display: "block", fontSize: "12.5px", fontWeight: 700, color: "#334155", marginBottom: "6px" }}>
+                    Ajak Tim RnD Baru Berkolaborasi
+                  </label>
+                  <div style={{ display: "flex", gap: "8px" }}>
+                    <select
+                      value={collaborateTeamId}
+                      onChange={(e) => setCollaborateTeamId(e.target.value)}
+                      disabled={loadingTeams || submitting}
+                      style={{
+                        flex: 1,
+                        padding: "8px 12px",
+                        borderRadius: "8px",
+                        border: "1px solid #cbd5e1",
+                        fontSize: "13px",
+                      }}
+                    >
+                      <option value="">-- Pilih Tim RnD yang Belum Terdaftar --</option>
+                      {allTeams
+                        .filter((t) => !assignedTeamIds.has(t.id))
+                        .map((t) => (
+                          <option key={t.id} value={t.id}>
+                            {t.name} • Leader: {t.leader?.name || "-"}
+                          </option>
+                        ))}
+                    </select>
+
+                    <button
+                      type="submit"
+                      disabled={!collaborateTeamId || submitting}
+                      style={{
+                        padding: "8px 16px",
+                        borderRadius: "8px",
+                        border: "none",
+                        backgroundColor: "#0e8587",
+                        color: "#ffffff",
+                        fontSize: "13px",
+                        fontWeight: 700,
+                        cursor: !collaborateTeamId || submitting ? "not-allowed" : "pointer",
+                      }}
+                    >
+                      + Tambah Tim
+                    </button>
+                  </div>
+                  <div style={{ fontSize: "11.5px", color: "#64748b", marginTop: "6px" }}>
+                    Hanya menampilkan tim RnD yang belum pernah masuk ke tiket ini. Tim yang ditambahkan dapat dialihkan menjadi Tim Utama kapan saja.
+                  </div>
+                </form>
+              ) : (
+                <div style={{ padding: "10px 14px", borderRadius: "8px", backgroundColor: "#f8fafc", border: "1px solid #e2e8f0", fontSize: "12px", color: "#64748b" }}>
+                  Hanya Leader tim penanggung jawab atau Admin yang dapat menambahkan atau mengelola tim kolaborator.
+                </div>
+              )}
             </div>
-          </form>
+          )}
+
+          {/* ============================================================== */}
+          {/* TAB 2: ALIH TANGGUNG JAWAB LANGSUNG                            */}
+          {/* ============================================================== */}
+          {activeTab === "directHandover" && (
+            <div>
+              {!isLeaderOfCurrentTeam ? (
+                <div
+                  style={{
+                    padding: "16px",
+                    borderRadius: "8px",
+                    backgroundColor: "#fef3c7",
+                    border: "1px solid #fde68a",
+                    color: "#92400e",
+                    fontSize: "13px",
+                    lineHeight: 1.5,
+                  }}
+                >
+                  <strong>Hak Akses Khusus:</strong> Hanya <strong>Leader</strong> dari tim penanggung jawab saat ini ({currentTeam?.leader?.name || "Leader Tim"}) atau <strong>Admin</strong> yang berwenang melakukan serah terima langsung dan melepaskan tiket.
+                </div>
+              ) : (
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (!directTargetTeamId) {
+                      setErrorMessage("Silakan pilih tim RnD penerima tanggung jawab.");
+                      return;
+                    }
+                    setConfirmDirectHandover(true);
+                  }}
+                  style={{ display: "flex", flexDirection: "column", gap: "14px" }}
+                >
+                  <div
+                    style={{
+                      padding: "12px 14px",
+                      borderRadius: "8px",
+                      backgroundColor: "#fff7ed",
+                      border: "1px solid #ffedd5",
+                      fontSize: "12.5px",
+                      color: "#c2410c",
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    <strong>Mekanisme Serah Terima Langsung:</strong> Menyerahkan kepemilikan tiket sepenuhnya ke tim RnD baru. Tim baru akan langsung menjadi <strong>Tim Utama (Leader Penanggung Jawab)</strong>, dan tim Anda saat ini (<strong>{currentTeam?.name}</strong>) akan <strong>langsung dilepas / dihapus</strong> dari tiket ini.
+                  </div>
+
+                  <div>
+                    <label style={{ display: "block", fontSize: "13px", fontWeight: 700, color: "#334155", marginBottom: "6px" }}>
+                      Pilih Tim Divisi RnD Penerima Tanggung Jawab <span style={{ color: "#dc2626" }}>*</span>
+                    </label>
+
+                    <select
+                      value={directTargetTeamId}
+                      onChange={(e) => setDirectTargetTeamId(e.target.value)}
+                      disabled={loadingTeams || submitting}
+                      style={{
+                        width: "100%",
+                        padding: "10px 12px",
+                        borderRadius: "8px",
+                        border: "1.5px solid #cbd5e1",
+                        fontSize: "13px",
+                        backgroundColor: "#ffffff",
+                        outline: "none",
+                        cursor: "pointer",
+                      }}
+                    >
+                      <option value="">-- Pilih Tim RnD Baru --</option>
+                      {allTeams
+                        .filter((t) => !assignedTeamIds.has(t.id))
+                        .map((t) => (
+                          <option key={t.id} value={t.id}>
+                            {t.name} • Leader: {t.leader?.name || "-"}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label style={{ display: "block", fontSize: "13px", fontWeight: 700, color: "#334155", marginBottom: "6px" }}>
+                      Catatan / Alasan Serah Terima Langsung
+                    </label>
+                    <textarea
+                      rows={3}
+                      placeholder="Contoh: Tiket dialihkan sepenuhnya ke tim Hardware karena kendala murni pada modul sensor fisik..."
+                      value={directHandoverNotes}
+                      onChange={(e) => setDirectHandoverNotes(e.target.value)}
+                      disabled={submitting}
+                      style={{
+                        width: "100%",
+                        padding: "10px 12px",
+                        borderRadius: "8px",
+                        border: "1.5px solid #cbd5e1",
+                        fontSize: "13px",
+                        outline: "none",
+                        fontFamily: "inherit",
+                        resize: "vertical",
+                      }}
+                    />
+                  </div>
+
+                  <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "6px" }}>
+                    <button
+                      type="submit"
+                      disabled={submitting || !directTargetTeamId}
+                      style={{
+                        padding: "10px 20px",
+                        borderRadius: "8px",
+                        border: "none",
+                        backgroundColor: !directTargetTeamId || submitting ? "#94a3b8" : "#ea580c",
+                        color: "#ffffff",
+                        fontSize: "13px",
+                        fontWeight: 700,
+                        cursor: !directTargetTeamId || submitting ? "not-allowed" : "pointer",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        boxShadow: "0 2px 4px rgba(234, 88, 12, 0.2)",
+                      }}
+                    >
+                      {submitting ? "Memproses..." : "Alihkan & Lepas Tiket"}
+                    </button>
+                  </div>
+                </form>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* MODAL FOOTER */}
+        <div
+          style={{
+            padding: "14px 22px",
+            borderTop: "1px solid #e2e8f0",
+            display: "flex",
+            justifyContent: "flex-end",
+            backgroundColor: "#f8fafc",
+          }}
+        >
+          <button
+            type="button"
+            onClick={onClose}
+            style={{
+              padding: "8px 18px",
+              borderRadius: "6px",
+              border: "1px solid #cbd5e1",
+              backgroundColor: "#ffffff",
+              color: "#334155",
+              fontSize: "13px",
+              fontWeight: 650,
+              cursor: "pointer",
+            }}
+          >
+            Tutup
+          </button>
         </div>
       </div>
 
-      {/* POPUP KONFIRMASI (MENGGANTIKAN WINDOW.CONFIRM) */}
-      {confirmModal && (
+      {/* MODAL KONFIRMASI: ALIH TANGGUNG JAWAB KE TIM KOLABORATOR */}
+      {promoteTeamTarget && (
         <div
           style={{
             position: "fixed",
             inset: 0,
-            zIndex: 10010,
-            backgroundColor: "rgba(15, 23, 42, 0.65)",
+            zIndex: 10000,
+            backgroundColor: "rgba(11, 30, 39, 0.75)",
             backdropFilter: "blur(4px)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             padding: "16px",
           }}
-          onClick={() => setConfirmModal(null)}
+          onClick={() => !submitting && setPromoteTeamTarget(null)}
         >
           <div
             style={{
               backgroundColor: "#ffffff",
-              borderRadius: "16px",
+              borderRadius: "12px",
               width: "100%",
-              maxWidth: "420px",
-              padding: "24px",
-              boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.35)",
-              textAlign: "center",
-              animation: "scaleIn 0.18s cubic-bezier(0.16, 1, 0.3, 1)",
+              maxWidth: "500px",
+              padding: "22px",
+              boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.2)",
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div
-              style={{
-                width: "50px",
-                height: "50px",
-                borderRadius: "50%",
-                backgroundColor: confirmModal.confirmBg === "#dc2626" ? "#fef2f2" : "#e8f7f6",
-                color: confirmModal.confirmBg || "#0e8587",
-                fontSize: "24px",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                margin: "0 auto 14px auto",
-                border: `1.5px solid ${confirmModal.confirmBg === "#dc2626" ? "#fecaca" : "#ccfbf1"}`,
-              }}
-            >
-              {confirmModal.icon || "ℹ️"}
-            </div>
-
-            <h4
-              style={{
-                margin: "0 0 8px 0",
-                fontSize: "17px",
-                fontWeight: 750,
-                color: "#0f172a",
-              }}
-            >
-              {confirmModal.title}
-            </h4>
-
-            <p
-              style={{
-                margin: "0 0 8px 0",
-                fontSize: "13.5px",
-                lineHeight: "1.5",
-                color: "#334155",
-                fontWeight: 500,
-              }}
-            >
-              {confirmModal.message}
-            </p>
-
-            {confirmModal.subMessage && (
-              <p
+            <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "12px" }}>
+              <div
                 style={{
-                  margin: "0 0 20px 0",
-                  fontSize: "12px",
-                  lineHeight: "1.4",
-                  color: "#64748b",
+                  width: "36px",
+                  height: "36px",
+                  borderRadius: "50%",
+                  backgroundColor: "#f0fdfa",
+                  color: "#0e8587",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: "18px",
                 }}
               >
-                {confirmModal.subMessage}
-              </p>
-            )}
+                ⭐
+              </div>
+              <div>
+                <h3 style={{ fontSize: "15px", fontWeight: 750, color: "#0f172a", margin: 0 }}>
+                  Alihkan Tanggung Jawab Utama
+                </h3>
+                <p style={{ fontSize: "12px", color: "#64748b", margin: 0 }}>
+                  Jadikan tim kolaborator sebagai penanggung jawab utama tiket
+                </p>
+              </div>
+            </div>
 
-            <div
-              style={{
-                display: "flex",
-                gap: "10px",
-                justifyContent: "center",
-                marginTop: confirmModal.subMessage ? "0" : "18px",
-              }}
-            >
+            <div style={{ padding: "12px 14px", borderRadius: "8px", backgroundColor: "#f8fafc", border: "1px solid #e2e8f0", fontSize: "12.5px", color: "#334155", lineHeight: 1.5, marginBottom: "14px" }}>
+              Apakah Anda yakin ingin menyerahkan tanggung jawab utama tiket kepada tim <strong>{promoteTeamTarget.name}</strong>?
+              <div style={{ marginTop: "6px", fontSize: "12px", color: "#64748b" }}>
+                Tim Anda (<strong>{currentTeam?.name}</strong>) akan tetap terhubung ke tiket ini sebagai tim kolaborator.
+              </div>
+            </div>
+
+            <div style={{ marginBottom: "16px" }}>
+              <label style={{ display: "block", fontSize: "12.5px", fontWeight: 700, color: "#334155", marginBottom: "6px" }}>
+                Catatan Pengalihan (Opsional)
+              </label>
+              <textarea
+                rows={2}
+                placeholder="Contoh: Tanggung jawab utama dialihkan karena komponen software telah terselesaikan..."
+                value={promoteNotes}
+                onChange={(e) => setPromoteNotes(e.target.value)}
+                disabled={submitting}
+                style={{
+                  width: "100%",
+                  padding: "8px 10px",
+                  borderRadius: "6px",
+                  border: "1.5px solid #cbd5e1",
+                  fontSize: "12.5px",
+                  outline: "none",
+                  fontFamily: "inherit",
+                }}
+              />
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px" }}>
               <button
                 type="button"
-                onClick={() => setConfirmModal(null)}
+                onClick={() => setPromoteTeamTarget(null)}
+                disabled={submitting}
                 style={{
-                  flex: 1,
-                  padding: "9px 16px",
-                  borderRadius: "8px",
-                  fontSize: "13px",
-                  fontWeight: 650,
+                  padding: "8px 14px",
+                  borderRadius: "6px",
                   border: "1px solid #cbd5e1",
                   backgroundColor: "#ffffff",
                   color: "#475569",
-                  cursor: "pointer",
+                  fontSize: "12.5px",
+                  fontWeight: 600,
+                  cursor: submitting ? "not-allowed" : "pointer",
                 }}
               >
                 Batal
               </button>
               <button
                 type="button"
-                onClick={confirmModal.onConfirm}
+                onClick={handlePromoteTeamConfirm}
+                disabled={submitting}
                 style={{
-                  flex: 1,
-                  padding: "9px 16px",
-                  borderRadius: "8px",
-                  fontSize: "13px",
-                  fontWeight: 700,
+                  padding: "8px 16px",
+                  borderRadius: "6px",
                   border: "none",
-                  backgroundColor: confirmModal.confirmBg || "#0e8587",
+                  backgroundColor: submitting ? "#94a3b8" : "#0e8587",
                   color: "#ffffff",
-                  cursor: "pointer",
-                  boxShadow: "0 2px 6px rgba(0,0,0,0.15)",
+                  fontSize: "12.5px",
+                  fontWeight: 700,
+                  cursor: submitting ? "not-allowed" : "pointer",
                 }}
               >
-                {confirmModal.confirmText}
+                {submitting ? "Memproses..." : "Ya, Alihkan Tanggung Jawab"}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* POPUP NOTIFIKASI / ALERT (MENGGANTIKAN ALERT BIASA) */}
-      {alertModal && (
+      {/* MODAL KONFIRMASI: ALIH TANGGUNG JAWAB LANGSUNG & HAPUS TIM */}
+      {confirmDirectHandover && (
         <div
           style={{
             position: "fixed",
             inset: 0,
-            zIndex: 10020,
-            backgroundColor: "rgba(15, 23, 42, 0.65)",
+            zIndex: 10000,
+            backgroundColor: "rgba(11, 30, 39, 0.75)",
             backdropFilter: "blur(4px)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             padding: "16px",
           }}
-          onClick={() => setAlertModal(null)}
+          onClick={() => !submitting && setConfirmDirectHandover(false)}
         >
           <div
             style={{
               backgroundColor: "#ffffff",
-              borderRadius: "16px",
+              borderRadius: "12px",
               width: "100%",
-              maxWidth: "400px",
-              padding: "24px",
-              boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.35)",
-              textAlign: "center",
-              animation: "scaleIn 0.18s cubic-bezier(0.16, 1, 0.3, 1)",
+              maxWidth: "500px",
+              padding: "22px",
+              boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.2)",
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div
-              style={{
-                width: "50px",
-                height: "50px",
-                borderRadius: "50%",
-                backgroundColor:
-                  alertModal.type === "error"
-                    ? "#fef2f2"
-                    : alertModal.type === "warning"
-                    ? "#fffbeb"
-                    : "#f0fdf4",
-                color:
-                  alertModal.type === "error"
-                    ? "#dc2626"
-                    : alertModal.type === "warning"
-                    ? "#d97706"
-                    : "#16a34a",
-                fontSize: "22px",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                margin: "0 auto 14px auto",
-                border: `1.5px solid ${
-                  alertModal.type === "error"
-                    ? "#fecaca"
-                    : alertModal.type === "warning"
-                    ? "#fde68a"
-                    : "#bbf7d0"
-                }`,
-              }}
-            >
-              {alertModal.type === "error" ? "✕" : alertModal.type === "warning" ? "!" : "✓"}
+            <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "12px" }}>
+              <div
+                style={{
+                  width: "36px",
+                  height: "36px",
+                  borderRadius: "50%",
+                  backgroundColor: "#fff7ed",
+                  color: "#ea580c",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: "18px",
+                }}
+              >
+                ⚠️
+              </div>
+              <div>
+                <h3 style={{ fontSize: "15px", fontWeight: 750, color: "#0f172a", margin: 0 }}>
+                  Konfirmasi Alih Tanggung Jawab Langsung
+                </h3>
+                <p style={{ fontSize: "12px", color: "#64748b", margin: 0 }}>
+                  Serah terima langsung dan pelepasan tim pengalih
+                </p>
+              </div>
             </div>
 
-            <h4
-              style={{
-                margin: "0 0 8px 0",
-                fontSize: "17px",
-                fontWeight: 750,
-                color: "#0f172a",
-              }}
-            >
-              {alertModal.title}
-            </h4>
+            <div style={{ padding: "12px 14px", borderRadius: "8px", backgroundColor: "#fff7ed", border: "1px solid #ffedd5", fontSize: "12.5px", color: "#c2410c", lineHeight: 1.5, marginBottom: "16px" }}>
+              <strong>Perhatian:</strong> Tanggung jawab tiket ini akan diserahkan sepenuhnya kepada tim <strong>{allTeams.find((t) => t.id === directTargetTeamId)?.name}</strong>.<br />
+              Tim Anda saat ini (<strong>{currentTeam?.name}</strong>) akan <strong>langsung dikeluarkan dari tiket ini</strong> dan tidak lagi memiliki akses pembaruan tiket.
+            </div>
 
-            <p
-              style={{
-                margin: "0 0 20px 0",
-                fontSize: "13.5px",
-                lineHeight: "1.5",
-                color: "#475569",
-              }}
-            >
-              {alertModal.message}
-            </p>
-
-            <button
-              type="button"
-              onClick={() => setAlertModal(null)}
-              style={{
-                width: "100%",
-                padding: "10px 16px",
-                borderRadius: "8px",
-                fontSize: "13px",
-                fontWeight: 700,
-                border: "none",
-                backgroundColor: alertModal.type === "error" ? "#dc2626" : "#0e8587",
-                color: "#ffffff",
-                cursor: "pointer",
-                boxShadow: "0 2px 6px rgba(0,0,0,0.12)",
-              }}
-            >
-              Mengerti
-            </button>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px" }}>
+              <button
+                type="button"
+                onClick={() => setConfirmDirectHandover(false)}
+                disabled={submitting}
+                style={{
+                  padding: "8px 14px",
+                  borderRadius: "6px",
+                  border: "1px solid #cbd5e1",
+                  backgroundColor: "#ffffff",
+                  color: "#475569",
+                  fontSize: "12.5px",
+                  fontWeight: 600,
+                  cursor: submitting ? "not-allowed" : "pointer",
+                }}
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={handleDirectHandoverConfirm}
+                disabled={submitting}
+                style={{
+                  padding: "8px 16px",
+                  borderRadius: "6px",
+                  border: "none",
+                  backgroundColor: submitting ? "#94a3b8" : "#ea580c",
+                  color: "#ffffff",
+                  fontSize: "12.5px",
+                  fontWeight: 700,
+                  cursor: submitting ? "not-allowed" : "pointer",
+                }}
+              >
+                {submitting ? "Memproses..." : "Ya, Serahkan & Lepas Tiket"}
+              </button>
+            </div>
           </div>
         </div>
+      )}
+
+      {/* KONFIRMASI HAPUS TIM KOLABORASI */}
+      {removingTeamTarget && (
+        <DeleteConfirmModal
+          isOpen={Boolean(removingTeamTarget)}
+          onClose={() => setRemovingTeamTarget(null)}
+          onConfirm={handleRemoveTeamConfirm}
+          loading={submitting}
+          title="Keluarkan Tim Kolaborasi"
+          itemName={removingTeamTarget.name}
+          description={`Apakah Anda yakin ingin mengeluarkan tim '${removingTeamTarget.name}' dari kolaborasi penanganan tiket ${ticket.id}?`}
+        />
       )}
     </div>
   );

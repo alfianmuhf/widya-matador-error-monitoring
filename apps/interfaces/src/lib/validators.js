@@ -2,11 +2,10 @@ import { z } from "zod";
 
 // sync with apps/error-service/src/modules/auth/auth.schema.js
 export const loginSchema = z.object({
-  email: z
-    .string({ required_error: "Email wajib diisi" })
+  username: z
+    .string({ required_error: "Username wajib diisi" })
     .trim()
-    .toLowerCase()
-    .email("Format email tidak valid")
+    .min(3, "Username minimal 3 karakter")
     .max(100),
   password: z
     .string({ required_error: "Password wajib diisi" })
@@ -16,11 +15,11 @@ export const loginSchema = z.object({
 
 // sync with apps/error-service/src/modules/user/user.schema.js
 export const createUserSchema = z.object({
-  email: z
-    .string({ required_error: "Email wajib diisi" })
+  username: z
+    .string({ required_error: "Username wajib diisi" })
     .trim()
-    .toLowerCase()
-    .email("Format email tidak valid"),
+    .min(3, "Username minimal 3 karakter")
+    .max(100),
   name: z
     .string({ required_error: "Nama wajib diisi" })
     .trim()
@@ -29,18 +28,18 @@ export const createUserSchema = z.object({
     .enum(["ADMIN", "COORDINATOR", "VIEWER", "admin", "coordinator", "viewer"])
     .default("admin"),
   division: z
-    .enum(["none", "after_sales", "software", "NONE", "AFTER_SALES", "SOFTWARE"])
+    .enum(["none", "after_sales", "rnd", "RnD", "RND", "software", "NONE", "AFTER_SALES", "SOFTWARE"])
     .optional()
     .default("none"),
   telegram_user_id: z.string().nullable().optional(),
 });
 
 export const updateUserSchema = z.object({
-  email: z
+  username: z
     .string()
     .trim()
-    .toLowerCase()
-    .email("Format email tidak valid")
+    .min(3, "Username minimal 3 karakter")
+    .max(100)
     .optional(),
   name: z
     .string()
@@ -51,7 +50,7 @@ export const updateUserSchema = z.object({
     .enum(["ADMIN", "COORDINATOR", "VIEWER", "admin", "coordinator", "viewer"])
     .optional(),
   division: z
-    .enum(["none", "after_sales", "software", "NONE", "AFTER_SALES", "SOFTWARE"])
+    .enum(["none", "after_sales", "rnd", "RnD", "RND", "software", "NONE", "AFTER_SALES", "SOFTWARE"])
     .optional(),
   status: z
     .enum(["ACTIVE", "SUSPENDED", "active", "suspended"])

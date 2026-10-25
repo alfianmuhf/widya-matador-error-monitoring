@@ -9,6 +9,7 @@ import ManajemenTiket from "./pages/ManajemenTiket.jsx";
 import Ringkasan from "./pages/Ringkasan.jsx";
 import AnalitikError from "./pages/AnalitikError.jsx";
 import AuditLogPage from "./pages/AuditLogPage.jsx";
+import ManajemenTim from "./pages/ManajemenTim.jsx";
 import { ProtectedRoute, PublicOnlyRoute, AdminRoute, CoordinatorRoute } from "./components/ProtectedRoute.jsx";
 import "./App.css";
 
@@ -54,6 +55,17 @@ export default function App() {
                 </ProtectedRoute>
               }
             />
+
+            {/* Menu Tim RnD — ADMIN & COORDINATOR */}
+            <Route
+              path="tim"
+              element={
+                <ProtectedRoute allowedRoles={["ADMIN", "COORDINATOR"]}>
+                  <ManajemenTim />
+                </ProtectedRoute>
+              }
+            />
+            <Route path="teams" element={<Navigate to="/tim" replace />} />
 
             {/* Master Data — semua role */}
             <Route path="master-data" element={<MasterData />} />

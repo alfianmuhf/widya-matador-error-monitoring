@@ -1,5 +1,6 @@
 import createError from "http-errors";
 import prisma from "../../config/prisma.js";
+import { getCache, setCache } from "../../config/redis.js";
 import { formatTicket } from "../ticket/services/ticket-format.service.js";
 import {
   updateTicket as coreUpdateTicket,
@@ -11,6 +12,7 @@ import {
   getTicketAssignees as coreGetTicketAssignees,
   changeLeader as coreChangeLeader,
 } from "../ticket/services/ticket-assignee.service.js";
+import * as ticketRepo from "../ticket/ticket.repository.js";
 import * as managementRepo from "./ticket-management.repository.js";
 export * from "./ticket-permission.service.js";
 
@@ -28,7 +30,7 @@ export const getManagedTickets = async (actorUser, query = {}) => {
   // Verifikasi role coordinator dari DB
   const dbUser = await prisma.users.findUnique({
     where: { id: actorUser.id },
-    select: { id: true, name: true, email: true, role: true, division: true },
+    select: { id: true, name: true, username: true, role: true, division: true },
   });
 
   if (!dbUser) {
@@ -41,56 +43,90 @@ export const getManagedTickets = async (actorUser, query = {}) => {
   }
 
   const division = (dbUser.division || actorUser.division || (role === "admin" ? "admin" : "")).toLowerCase();
-  if (role !== "admin" && (!division || (division !== "after_sales" && division !== "software"))) {
+  if (role !== "admin" && (!division || (division !== "after_sales" && division !== "software" && division !== "rnd"))) {
     throw createError(
       403,
-      "Akses ditolak: Divisi coordinator harus terdefinisi sebagai 'after_sales' atau 'software'."
+      "Akses ditolak: Divisi coordinator harus terdefinisi sebagai 'after_sales' atau 'rnd'."
     );
   }
 
-  const { search, severity } = query;
-
-  // 1. Ambil ID tiket yang memenuhi kriteria spesifik divisi/role
-  const managedTicketIds = await managementRepo.findManagedTicketIds({
-    userId: dbUser.id,
-    division,
-    role,
-  });
-
-  // 2. Ambil data tiket lengkap
-  const rawTickets = await managementRepo.findManagedTicketsByIds(managedTicketIds, {
-    search,
-    severity,
-  });
-
-  // 3. Format tiket menggunakan standar ticket-format.service
-  const formattedTickets = rawTickets.map(formatTicket);
-
-  // 4. Hitung ringkasan statistik KPI khusus coordinator tersebut
-  const total = formattedTickets.length;
-  const highSeverityCount = formattedTickets.filter(
-    (t) => (t.rawSeverity || t.severity || "").toLowerCase() === "tinggi"
-  ).length;
+  const { search, severity, countOnly, page = 1, limit = 50 } = query;
 
   const targetDivisionLabel =
     role === "admin"
       ? "Semua Tiket Belum Solved (Status Open & Escalated)"
       : division === "after_sales"
       ? "Tim Aftersales (Status Open)"
-      : "Tim Software (Status Escalated & Assigned)";
+      : "Tim RnD (Status Escalated & Assigned)";
+
+  // Check Redis cache for KPI
+  const kpiCacheKey = `ticket-management:kpi:${role}:${division}:${dbUser.id}`;
+  let kpiStats = await getCache(kpiCacheKey);
+  if (!kpiStats) {
+    kpiStats = await managementRepo.getManagedTicketsKPI({
+      userId: dbUser.id,
+      division,
+      role,
+    });
+    await setCache(kpiCacheKey, kpiStats, 30);
+  }
+
+  // Jika request hanya membutuhkan count / KPI (misal dari Sidebar badge count)
+  if (countOnly === "true") {
+    return {
+      tickets: [],
+      meta: {
+        total: kpiStats.total,
+        division,
+        role,
+        coordinatorName: dbUser.name,
+        coordinatorUsername: dbUser.username,
+        coordinatorEmail: dbUser.username,
+      },
+      kpi: {
+        total: kpiStats.total,
+        highSeverityCount: kpiStats.highSeverityCount,
+        targetDivision: targetDivisionLabel,
+      },
+    };
+  }
+
+  const limitNum = Math.min(Math.max(1, parseInt(limit, 10) || 50), 100);
+  const pageNum = Math.max(1, parseInt(page, 10) || 1);
+  const skip = (pageNum - 1) * limitNum;
+
+  // 1. Ambil ID tiket yang memenuhi kriteria spesifik divisi/role dengan batas paginasi
+  const managedTicketIds = await managementRepo.findManagedTicketIds({
+    userId: dbUser.id,
+    division,
+    role,
+    severity,
+    search,
+    limit: limitNum,
+    skip,
+  });
+
+  // 2. Ambil data tiket lengkap
+  const rawTickets = await managementRepo.findManagedTicketsByIds(managedTicketIds);
+
+  // 3. Format tiket menggunakan standar ticket-format.service
+  const formattedTickets = rawTickets.map(formatTicket);
 
   return {
     tickets: formattedTickets,
     meta: {
-      total,
+      total: kpiStats.total,
+      page: pageNum,
+      limit: limitNum,
       division,
       role,
       coordinatorName: dbUser.name,
-      coordinatorEmail: dbUser.email,
+      coordinatorUsername: dbUser.username,
+      coordinatorEmail: dbUser.username,
     },
     kpi: {
-      total,
-      highSeverityCount,
+      total: kpiStats.total,
+      highSeverityCount: kpiStats.highSeverityCount,
       targetDivision: targetDivisionLabel,
     },
   };
@@ -111,14 +147,18 @@ export const transferManagedAftersalesLead = async (ticketId, data, actorUser) =
 };
 
 /**
- * Service untuk mengalihkan leader tim software
+ * Service untuk mengalihkan leader tim software / handover tanggung jawab ke tim RnD lain
  */
 export const changeManagedLeader = async (ticketId, data, actorUser) => {
   return coreChangeLeader(ticketId, data, actorUser);
 };
 
+export const handoverManagedTeam = async (ticketId, data, actorUser) => {
+  return coreChangeLeader(ticketId, data, actorUser);
+};
+
 /**
- * Service untuk menambah anggota tim software ke ticket_assignees
+ * Service untuk menambah tim / anggota ke tiket
  */
 export const addManagedAssignee = async (ticketId, data, actorUser) => {
   if (!actorUser) {
@@ -138,25 +178,21 @@ export const addManagedAssignee = async (ticketId, data, actorUser) => {
     throw createError(403, "Akses ditolak: Hanya peran Coordinator dan Admin yang dapat mengelola penugasan di modul ini.");
   }
 
-  if (!isAdmin && division !== "software") {
-    throw createError(403, "Akses ditolak: Penambahan anggota tim software hanya dapat dilakukan oleh Koordinator Software atau Admin.");
+  if (!isAdmin && division !== "software" && division !== "rnd") {
+    throw createError(403, "Akses ditolak: Pengelolaan tim RnD hanya dapat dilakukan oleh Koordinator RnD atau Admin.");
   }
 
-  if (!isAdmin) {
-    const isAssigned = await prisma.ticket_assignees.findFirst({
-      where: { ticket_id: ticketId, user_id: dbUser.id },
-    });
-
-    if (!isAssigned) {
-      throw createError(403, "Akses ditolak: Anda hanya dapat menambahkan anggota pada tiket yang ditugaskan kepada Anda.");
-    }
-  }
+  await checkManageTicketTeamsPermission(ticketId, actorUser);
 
   return coreAddAssignee(ticketId, data, actorUser);
 };
 
+export const addManagedTeam = async (ticketId, data, actorUser) => {
+  return addManagedAssignee(ticketId, data, actorUser);
+};
+
 /**
- * Service untuk menghapus anggota dari ticket_assignees
+ * Service untuk menghapus tim / anggota dari tiket
  */
 export const removeManagedAssignee = async (ticketId, assigneeId, actorUser) => {
   if (!actorUser) {
@@ -176,19 +212,15 @@ export const removeManagedAssignee = async (ticketId, assigneeId, actorUser) => 
     throw createError(403, "Akses ditolak: Hanya peran Coordinator dan Admin yang dapat mengelola penugasan di modul ini.");
   }
 
-  if (!isAdmin && division !== "software") {
-    throw createError(403, "Akses ditolak: Pengelolaan anggota tim software hanya dapat dilakukan oleh Koordinator Software atau Admin.");
+  if (!isAdmin && division !== "software" && division !== "rnd") {
+    throw createError(403, "Akses ditolak: Pengelolaan tim RnD hanya dapat dilakukan oleh Koordinator RnD atau Admin.");
   }
 
-  if (!isAdmin) {
-    const isAssigned = await prisma.ticket_assignees.findFirst({
-      where: { ticket_id: ticketId, user_id: dbUser.id },
-    });
-
-    if (!isAssigned) {
-      throw createError(403, "Akses ditolak: Anda hanya dapat mengelola anggota pada tiket yang ditugaskan kepada Anda.");
-    }
-  }
+  await checkManageTicketTeamsPermission(ticketId, actorUser);
 
   return coreRemoveAssignee(ticketId, assigneeId, actorUser);
+};
+
+export const removeManagedTeam = async (ticketId, teamId, actorUser) => {
+  return removeManagedAssignee(ticketId, teamId, actorUser);
 };

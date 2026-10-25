@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import prisma from "../../config/prisma.js";
 
 export const ticketIncludes = {
@@ -35,7 +36,7 @@ export const ticketIncludes = {
     select: {
       id: true,
       name: true,
-      email: true,
+      username: true,
       role: true,
       division: true,
       telegram_user: {
@@ -49,13 +50,13 @@ export const ticketIncludes = {
       },
     },
   },
-  leader_assignee: {
+  current_team: {
     include: {
-      user: {
+      leader: {
         select: {
           id: true,
           name: true,
-          email: true,
+          username: true,
           role: true,
           division: true,
           telegram_user: {
@@ -64,45 +65,97 @@ export const ticketIncludes = {
               telegram_id: true,
               username: true,
               full_name: true,
-              division: true,
             },
           },
         },
       },
-    },
-  },
-  ticket_assignees: {
-    include: {
-      user: {
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          role: true,
-          division: true,
-          telegram_user: {
+      members: {
+        include: {
+          user: {
             select: {
               id: true,
-              telegram_id: true,
+              name: true,
               username: true,
-              full_name: true,
+              role: true,
               division: true,
+              telegram_user: {
+                select: {
+                  id: true,
+                  telegram_id: true,
+                  username: true,
+                  full_name: true,
+                },
+              },
             },
+          },
+        },
+        orderBy: { joined_at: "asc" },
+      },
+    },
+  },
+  ticket_teams: {
+    include: {
+      team: {
+        include: {
+          leader: {
+            select: {
+              id: true,
+              name: true,
+              username: true,
+              role: true,
+              division: true,
+              telegram_user: {
+                select: {
+                  id: true,
+                  telegram_id: true,
+                  username: true,
+                  full_name: true,
+                },
+              },
+            },
+          },
+          members: {
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  name: true,
+                  username: true,
+                  role: true,
+                  division: true,
+                  telegram_user: {
+                    select: {
+                      id: true,
+                      telegram_id: true,
+                      username: true,
+                      full_name: true,
+                    },
+                  },
+                },
+              },
+            },
+            orderBy: { joined_at: "asc" },
           },
         },
       },
     },
     orderBy: {
-      created_at: "asc",
+      assigned_at: "asc",
     },
   },
   ticket_history: {
     include: {
+      team: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
       changed_by_user: {
         select: {
           id: true,
           name: true,
-          email: true,
+          username: true,
           role: true,
           division: true,
         },
@@ -130,6 +183,14 @@ export const ticketIncludes = {
 export const ticketDetailIncludes = {
   ...ticketIncludes,
   ticket_attachments: {
+    include: {
+      uploaded_by_user: {
+        select: { id: true, name: true, username: true },
+      },
+      uploaded_by_telegram: {
+        select: { id: true, username: true, full_name: true },
+      },
+    },
     orderBy: {
       uploaded_at: "asc",
     },
@@ -233,6 +294,103 @@ export const findTicketIdsByCurrentHistory = async ({ status, severity }) => {
 };
 
 /**
+ * Find paginated ticket IDs and total count when filtering by status/severity,
+ * preventing Prisma parameter limit overflow when tens of thousands of tickets match.
+ */
+export const findFilteredTicketIdsAndCount = async ({
+  status,
+  severity,
+  componentId,
+  unitCode,
+  clientId,
+  locationId,
+  startDate,
+  endDate,
+  search,
+  sortBy = "open_at",
+  sortOrder = "desc",
+  skip = 0,
+  take = 10,
+}) => {
+  const conditions = [Prisma.sql`1=1`];
+  if (status) {
+    const st = status.toLowerCase() === "monitor" ? "escalated" : status.toLowerCase();
+    conditions.push(Prisma.sql`th.status = ${st}::ticket_status`);
+  }
+  if (severity) {
+    conditions.push(Prisma.sql`th.severity = ${severity.toLowerCase()}::severity`);
+  }
+  if (componentId) {
+    conditions.push(Prisma.sql`fc.component_id = ${componentId}::uuid`);
+  }
+  if (unitCode) {
+    conditions.push(Prisma.sql`LOWER(a.unit_code) LIKE ${`%${unitCode.toLowerCase()}%`}`);
+  }
+  if (clientId) {
+    conditions.push(Prisma.sql`a.client_id = ${clientId}::uuid`);
+  }
+  if (locationId) {
+    conditions.push(Prisma.sql`a.location_id = ${locationId}::uuid`);
+  }
+  if (startDate) {
+    conditions.push(Prisma.sql`t.open_at >= ${new Date(startDate)}`);
+  }
+  if (endDate) {
+    const end = new Date(endDate);
+    if (String(endDate).length === 10) end.setHours(23, 59, 59, 999);
+    conditions.push(Prisma.sql`t.open_at <= ${end}`);
+  }
+  if (search) {
+    const q = `%${search.trim().toLowerCase()}%`;
+    conditions.push(Prisma.sql`(
+      LOWER(t.id) LIKE ${q}
+      OR LOWER(a.unit_code) LIKE ${q}
+      OR LOWER(fc.code) LIKE ${q}
+      OR LOWER(th.damage_description) LIKE ${q}
+      OR LOWER(th.action_taken) LIKE ${q}
+      OR LOWER(th.root_cause) LIKE ${q}
+    )`);
+  }
+
+  const whereClause = Prisma.join(conditions, " AND ");
+
+  const allowedSortCols = {
+    open_at: Prisma.sql`t.open_at`,
+    escalated_at: Prisma.sql`t.escalated_at`,
+    solved_at: Prisma.sql`t.solved_at`,
+    id: Prisma.sql`t.id`,
+  };
+  const sortCol = allowedSortCols[sortBy] || Prisma.sql`t.open_at`;
+  const sortDir = sortOrder.toLowerCase() === "asc" ? Prisma.sql`ASC` : Prisma.sql`DESC`;
+
+  const [countRows, idRows] = await Promise.all([
+    prisma.$queryRaw(Prisma.sql`
+      SELECT COUNT(DISTINCT t.id)::int as total
+      FROM tickets t
+      JOIN ticket_history th ON th.ticket_id = t.id AND th.version = t.current_version
+      JOIN failure_codes fc ON fc.id = t.failure_code_id
+      JOIN assets a ON a.id = t.asset_id
+      WHERE ${whereClause}
+    `),
+    prisma.$queryRaw(Prisma.sql`
+      SELECT t.id
+      FROM tickets t
+      JOIN ticket_history th ON th.ticket_id = t.id AND th.version = t.current_version
+      JOIN failure_codes fc ON fc.id = t.failure_code_id
+      JOIN assets a ON a.id = t.asset_id
+      WHERE ${whereClause}
+      ORDER BY ${sortCol} ${sortDir}
+      LIMIT ${take} OFFSET ${skip}
+    `),
+  ]);
+
+  const total = Number(countRows[0]?.total || 0);
+  const ids = idRows.map((r) => r.id);
+
+  return { total, ids };
+};
+
+/**
  * Create a new ticket along with an initial ticket_history entry atomically
  * Initial version is strictly 0.
  */
@@ -300,7 +458,7 @@ export const findHistoryByTicketId = async (ticketId, { order = "desc" } = {}) =
         select: {
           id: true,
           name: true,
-          email: true,
+          username: true,
           role: true,
           division: true,
         },
@@ -337,7 +495,7 @@ export const findHistoryByVersion = async (ticketId, version) => {
         select: {
           id: true,
           name: true,
-          email: true,
+          username: true,
           role: true,
           division: true,
         },
@@ -355,81 +513,189 @@ export const findHistoryByVersion = async (ticketId, version) => {
   });
 };
 
-/**
- * Find assignees for a ticket
- */
-export const findAssigneesByTicketId = async (ticketId) => {
-  return prisma.ticket_assignees.findMany({
-    where: { ticket_id: ticketId },
-    include: {
-      user: {
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          role: true,
-          division: true,
-          telegram_user: {
-            select: {
-              id: true,
-              telegram_id: true,
-              username: true,
-              full_name: true,
-              division: true,
-            },
-          },
-        },
-      },
-    },
-    orderBy: {
-      created_at: "asc",
-    },
-  });
-};
 
 /**
- * Find assignee by ID
+ * Check if a user is assigned to a ticket (either as leader or member of current_team or any ticket_teams)
  */
-export const findAssigneeById = async (assigneeId) => {
-  return prisma.ticket_assignees.findUnique({
-    where: { id: assigneeId },
-    include: {
-      user: {
+export const isUserAssignedToTicket = async (ticketId, userId) => {
+  if (!userId) return false;
+
+  const ticket = await prisma.tickets.findUnique({
+    where: { id: ticketId },
+    select: {
+      current_team_id: true,
+      current_team: {
         select: {
-          id: true,
-          name: true,
-          email: true,
-          division: true,
-          telegram_user: {
+          leader_user_id: true,
+          members: { select: { user_id: true } },
+        },
+      },
+      ticket_teams: {
+        select: {
+          team: {
             select: {
-              id: true,
-              telegram_id: true,
-              username: true,
-              full_name: true,
-              division: true,
+              leader_user_id: true,
+              members: { select: { user_id: true } },
             },
           },
         },
       },
     },
   });
+
+  if (!ticket) return false;
+
+  if (
+    ticket.current_team &&
+    (ticket.current_team.leader_user_id === userId ||
+      ticket.current_team.members.some((m) => m.user_id === userId))
+  ) {
+    return true;
+  }
+
+  return (ticket.ticket_teams || []).some(
+    (tt) =>
+      tt.team?.leader_user_id === userId ||
+      tt.team?.members.some((m) => m.user_id === userId)
+  );
 };
 
 /**
- * Check if a user is already assigned to a ticket
+ * Check if user is the leader of the current team on a ticket
+ */
+export const isUserLeaderOfCurrentTicketTeam = async (ticketId, userId) => {
+  if (!userId) return false;
+
+  const ticket = await prisma.tickets.findUnique({
+    where: { id: ticketId },
+    select: {
+      current_team: {
+        select: { leader_user_id: true },
+      },
+    },
+  });
+
+  return ticket?.current_team?.leader_user_id === userId;
+};
+
+/**
+ * Backward compatibility: findAssigneeByTicketAndMember
  */
 export const findAssigneeByTicketAndMember = async (ticketId, { userId }) => {
   if (!userId) return null;
+  const isAssigned = await isUserAssignedToTicket(ticketId, userId);
+  if (!isAssigned) return null;
 
-  return prisma.ticket_assignees.findFirst({
-    where: {
+  const user = await prisma.users.findUnique({
+    where: { id: userId },
+    include: { telegram_user: true },
+  });
+
+  return user ? { user_id: userId, user } : null;
+};
+
+/**
+ * Backward compatibility: findAssigneesByTicketId
+ */
+export const findAssigneesByTicketId = async (ticketId) => {
+  const ticket = await prisma.tickets.findUnique({
+    where: { id: ticketId },
+    include: {
+      current_team: {
+        include: {
+          leader: { include: { telegram_user: true } },
+          members: { include: { user: { include: { telegram_user: true } } } },
+        },
+      },
+      ticket_teams: {
+        include: {
+          team: {
+            include: {
+              leader: { include: { telegram_user: true } },
+              members: { include: { user: { include: { telegram_user: true } } } },
+            },
+          },
+        },
+      },
+    },
+  });
+
+  if (!ticket) return [];
+
+  const map = new Map();
+  if (ticket.current_team?.leader) {
+    map.set(ticket.current_team.leader.id, {
+      id: ticket.current_team.leader.id,
       ticket_id: ticketId,
-      user_id: userId,
+      user_id: ticket.current_team.leader.id,
+      user: ticket.current_team.leader,
+      isLeader: true,
+      created_at: ticket.open_at,
+    });
+  }
+
+  (ticket.current_team?.members || []).forEach((m) => {
+    if (m.user && !map.has(m.user.id)) {
+      map.set(m.user.id, {
+        id: m.id,
+        ticket_id: ticketId,
+        user_id: m.user.id,
+        user: m.user,
+        isLeader: m.user.id === ticket.current_team?.leader_user_id,
+        created_at: m.joined_at,
+      });
+    }
+  });
+
+  (ticket.ticket_teams || []).forEach((tt) => {
+    if (tt.team?.leader && !map.has(tt.team.leader.id)) {
+      map.set(tt.team.leader.id, {
+        id: tt.team.leader.id,
+        ticket_id: ticketId,
+        user_id: tt.team.leader.id,
+        user: tt.team.leader,
+        isLeader: tt.team.id === ticket.current_team_id,
+        created_at: tt.assigned_at,
+      });
+    }
+    (tt.team?.members || []).forEach((m) => {
+      if (m.user && !map.has(m.user.id)) {
+        map.set(m.user.id, {
+          id: m.id,
+          ticket_id: ticketId,
+          user_id: m.user.id,
+          user: m.user,
+          isLeader: m.user.id === ticket.current_team?.leader_user_id,
+          created_at: m.joined_at,
+        });
+      }
+    });
+  });
+
+  return Array.from(map.values());
+};
+
+/**
+ * Add team to ticket_teams
+ */
+export const addTeamToTicket = async (ticketId, teamId, tx = prisma) => {
+  return tx.ticket_teams.upsert({
+    where: {
+      ticket_id_team_id: {
+        ticket_id: ticketId,
+        team_id: teamId,
+      },
+    },
+    update: {},
+    create: {
+      ticket_id: ticketId,
+      team_id: teamId,
     },
     include: {
-      user: {
+      team: {
         include: {
-          telegram_user: true,
+          leader: true,
+          members: { include: { user: true } },
         },
       },
     },
@@ -437,44 +703,41 @@ export const findAssigneeByTicketAndMember = async (ticketId, { userId }) => {
 };
 
 /**
- * Add member to ticket_assignees and optionally set as leader
+ * Remove team from ticket_teams
  */
-export const addAssigneeToTicket = async (ticketId, { userId, isLeader = false }) => {
-  return prisma.$transaction(async (tx) => {
-    const assignee = await tx.ticket_assignees.create({
-      data: {
-        ticket_id: ticketId,
-        user_id: userId,
-      },
-      include: {
-        user: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            division: true,
-            telegram_user: {
-              select: {
-                id: true,
-                telegram_id: true,
-                username: true,
-                full_name: true,
-                division: true,
-              },
-            },
-          },
+export const removeTeamFromTicket = async (ticketId, teamId, tx = prisma) => {
+  return tx.ticket_teams.deleteMany({
+    where: {
+      ticket_id: ticketId,
+      team_id: teamId,
+    },
+  });
+};
+
+/**
+ * Set current_team_id on a ticket and ensure team is in ticket_teams
+ */
+export const setTicketCurrentTeam = async (ticketId, teamId, tx = prisma) => {
+  if (teamId) {
+    await tx.ticket_teams.upsert({
+      where: {
+        ticket_id_team_id: {
+          ticket_id: ticketId,
+          team_id: teamId,
         },
       },
+      update: {},
+      create: {
+        ticket_id: ticketId,
+        team_id: teamId,
+      },
     });
+  }
 
-    if (isLeader) {
-      await tx.tickets.update({
-        where: { id: ticketId },
-        data: { leader_assignee_id: assignee.id },
-      });
-    }
-
-    return assignee;
+  return tx.tickets.update({
+    where: { id: ticketId },
+    data: { current_team_id: teamId },
+    include: ticketIncludes,
   });
 };
 
@@ -486,73 +749,6 @@ export const updateAftersalesLead = async (ticketId, aftersalesUserId) => {
     where: { id: ticketId },
     data: { aftersales_user_id: aftersalesUserId },
     include: ticketIncludes,
-  });
-};
-
-/**
- * Update leader_assignee_id on a ticket
- */
-export const setTicketLeader = async (ticketId, assigneeId) => {
-  return prisma.tickets.update({
-    where: { id: ticketId },
-    data: { leader_assignee_id: assigneeId },
-    include: ticketIncludes,
-  });
-};
-
-/**
- * Remove assignee from ticket
- */
-export const removeAssigneeFromTicket = async (ticketId, assigneeId) => {
-  return prisma.$transaction(async (tx) => {
-    // If this assignee is the leader, unset leader_assignee_id first
-    const ticket = await tx.tickets.findUnique({
-      where: { id: ticketId },
-      select: { leader_assignee_id: true },
-    });
-
-    if (ticket?.leader_assignee_id === assigneeId) {
-      await tx.tickets.update({
-        where: { id: ticketId },
-        data: { leader_assignee_id: null },
-      });
-    }
-
-    return tx.ticket_assignees.delete({
-      where: { id: assigneeId },
-    });
-  });
-};
-
-/**
- * Update an existing assignee in ticket_assignees
- */
-export const updateAssigneeInTicket = async (assigneeId, { userId, telegramUserId }) => {
-  return prisma.ticket_assignees.update({
-    where: { id: assigneeId },
-    data: {
-      user_id: userId,
-      telegram_user_id: telegramUserId,
-    },
-    include: {
-      user: {
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          division: true,
-        },
-      },
-      telegram_user: {
-        select: {
-          id: true,
-          telegram_id: true,
-          username: true,
-          full_name: true,
-          division: true,
-        },
-      },
-    },
   });
 };
 

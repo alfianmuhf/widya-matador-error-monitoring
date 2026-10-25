@@ -4,11 +4,12 @@ import { z } from "zod";
  * Validation schema for Admin creating a new user
  */
 export const createUserSchema = z.object({
-  email: z
-    .string({ required_error: "Email wajib diisi" })
+  username: z
+    .string({ required_error: "Username wajib diisi" })
     .trim()
-    .toLowerCase()
-    .email("Format email tidak valid"),
+    .min(3, "Username minimal 3 karakter")
+    .max(50, "Username maksimal 50 karakter"),
+  email: z.string().trim().optional(),
   name: z
     .string({ required_error: "Nama wajib diisi" })
     .trim()
@@ -21,12 +22,16 @@ export const createUserSchema = z.object({
     .default("viewer")
     .transform((val) => val.toLowerCase()),
   division: z
-    .enum(["none", "after_sales", "software", "NONE", "AFTER_SALES", "SOFTWARE"], {
-      errorMap: () => ({ message: "Divisi harus berupa none, after_sales, atau software" }),
+    .enum(["none", "after_sales", "rnd", "RnD", "RND", "software", "NONE", "AFTER_SALES", "SOFTWARE"], {
+      errorMap: () => ({ message: "Divisi harus berupa none, after_sales, atau rnd" }),
     })
     .optional()
     .nullable()
-    .transform((val) => (val ? val.toLowerCase() : null)),
+    .transform((val) => {
+      if (!val) return null;
+      const lower = val.toLowerCase();
+      return lower === "software" ? "rnd" : lower;
+    }),
   // ID Akun Telegram dari tabel telegram_users (Whitelist)
   telegramUserId: z
     .string()
@@ -46,7 +51,7 @@ export const createUserSchema = z.object({
     .max(50, "Telegram ID maksimal 50 karakter")
     .optional()
     .nullable(),
-  username: z
+  telegramUsername: z
     .string()
     .trim()
     .max(100, "Username Telegram maksimal 100 karakter")
@@ -59,12 +64,13 @@ export const createUserSchema = z.object({
  */
 export const updateUserSchema = z
   .object({
-    email: z
+    username: z
       .string()
       .trim()
-      .toLowerCase()
-      .email("Format email tidak valid")
+      .min(3, "Username minimal 3 karakter")
+      .max(50, "Username maksimal 50 karakter")
       .optional(),
+    email: z.string().trim().optional(),
     name: z
       .string()
       .trim()
@@ -81,12 +87,16 @@ export const updateUserSchema = z
       .optional()
       .transform((val) => (val ? val.toLowerCase() : undefined)),
     division: z
-      .enum(["none", "after_sales", "software", "NONE", "AFTER_SALES", "SOFTWARE"], {
-        errorMap: () => ({ message: "Divisi harus berupa none, after_sales, atau software" }),
+      .enum(["none", "after_sales", "rnd", "RnD", "RND", "software", "NONE", "AFTER_SALES", "SOFTWARE"], {
+        errorMap: () => ({ message: "Divisi harus berupa none, after_sales, atau rnd" }),
       })
       .optional()
       .nullable()
-      .transform((val) => (val ? val.toLowerCase() : null)),
+      .transform((val) => {
+        if (!val) return null;
+        const lower = val.toLowerCase();
+        return lower === "software" ? "rnd" : lower;
+      }),
     status: z
       .enum(["ACTIVE", "SUSPENDED", "INVITED", "active", "suspended", "invited"], {
         errorMap: () => ({ message: "Status harus berupa ACTIVE atau SUSPENDED" }),

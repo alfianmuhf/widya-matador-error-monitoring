@@ -19,6 +19,10 @@ coverage/
 *.env
 !*.env.example
 
+# Secrets & Passwords
+*password.txt
+!*password.txt.example
+
 # Logs
 logs/
 *.log
@@ -46,3 +50,15 @@ openspec/
 # OS Generated Files
 .DS_Store
 Thumbs.db
+
+# Development & Test Scripts
+scripts/test_*
+apps/*/scripts/test_*
+scripts/
+apps/*/scripts/
+
+# Database Design / Scratch DBML
+perubahan_db.dbml
+*.dbml
+
+

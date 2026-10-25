@@ -28,7 +28,7 @@ enum user_status {
 enum division {
   none
   after_sales
-  software
+  rnd
 }
 
 enum bot_state {
@@ -90,7 +90,7 @@ enum severity {
 model users {
   id                    String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   telegram_user_id      String?     @unique @db.Uuid
-  email                 String      @unique @db.VarChar(100)
+  username              String      @unique @db.VarChar(100)
   name                  String      @db.VarChar(100)
   password_hash         String
   role                  user_role   @default(viewer)
@@ -104,13 +104,15 @@ model users {
   created_at            DateTime    @default(now()) @db.Timestamptz
   updated_at            DateTime    @default(now()) @updatedAt @db.Timestamptz
 
-  telegram_user    telegram_users?    @relation(fields: [telegram_user_id], references: [id], onDelete: SetNull)
-  refresh_tokens   refresh_tokens[]
-  export_jobs      export_jobs[]
-  audit_logs       audit_logs[]
-  ticket_history   ticket_history[]
-  ticket_assignees ticket_assignees[]
-  created_tickets  tickets[]          @relation("ticket_aftersales_user")
+  telegram_user        telegram_users?      @relation(fields: [telegram_user_id], references: [id], onDelete: SetNull)
+  refresh_tokens       refresh_tokens[]
+  export_jobs          export_jobs[]
+  audit_logs           audit_logs[]
+  ticket_history       ticket_history[]
+  created_tickets      tickets[]            @relation("ticket_aftersales_user")
+  lead_teams           teams[]              @relation("team_leader")
+  team_memberships     team_members[]
+  uploaded_attachments ticket_attachments[] @relation("attachment_uploaded_by_user")
 }
 
 model telegram_users {
@@ -123,10 +125,11 @@ model telegram_users {
   created_at  DateTime   @default(now()) @db.Timestamptz
   updated_at  DateTime   @default(now()) @updatedAt @db.Timestamptz
 
-  user           users?
-  bot_sessions   bot_sessions?
-  audit_logs     audit_logs[]
-  ticket_history ticket_history[]
+  user                 users?
+  bot_sessions         bot_sessions?
+  audit_logs           audit_logs[]
+  ticket_history       ticket_history[]
+  uploaded_attachments ticket_attachments[] @relation("attachment_uploaded_by_telegram")
 }
 
 model bot_sessions {
@@ -290,28 +293,29 @@ model telegram_groups {
 // ==================================================
 
 model tickets {
-  id                 String   @id @db.VarChar(50)
-  asset_id           String   @db.Uuid
-  failure_code_id    String   @db.Uuid
-  aftersales_user_id String   @db.Uuid
-  current_version    Int      @default(1)
+  id                 String    @id @db.VarChar(50)
+  asset_id           String    @db.Uuid
+  failure_code_id    String    @db.Uuid
+  aftersales_user_id String    @db.Uuid
+  current_version    Int       @default(1)
+  current_team_id    String?   @db.Uuid
   open_at            DateTime  @default(now()) @db.Timestamptz
   escalated_at       DateTime? @db.Timestamptz
   solved_at          DateTime? @db.Timestamptz
-  leader_assignee_id String?   @unique @db.Uuid
 
-  asset           assets            @relation(fields: [asset_id], references: [id], onDelete: Restrict)
-  failure_code    failure_codes     @relation(fields: [failure_code_id], references: [id], onDelete: Restrict)
-  aftersales_user users             @relation("ticket_aftersales_user", fields: [aftersales_user_id], references: [id], onDelete: Restrict)
-  leader_assignee ticket_assignees? @relation("ticket_leader_assignee", fields: [leader_assignee_id], references: [id], onDelete: SetNull)
+  asset           assets        @relation(fields: [asset_id], references: [id], onDelete: Restrict)
+  failure_code    failure_codes @relation(fields: [failure_code_id], references: [id], onDelete: Restrict)
+  aftersales_user users         @relation("ticket_aftersales_user", fields: [aftersales_user_id], references: [id], onDelete: Restrict)
+  current_team    teams?        @relation("ticket_current_team", fields: [current_team_id], references: [id], onDelete: SetNull)
 
   ticket_history     ticket_history[]
-  ticket_assignees   ticket_assignees[]   @relation("ticket_assignee_list")
+  ticket_teams       ticket_teams[]
   ticket_attachments ticket_attachments[]
 
   @@index([asset_id])
   @@index([failure_code_id])
   @@index([aftersales_user_id])
+  @@index([current_team_id])
   @@index([open_at])
 }
 
@@ -320,39 +324,73 @@ model ticket_history {
   ticket_id                   String        @db.VarChar(50)
   version                     Int
   status                      ticket_status @default(open)
+  severity                    severity      @default(rendah)
+  team_id                     String?       @db.Uuid
   damage_description          String?
   action_taken                String?
   root_cause                  String?
-  severity                    severity      @default(rendah)
   notes                       String?
   changed_by_user_id          String?       @db.Uuid
   changed_by_telegram_user_id String?       @db.Uuid
   changed_at                  DateTime      @default(now()) @db.Timestamptz
 
   ticket              tickets         @relation(fields: [ticket_id], references: [id], onDelete: Cascade)
+  team                teams?          @relation(fields: [team_id], references: [id], onDelete: SetNull)
   changed_by_user     users?          @relation(fields: [changed_by_user_id], references: [id], onDelete: Restrict)
   changed_by_telegram telegram_users? @relation(fields: [changed_by_telegram_user_id], references: [id], onDelete: Restrict)
 
   @@unique([ticket_id, version])
   @@index([status, changed_at])
+  @@index([team_id])
 }
 
 // ==================================================
-// 5. GROUP SOFTWARE (claim tiket)
+// 5. TEAMS & TICKET TEAMS (RnD Teams & Assignment)
 // ==================================================
 
-model ticket_assignees {
-  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  ticket_id  String   @db.VarChar(50)
-  user_id    String   @db.Uuid
-  created_at DateTime @default(now()) @db.Timestamptz
+model teams {
+  id             String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name           String         @unique @db.VarChar(100)
+  leader_user_id String         @db.Uuid
+  is_active      Boolean        @default(true)
+  created_at     DateTime       @default(now()) @db.Timestamptz
+  updated_at     DateTime       @default(now()) @updatedAt @db.Timestamptz
 
-  ticket      tickets  @relation("ticket_assignee_list", fields: [ticket_id], references: [id], onDelete: Cascade)
-  user        users    @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  lead_ticket tickets? @relation("ticket_leader_assignee")
+  leader          users          @relation("team_leader", fields: [leader_user_id], references: [id], onDelete: Restrict)
+  members         team_members[]
+  primary_tickets tickets[]      @relation("ticket_current_team")
+  ticket_teams    ticket_teams[]
+  ticket_history  ticket_history[]
 
-  @@unique([ticket_id, user_id])
+  @@index([leader_user_id])
+}
+
+model team_members {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  team_id   String   @db.Uuid
+  user_id   String   @db.Uuid
+  joined_at DateTime @default(now()) @db.Timestamptz
+
+  team teams @relation(fields: [team_id], references: [id], onDelete: Cascade)
+  user users @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([team_id, user_id])
   @@index([user_id])
+  @@index([team_id])
+}
+
+model ticket_teams {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  ticket_id   String   @db.VarChar(50)
+  team_id     String   @db.Uuid
+  assigned_at DateTime @default(now()) @db.Timestamptz
+
+  ticket tickets @relation(fields: [ticket_id], references: [id], onDelete: Cascade)
+  team   teams   @relation(fields: [team_id], references: [id], onDelete: Cascade)
+
+  @@unique([ticket_id, team_id])
+  @@index([ticket_id])
+  @@index([team_id])
 }
 
 // ==================================================
@@ -360,15 +398,21 @@ model ticket_assignees {
 // ==================================================
 
 model ticket_attachments {
-  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  ticket_id   String   @db.VarChar(50)
-  file_url    String
-  file_name   String   @db.VarChar(255)
-  mime_type   String   @db.VarChar(100)
-  file_size   Int
-  uploaded_at DateTime @default(now()) @db.Timestamptz
+  id                          String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  ticket_id                   String          @db.VarChar(50)
+  file_url                    String
+  file_name                   String          @db.VarChar(255)
+  mime_type                   String          @db.VarChar(100)
+  file_size                   Int
+  uploaded_by_user_id          String?         @db.Uuid
+  uploaded_by_telegram_user_id String?         @db.Uuid
+  uploaded_at                 DateTime        @default(now()) @db.Timestamptz
 
-  ticket      tickets  @relation(fields: [ticket_id], references: [id], onDelete: Cascade)
+  ticket               tickets         @relation(fields: [ticket_id], references: [id], onDelete: Cascade)
+  uploaded_by_user     users?          @relation("attachment_uploaded_by_user", fields: [uploaded_by_user_id], references: [id], onDelete: SetNull)
+  uploaded_by_telegram telegram_users? @relation("attachment_uploaded_by_telegram", fields: [uploaded_by_telegram_user_id], references: [id], onDelete: SetNull)
 
   @@index([ticket_id])
+  @@index([uploaded_by_user_id])
+  @@index([uploaded_by_telegram_user_id])
 }

@@ -1,4 +1,4 @@
-# API Documentation â€” After-Sales Monitoring System (ERAD)
+# API Documentation — After-Sales Monitoring System (ERAD)
 
 Dokumentasi teknis resmi Application Programming Interface (API) untuk **Error Report Automation Dashboard (ERAD) / Load Scanner After-Sales Monitoring Platform**.
 
@@ -38,7 +38,7 @@ Sistem ini menerapkan **tiga protokol komunikasi** utama:
 
 ---
 
-## ðŸ“‹ Tabel Direktori Endpoint & Protokol (Master API Directory)
+## 📋 Tabel Direktori Endpoint & Protokol (Master API Directory)
 
 Tabel berikut menyajikan seluruh endpoint yang tersedia pada sistem, metode HTTP, protokol yang digunakan, serta batasan izin peran (*role permissions*):
 
@@ -47,14 +47,14 @@ Tabel berikut menyajikan seluruh endpoint yang tersedia pada sistem, metode HTTP
 | 1 | **System** | REST API | `GET` | `/health` | Publik | Health check status service |
 | 2 | **System** | REST API | `GET` | `/` | Publik | Service information & status |
 | 3 | **Auth** | REST API | `POST` | `/auth/register` | Publik | Pendaftaran mandiri user baru |
-| 4 | **Auth** | REST API | `POST` | `/auth/login` | Publik | Login email & password (termasuk user invited) |
+| 4 | **Auth** | REST API | `POST` | `/auth/login` | Publik | Login username & password (termasuk user invited) |
 | 5 | **Auth** | REST API | `POST` | `/auth/refresh` | Publik (Cookie) | Rotasi dan perpanjangan access token |
 | 6 | **Auth** | REST API | `POST` | `/auth/logout` | Terautentikasi | Hapus cookie refresh token & cabut sesi |
 | 7 | **Auth** | REST API | `GET` | `/auth/me` | Terautentikasi | Ambil profil pengguna yang sedang login |
 | 8 | **Auth** | REST API | `POST`, `PATCH` | `/auth/change-password` | Terautentikasi | Ganti password akun sendiri (aktivasi akun invited) |
-| 9 | **Auth** | REST API | `POST` | `/auth/forgot-password` | Publik | Kirim OTP 6 digit ke Telegram untuk reset password (tidak membocorken existence email) |
+| 9 | **Auth** | REST API | `POST` | `/auth/forgot-password` | Publik | Kirim OTP 6 digit ke Telegram untuk reset password |
 | 10 | **Auth** | REST API | `POST` | `/auth/reset-password` | Publik | Verifikasi OTP dan update password; hapus refresh token, reset lockout |
-| 11 | **Users** | REST API | `POST` | `/users` | `admin` | Buat akun pengguna baru (status awal: `invited`) |
+| 11 | **Users** | REST API | `POST` | `/users` | `admin` | Buat akun pengguna baru (username unik, status awal: `invited`) |
 | 12 | **Users** | REST API | `GET` | `/users` | `admin`, `coordinator` | Ambil daftar seluruh pengguna dashboard (read-only coordinator) |
 | 13 | **Users** | REST API | `GET` | `/users/:id` | `admin`, `coordinator` | Ambil detail satu pengguna |
 | 14 | **Users** | REST API | `PATCH`, `PUT` | `/users/:id` | `admin` | Ubah data pengguna (status hanya `active`/`suspended`) |
@@ -89,38 +89,52 @@ Tabel berikut menyajikan seluruh endpoint yang tersedia pada sistem, metode HTTP
 | 43 | **Master Asset** | REST API | `GET` | `/assets/:id` | Semua Role | Detail unit Load Scanner |
 | 44 | **Master Asset** | REST API | `PATCH` | `/assets/:id` | Semua Role | Perbarui unit Load Scanner |
 | 45 | **Master Asset** | REST API | `DELETE` | `/assets/:id` | Semua Role | Hapus unit Load Scanner |
-| 46 | **Tiket** | **SSE Stream** | `GET` | `/tickets/stream` | Semua Role | Real-time live update stream tiket |
-| 47 | **Tiket** | REST API | `GET` | `/tickets` | Semua Role | Ambil daftar tiket dengan filter & paginasi |
-| 48 | **Tiket** | REST API | `GET` | `/tickets/:id` | Semua Role | Detail tiket lengkap riwayat & komentar |
-| 49 | **Tiket** | REST API | `POST` | `/tickets` | `coordinator` (Aftersales) | Buat tiket baru dari dashboard (khusus Divisi Aftersales) |
-| 50 | **Tiket** | REST API | `PATCH` | `/tickets/:id` | `coordinator` | Update status tiket / penanganan (sesuai status & divisi) |
-| 51 | **Tiket** | REST API | `POST` | `/tickets/:id/comments` | `coordinator` | Tambah catatan penanganan ke tiket |
-| 52 | **Tiket** | REST API | `POST` | `/tickets/:id/claim` | Software / Admin | Klaim tiket oleh tim Software (klaim awal jadi Leader) |
-| 53 | **Tiket** | REST API | `GET` | `/tickets/:id/assignees` | Semua Role | Ambil daftar tim penanganan tiket |
-| 54 | **Tiket** | REST API | `POST` | `/tickets/:id/assignees` | Leader / Admin | Tambah anggota tim penanganan tiket |
-| 55 | **Tiket** | REST API | `PATCH`, `PUT` | `/tickets/:id/assignees/:assigneeId` | Leader / Admin | Ubah data anggota tim penanganan tiket |
-| 56 | **Tiket** | REST API | `PATCH` | `/tickets/:id/leader` | Leader / Admin | Alihkan kepemimpinan tiket ke anggota software lain (status escalated) |
-| 57 | **Tiket** | REST API | `PATCH` | `/tickets/:id/aftersales-lead` | Aftersales PJ / Admin | Alihkan penanggung jawab Aftersales tiket (status open) |
-| 58 | **Tiket** | REST API | `DELETE` | `/tickets/:id/assignees/:assigneeId` | Leader / Admin / Self | Hapus anggota dari tim tiket (Leader dilarang dihapus langsung) |
-| 59 | **Tiket** | REST API | `GET` | `/tickets/:id/history` | Semua Role | Linimasa riwayat versi tiket |
-| 60 | **Tiket** | REST API | `GET` | `/tickets/:id/history/:version` | Semua Role | Detail snapshot versi riwayat tiket tertentu |
-| 61 | **Manajemen Tiket** | REST API | `GET` | `/ticket-management` | `coordinator`, `admin` | Ambil tiket yang dikelola (Aftersales: open & miliknya; Software: escalated & assigned; Admin: semua belum solved) |
-| 62 | **Manajemen Tiket** | REST API | `PATCH` | `/ticket-management/:id` | `coordinator` | Update status & tindakan tiket dari manajemen tiket (Admin dilarang update langsung) |
-| 63 | **Manajemen Tiket** | REST API | `PATCH` | `/ticket-management/:id/aftersales-lead` | Aftersales PJ / Admin | Alihkan penanggung jawab Aftersales saat tiket status open |
-| 64 | **Manajemen Tiket** | REST API | `POST` | `/ticket-management/:id/assignees` | Software Leader / Admin | Tambah anggota tim software ke `ticket_assignees` |
-| 65 | **Manajemen Tiket** | REST API | `PATCH` | `/ticket-management/:id/leader` | Software Leader / Admin | Alihkan kepemimpinan Leader software ke anggota lain (status escalated) |
-| 66 | **Manajemen Tiket** | REST API | `DELETE` | `/ticket-management/:id/assignees/:assigneeId` | Software Leader / Admin / Self | Hapus anggota tim software (Leader dilarang dihapus langsung) |
-| 67 | **Export** | REST API | `GET` | `/exports/excel`, `/tickets/export/excel` | Semua Role | Download rekapitulasi file Excel (`.xlsx`) |
-| 68 | **Export** | REST API | `GET` | `/exports/pdf`, `/tickets/export/pdf` | Semua Role | Download rekapitulasi file PDF (`.pdf`) |
-| 69 | **Audit Log** | **SSE Stream** | `GET` | `/audit-logs/stream` | Semua Role | Real-time live stream audit log |
-| 70 | **Audit Log** | REST API | `GET` | `/audit-logs` | Semua Role | Daftar rekam jejak audit log |
-| 71 | **Audit Log** | REST API | `GET` | `/audit-logs/:id` | Semua Role | Detail satu rekam jejak audit |
-| 72 | **Ringkasan** | REST API | `GET` | `/summary`, `/ringkasan` | Semua Role | KPI, tren bulanan, top ranking kerusakan |
-| 73 | **Analitik** | REST API | `GET` | `/error-analytics`, `/analytics` | Semua Role | Pareto, heatmap unit vs komponen, dsb. |
+| 46 | **Tim RnD** | REST API | `GET` | `/teams` | Semua Role | Daftar tim divisi RnD dengan filter & jumlah anggota |
+| 47 | **Tim RnD** | REST API | `GET` | `/teams/:id` | Semua Role | Detail tim divisi RnD beserta daftar anggota |
+| 48 | **Tim RnD** | REST API | `POST` | `/teams` | `admin` | Tambah tim divisi RnD baru & tentukan leader |
+| 49 | **Tim RnD** | REST API | `PATCH` | `/teams/:id` | `admin` | Ubah nama tim atau alihkan leader tim oleh Admin |
+| 50 | **Tim RnD** | REST API | `DELETE` | `/teams/:id` | `admin` | Hapus tim RnD (soft-deactive jika ada riwayat tiket) |
+| 51 | **Tim RnD** | REST API | `POST` | `/teams/:id/members` | Leader / Admin | Tambah anggota baru ke tim divisi |
+| 52 | **Tim RnD** | REST API | `DELETE` | `/teams/:id/members/:userId` | Leader / Admin | Keluarkan anggota dari tim divisi |
+| 53 | **Tiket** | **SSE Stream** | `GET` | `/tickets/stream` | Semua Role | Real-time live update stream tiket |
+| 54 | **Tiket** | REST API | `GET` | `/tickets` | Semua Role | Ambil daftar tiket dengan filter & paginasi |
+| 55 | **Tiket** | REST API | `GET` | `/tickets/:id` | Semua Role | Detail tiket lengkap riwayat, tim, & komentar |
+| 56 | **Tiket** | REST API | `POST` | `/tickets` | `coordinator` (Aftersales) | Buat tiket baru dari dashboard (khusus Divisi Aftersales) |
+| 57 | **Tiket** | REST API | `PATCH` | `/tickets/:id` | Anggota Tim Tiket | Update status tiket / penanganan (sesuai status & tim tiket) |
+| 58 | **Tiket** | REST API | `POST` | `/tickets/:id/comments` | Anggota Tim Tiket | Tambah catatan penanganan ke tiket |
+| 59 | **Tiket** | REST API | `POST` | `/tickets/:id/claim` | Koordinator RnD / Admin | Klaim tiket oleh tim RnD (bisa tentukan `teamId`) |
+| 60 | **Tiket** | REST API | `GET` | `/tickets/:id/assignees` | Semua Role | Ambil daftar tim penanganan tiket |
+| 61 | **Tiket** | REST API | `POST` | `/tickets/:id/assignees` | Leader / Admin | Tambah tim/anggota penanganan tiket |
+| 62 | **Tiket** | REST API | `PATCH`, `PUT` | `/tickets/:id/assignees/:assigneeId` | Leader / Admin | Ubah data anggota tim penanganan tiket |
+| 63 | **Tiket** | REST API | `PATCH` | `/tickets/:id/leader` | Leader / Admin | Alihkan kepemimpinan tiket ke tim/anggota lain |
+| 64 | **Tiket** | REST API | `PATCH` | `/tickets/:id/aftersales-lead` | Aftersales PJ / Admin | Alihkan penanggung jawab Aftersales tiket (status open) |
+| 65 | **Tiket** | REST API | `DELETE` | `/tickets/:id/assignees/:assigneeId` | Leader / Admin / Self | Hapus anggota dari tim tiket |
+| 66 | **Tiket** | REST API | `GET` | `/tickets/:id/history` | Semua Role | Linimasa riwayat versi tiket |
+| 67 | **Tiket** | REST API | `GET` | `/tickets/:id/history/:version` | Semua Role | Detail snapshot versi riwayat tiket tertentu |
+| 68 | **Lampiran Tiket** | REST API | `GET` | `/tickets/:id/attachments` | Semua Role | Ambil daftar lampiran gambar tiket & uploader |
+| 69 | **Lampiran Tiket** | REST API | `POST` | `/tickets/:id/attachments` | Anggota Tim Tiket / Admin | Unggah lampiran gambar tiket (WebP, tercatat ID pengunggah) |
+| 70 | **Lampiran Tiket** | REST API | `GET` | `/tickets/:id/attachments/:attachmentId/content` | Semua Role | Stream / download file gambar lampiran tiket |
+| 71 | **Lampiran Tiket** | REST API | `DELETE` | `/tickets/:id/attachments/:attachmentId` | `admin`, `coordinator` | Hapus lampiran gambar dari tiket dan Object Storage |
+| 72 | **Manajemen Tiket** | REST API | `GET` | `/ticket-management` | `coordinator`, `admin` | Ambil tiket yang dikelola (Aftersales: open & miliknya; RnD: escalated & timnya; Admin: semua belum solved) |
+| 73 | **Manajemen Tiket** | REST API | `PATCH` | `/ticket-management/:id` | Anggota Tim Tiket | Update status & tindakan tiket dari manajemen tiket |
+| 74 | **Manajemen Tiket** | REST API | `PATCH` | `/ticket-management/:id/aftersales-lead` | Aftersales PJ / Admin | Alihkan penanggung jawab Aftersales saat tiket status open |
+| 75 | **Manajemen Tiket** | REST API | `PATCH` | `/ticket-management/:id/team` | Leader Tim Tiket / Admin | Handover tanggung jawab tiket ke tim RnD lain |
+| 76 | **Manajemen Tiket** | REST API | `POST` | `/ticket-management/:id/teams` | Leader Tim Tiket / Admin | Tambah tim kolaborasi multi-divisi ke tiket |
+| 77 | **Manajemen Tiket** | REST API | `DELETE` | `/ticket-management/:id/teams/:teamId` | Leader Tim Tiket / Admin | Hapus tim kolaborasi dari tiket |
+| 78 | **Manajemen Tiket** | REST API | `POST` | `/ticket-management/:id/assignees` | Leader / Admin | Tambah anggota tim software/RnD ke tiket (legacy compatibility) |
+| 79 | **Manajemen Tiket** | REST API | `PATCH` | `/ticket-management/:id/leader` | Leader / Admin | Alihkan kepemimpinan tiket ke tim/anggota lain (legacy compatibility) |
+| 80 | **Manajemen Tiket** | REST API | `DELETE` | `/ticket-management/:id/assignees/:assigneeId` | Leader / Admin / Self | Hapus anggota tim software/RnD (legacy compatibility) |
+| 81 | **Export** | REST API | `GET` | `/exports/excel`, `/tickets/export/excel` | Semua Role | Download rekapitulasi file Excel (`.xlsx`) |
+| 82 | **Export** | REST API | `GET` | `/exports/pdf`, `/tickets/export/pdf` | Semua Role | Download rekapitulasi file PDF (`.pdf`) |
+| 83 | **Audit Log** | **SSE Stream** | `GET` | `/audit-logs/stream` | Semua Role | Real-time live stream audit log |
+| 84 | **Audit Log** | REST API | `GET` | `/audit-logs` | Semua Role | Daftar rekam jejak audit log |
+| 85 | **Audit Log** | REST API | `GET` | `/audit-logs/:id` | Semua Role | Detail satu rekam jejak audit |
+| 86 | **Ringkasan** | REST API | `GET` | `/summary`, `/ringkasan` | Semua Role | KPI, tren bulanan, top ranking kerusakan |
+| 87 | **Analitik** | REST API | `GET` | `/error-analytics`, `/analytics` | Semua Role | Pareto, heatmap unit vs komponen, dsb. |
 
 ---
 
-## ðŸ”’ Konvensi Umum & Struktur Error Response
+## 🔒 Konvensi Umum & Struktur Error Response
 
 ### 1. Format Respons Sukses (Status Code `200` & `201`)
 ```json
@@ -150,8 +164,8 @@ Ketika body JSON atau query string melanggar aturan skema validasi (Zod):
   "message": "Validation Error",
   "details": [
     {
-      "field": "email",
-      "message": "Format email tidak valid"
+      "field": "username",
+      "message": "Username minimal 3 karakter"
     },
     {
       "field": "password",
@@ -188,6 +202,29 @@ Memeriksa ketersediaan dan status kesehatan server backend.
 
 ---
 
+### `GET /`
+
+| Parameter | Spesifikasi |
+|:---|:---|
+| **Protokol** | **REST API** |
+| **HTTP Method** | `GET` |
+| **Endpoint Path** | `/` |
+| **Autentikasi** | Tidak Diperlukan (Publik) |
+| **Role Izin** | Publik |
+
+Mengembalikan identitas service dan status operasional dasar API.
+
+#### Response Sukses: `200 OK`
+```json
+{
+  "name": "ROS Error Monitoring API",
+  "version": "1.0.0",
+  "status": "running"
+}
+```
+
+---
+
 ## 2. Auth Module (`/auth`)
 
 ### `POST /auth/register`
@@ -205,11 +242,11 @@ Mendaftarkan pengguna baru secara mandiri.
 #### Request Body Valid
 ```json
 {
-  "email": "user@example.com",
+  "username": "johndoe",
   "password": "password123",
   "name": "John Doe",
   "role": "viewer",
-  "division": "software"
+  "division": "rnd"
 }
 ```
 
@@ -221,10 +258,10 @@ Mendaftarkan pengguna baru secara mandiri.
   "data": {
     "user": {
       "id": "48247728-9cfe-4789-a01f-bd27ad0272a1",
-      "email": "user@example.com",
+      "username": "johndoe",
       "name": "John Doe",
       "role": "viewer",
-      "division": "software",
+      "division": "rnd",
       "status": "active",
       "must_change_password": false,
       "created_at": "2026-10-09T05:30:00.000Z"
@@ -234,11 +271,11 @@ Mendaftarkan pengguna baru secara mandiri.
 ```
 
 #### âŒ Contoh Input Error & Response: `422 Unprocessable Entity`
-Jika input email tidak valid dan password kurang dari 6 karakter:
+Jika input username kurang dari 3 karakter atau password kurang dari 6 karakter:
 ```json
 // Request Body yang Salah:
 {
-  "email": "bukan-format-email",
+  "username": "jo",
   "password": "123",
   "name": "J"
 }
@@ -296,7 +333,7 @@ Autentikasi pengguna menggunakan email dan kata sandi. Menerbitkan Access Token 
 #### Request Body Valid
 ```json
 {
-  "email": "admin@widya.com",
+  "username": "admin",
   "password": "password123"
 }
 ```
@@ -309,7 +346,7 @@ Autentikasi pengguna menggunakan email dan kata sandi. Menerbitkan Access Token 
   "data": {
     "user": {
       "id": "48247728-9cfe-4789-a01f-bd27ad0272a1",
-      "email": "admin@widya.com",
+      "username": "admin",
       "name": "Super Admin",
       "role": "admin",
       "division": "none",
@@ -329,7 +366,7 @@ Autentikasi pengguna menggunakan email dan kata sandi. Menerbitkan Access Token 
   "data": {
     "user": {
       "id": "550e8400-e29b-41d4-a716-446655440001",
-      "email": "bruno@erad.id",
+      "username": "bruno",
       "name": "Bruno Aftersales",
       "role": "coordinator",
       "division": "after_sales",
@@ -347,7 +384,7 @@ Menampilkan sisa percobaan login sebelum akun terkunci:
 {
   "success": false,
   "statusCode": 401,
-  "message": "Email atau password salah. Sisa kesempatan login: 4 kali."
+  "message": "Username atau password salah. Sisa kesempatan login: 4 kali."
 }
 ```
 
@@ -393,7 +430,7 @@ Menerbitkan Access Token baru menggunakan cookie `refreshToken`. Mendukung pengg
     "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
     "user": {
       "id": "48247728-9cfe-4789-a01f-bd27ad0272a1",
-      "email": "admin@widya.com",
+      "username": "admin",
       "name": "Super Admin",
       "role": "admin",
       "division": "none",
@@ -450,7 +487,7 @@ Mengubah kata sandi akun pengguna yang sedang aktif.
   "data": {
     "user": {
       "id": "550e8400-e29b-41d4-a716-446655440001",
-      "email": "bruno@erad.id",
+      "username": "bruno",
       "name": "Bruno Aftersales",
       "role": "coordinator",
       "division": "after_sales",
@@ -515,7 +552,7 @@ Meminta OTP 6 digit untuk reset password. OTP dikirim via **DM Telegram** ke aku
 #### Request Body Valid
 ```json
 {
-  "email": "bruno@erad.id"
+  "username": "bruno"
 }
 ```
 
@@ -546,7 +583,7 @@ Meriset password menggunakan OTP dari Telegram, **tanpa password lama**. Jika be
 #### Request Body Valid
 ```json
 {
-  "email": "bruno@erad.id",
+  "username": "bruno",
   "otp": "481920",
   "newPassword": "passwordBaru123"
 }
@@ -597,6 +634,75 @@ Meriset password menggunakan OTP dari Telegram, **tanpa password lama**. Jika be
 
 ---
 
+### `POST /auth/logout`
+
+| Parameter | Spesifikasi |
+|:---|:---|
+| **Protokol** | **REST API** |
+| **HTTP Method** | `POST` |
+| **Endpoint Path** | `/auth/logout` |
+| **Autentikasi** | Opsional (Membaca cookie `refreshToken` atau JSON body `{ "refreshToken": "..." }`) |
+| **Role Izin** | Publik / Terautentikasi |
+
+Mencabut sesi refresh token pengguna saat ini dan menghapus cookie HTTP-only `refreshToken`. Jika token tidak dikirim atau sudah kedaluwarsa, endpoint tetap mengembalikan respons sukses idempoten demi keamanan client.
+
+#### Response Sukses: `200 OK`
+```json
+{
+  "success": true,
+  "message": "Logout berhasil"
+}
+```
+
+---
+
+### `GET /auth/me`
+
+| Parameter | Spesifikasi |
+|:---|:---|
+| **Protokol** | **REST API** |
+| **HTTP Method** | `GET` |
+| **Endpoint Path** | `/auth/me` |
+| **Autentikasi** | `Authorization: Bearer <access_token>` |
+| **Role Izin** | **Semua Role** (`admin`, `coordinator`, `viewer`) |
+
+Mengambil informasi profil akun pengguna yang sedang terautentikasi berdasarkan JWT access token.
+
+#### Response Sukses: `200 OK`
+```json
+{
+  "success": true,
+  "data": {
+    "user": {
+      "id": "e4c70a84-06c8-47bc-bd82-939e6a0d2001",
+      "username": "budi",
+      "name": "Budi Santoso",
+      "role": "coordinator",
+      "division": "rnd",
+      "status": "active",
+      "must_change_password": false,
+      "failed_login_attempts": 0,
+      "locked_until": null,
+      "last_login_at": "2026-10-23T10:00:00.000Z",
+      "password_changed_at": "2026-10-20T08:00:00.000Z",
+      "created_at": "2026-09-01T00:00:00.000Z",
+      "updated_at": "2026-10-23T10:00:00.000Z"
+    }
+  }
+}
+```
+
+#### ❌ Contoh Error Token Tidak Dikirim / Kedaluwarsa: `401 Unauthorized`
+```json
+{
+  "success": false,
+  "statusCode": 401,
+  "message": "Access token tidak valid atau telah kedaluwarsa"
+}
+```
+
+---
+
 ## 3. User Management Module (`/users`)
 
 ### `POST /users`
@@ -611,7 +717,7 @@ Meriset password menggunakan OTP dari Telegram, **tanpa password lama**. Jika be
 
 Mendaftarkan akun pengguna dashboard baru.
 * **Status Awal:** Akun otomatis dibuat dengan status **`invited`** dan flag **`must_change_password: true`**.
-* **Password Awal:** Otomatis digenerate dengan pola **nama email sebelum `@` + `12345`** (contoh: `joko@gmail.com` $\rightarrow$ `joko12345`). Nilai `initialPassword` ini dikembalikan di respon agar admin dapat meneruskannya kepada pengguna.
+* **Password Awal:** Otomatis digenerate dengan pola **`[username]12345`** (contoh: `jokosusilo` $\rightarrow$ `jokosusilo12345`). Nilai `initialPassword` ini dikembalikan di respon agar admin dapat meneruskannya kepada pengguna. Kolom `username` bersifat unik, sedangkan `name` tidak harus unik.
 * **Audit Trail:** Pembuatan akun dicatat lengkap dengan data aktor pembuat di sistem `audit_logs`.
 
 * **telegramUserId** / **telegram_user_id** *(UUID string, opsional)*: ID akun dari Whitelist Telegram (`telegram_users.id`) untuk menautkan pengguna dashboard dengan akun Telegram (relasi 1-to-1). Jika diisi:
@@ -623,7 +729,7 @@ Mendaftarkan akun pengguna dashboard baru.
 #### Request Body Valid
 ```json
 {
-  "email": "joko@gmail.com",
+  "username": "jokosusilo",
   "name": "Joko Susilo",
   "role": "coordinator",
   "division": "after_sales",
@@ -639,7 +745,7 @@ Mendaftarkan akun pengguna dashboard baru.
   "data": {
     "user": {
       "id": "981ba263-8103-4c76-a7ed-f241297e8b27",
-      "email": "joko@gmail.com",
+      "username": "jokosusilo",
       "name": "Joko Susilo",
       "role": "coordinator",
       "division": "after_sales",
@@ -676,7 +782,7 @@ Jika nama kosong atau role tidak valid:
 ```json
 // Request Body yang Salah:
 {
-  "email": "invalid-email-address",
+  "username": "jo",
   "name": "",
   "role": "SUPERUSER"
 }
@@ -772,7 +878,7 @@ Memperbarui data pengguna (nama, email, role, divisi, atau status akun).
 {
   "name": "Joko Susilo, S.T.",
   "role": "coordinator",
-  "division": "software",
+  "division": "rnd",
   "status": "active",
   "telegramUserId": "c3da5963-8482-4537-b3b0-10ee93126284"
 }
@@ -787,10 +893,10 @@ Memperbarui data pengguna (nama, email, role, divisi, atau status akun).
   "data": {
     "user": {
       "id": "981ba263-8103-4c76-a7ed-f241297e8b27",
-      "email": "joko@gmail.com",
+      "username": "jokosusilo",
       "name": "Joko Susilo, S.T.",
       "role": "coordinator",
-      "division": "software",
+      "division": "rnd",
       "status": "active",
       "must_change_password": false,
       "updated_at": "2026-10-09T08:35:00.000Z"
@@ -882,7 +988,7 @@ Menambahkan akun Telegram baru ke whitelist bot. Cukup memasukkan **`username`**
 {
   "username": "john_doe",
   "fullName": "John Doe",
-  "division": "software",
+  "division": "rnd",
   "isActive": true
 }
 ```
@@ -904,7 +1010,7 @@ Menambahkan akun Telegram baru ke whitelist bot. Cukup memasukkan **`username`**
       "telegramId": null,
       "username": "john_doe",
       "fullName": "John Doe",
-      "division": "software",
+      "division": "rnd",
       "isActive": true,
       "createdAt": "2026-10-09T08:00:00.000Z",
       "updatedAt": "2026-10-09T08:00:00.000Z"
@@ -981,7 +1087,7 @@ Mengambil daftar akun Telegram yang terdaftar dengan paginasi dan filter.
         "telegramId": "123456789",
         "username": "john_doe",
         "fullName": "John Doe Tele",
-        "division": "software",
+        "division": "rnd",
         "isActive": true,
         "createdAt": "2026-10-09T08:00:00.000Z",
         "updatedAt": "2026-10-09T08:00:00.000Z"
@@ -1019,7 +1125,7 @@ Mengambil informasi detail akun Telegram berdasarkan ID UUID whitelist.
       "telegramId": "123456789",
       "username": "john_doe",
       "fullName": "John Doe Tele",
-      "division": "software",
+      "division": "rnd",
       "isActive": true,
       "createdAt": "2026-10-09T08:00:00.000Z",
       "updatedAt": "2026-10-09T08:00:00.000Z"
@@ -1228,6 +1334,224 @@ Mengelola master data aset unit mesin Load Scanner di lapangan.
 
 ---
 
+### 5.6 Team Management Module (`/teams`)
+
+Modul pengelolaan master tim divisi RnD / engineering untuk penanganan tiket gangguan (misal: *RnD - Software*, *RnD - Hardware*, *RnD - Network*, dsb.).
+Setiap tim memiliki seorang **Leader** (`leader_user_id`), daftar anggota (`team_members`), serta hak akses kolaboratif dalam tiket.
+
+#### `GET /teams`
+
+| Parameter | Spesifikasi |
+|:---|:---|
+| **Protokol** | **REST API** |
+| **HTTP Method** | `GET` |
+| **Endpoint Path** | `/teams` |
+| **Query Params** | `?page=1&limit=50&search=&isActive=` |
+| **Autentikasi** | `Authorization: Bearer <access_token>` |
+| **Role Izin** | **Semua Role** (`admin`, `coordinator`, `viewer`) |
+
+Mengambil daftar tim RnD dengan filter status aktif, pencarian teks (nama/kode), serta jumlah anggota dan tiket yang ditangani.
+
+##### Response Sukses: `200 OK`
+```json
+{
+  "success": true,
+  "statusCode": 200,
+  "message": "Daftar tim berhasil diambil",
+  "data": [
+    {
+      "id": "e7b0a88b-8ef6-43b6-896c-b3bbfec62c95",
+      "name": "RnD - Software",
+      "isActive": true,
+      "leaderUserId": "713ba0c8-66d4-4bb8-8f8d-dbca44131553",
+      "leader": {
+        "id": "713ba0c8-66d4-4bb8-8f8d-dbca44131553",
+        "name": "Siti RnD 1",
+        "username": "siti",
+        "role": "coordinator",
+        "division": "rnd",
+        "telegramUser": null
+      },
+      "membersCount": 2,
+      "members": [
+        {
+          "id": "1e8a8b12-9c44-4821-b3b1-a67e88ff2101",
+          "userId": "713ba0c8-66d4-4bb8-8f8d-dbca44131553",
+          "name": "Siti RnD 1",
+          "username": "siti",
+          "role": "coordinator",
+          "division": "rnd",
+          "telegramUser": null,
+          "joinedAt": "2026-10-25T17:00:00.000Z"
+        }
+      ],
+      "createdAt": "2026-10-25T17:00:00.000Z",
+      "updatedAt": "2026-10-25T17:00:00.000Z"
+    }
+  ],
+  "pagination": {
+    "total": 2,
+    "page": 1,
+    "limit": 50,
+    "totalPages": 1
+  }
+}
+```
+
+---
+
+#### `GET /teams/:id`
+
+| Parameter | Spesifikasi |
+|:---|:---|
+| **Protokol** | **REST API** |
+| **HTTP Method** | `GET` |
+| **Endpoint Path** | `/teams/:id` |
+| **Autentikasi** | `Authorization: Bearer <access_token>` |
+| **Role Izin** | **Semua Role** (`admin`, `coordinator`, `viewer`) |
+
+Mengambil informasi detail satu tim RnD beserta susunan Leader dan seluruh anggotanya.
+
+---
+
+#### `POST /teams`
+
+| Parameter | Spesifikasi |
+|:---|:---|
+| **Protokol** | **REST API** |
+| **HTTP Method** | `POST` |
+| **Endpoint Path** | `/teams` |
+| **Autentikasi** | `Authorization: Bearer <access_token>` |
+| **Role Izin** | **`admin`** |
+
+Membuat tim RnD baru. Pengguna yang dipilih sebagai `leaderUserId` secara otomatis didaftarkan sebagai anggota pertama di `team_members`.
+
+##### Request Body
+```json
+{
+  "name": "RnD - Hardware",
+  "leaderUserId": "916e5839-f26c-41b6-bd7c-98c7736030a7",
+  "isActive": true
+}
+```
+
+##### Response Sukses: `201 Created`
+```json
+{
+  "success": true,
+  "statusCode": 201,
+  "message": "Tim 'RnD - Hardware' berhasil dibuat",
+  "data": {
+    "id": "f8a02c54-4412-4f32-8499-123456789abc",
+    "name": "RnD - Hardware",
+    "isActive": true,
+    "leaderUserId": "916e5839-f26c-41b6-bd7c-98c7736030a7"
+  }
+}
+```
+
+---
+
+#### `PATCH /teams/:id`
+
+| Parameter | Spesifikasi |
+|:---|:---|
+| **Protokol** | **REST API** |
+| **HTTP Method** | `PATCH` |
+| **Endpoint Path** | `/teams/:id` |
+| **Autentikasi** | `Authorization: Bearer <access_token>` |
+| **Role Izin** | **`admin`** (Wewenang struktural divisi oleh Admin) |
+
+Memperbarui nama tim, status keaktifan, atau mengganti Leader tim oleh Admin. Catatan: Pengalihan kepemimpinan merupakan wewenang struktural divisi oleh Admin (fitur pengalihan oleh leader tim telah ditiadakan). Jika leader diganti, leader baru otomatis ditambahkan ke `team_members` jika belum terdaftar.
+
+##### Request Body
+```json
+{
+  "name": "RnD - Embedded & Hardware",
+  "leaderUserId": "916e5839-f26c-41b6-bd7c-98c7736030a7",
+  "isActive": true
+}
+```
+
+---
+
+#### `DELETE /teams/:id`
+
+| Parameter | Spesifikasi |
+|:---|:---|
+| **Protokol** | **REST API** |
+| **HTTP Method** | `DELETE` |
+| **Endpoint Path** | `/teams/:id` |
+| **Autentikasi** | `Authorization: Bearer <access_token>` |
+| **Role Izin** | **`admin`** |
+
+Menghapus tim RnD. Jika tim sudah memiliki keterkaitan dengan tiket gangguan aktif atau histori penanganan, sistem secara aman melakukan deaktivasi (*soft-deactivate* `isActive: false`) agar integritas riwayat audit tetap terjaga.
+
+---
+
+#### `POST /teams/:id/members`
+
+| Parameter | Spesifikasi |
+|:---|:---|
+| **Protokol** | **REST API** |
+| **HTTP Method** | `POST` |
+| **Endpoint Path** | `/teams/:id/members` |
+| **Autentikasi** | `Authorization: Bearer <access_token>` |
+| **Role Izin** | **Leader Tim bersangkutan** atau **Admin** |
+
+Menambahkan anggota baru ke dalam tim divisi. Anggota yang ditambahkan harus berupa akun aktif / terundang yang terdaftar di sistem.
+
+##### Request Body
+```json
+{
+  "userId": "ca2823c5-d250-47de-9238-991d33afb896"
+}
+```
+
+##### Response Sukses: `201 Created`
+```json
+{
+  "success": true,
+  "statusCode": 201,
+  "message": "Anggota berhasil ditambahkan ke tim",
+  "data": {
+    "id": "bb441122-3344-5566-7788-99aabbccdde1",
+    "teamId": "e7b0a88b-8ef6-43b6-896c-b3bbfec62c95",
+    "userId": "ca2823c5-d250-47de-9238-991d33afb896",
+    "joinedAt": "2026-10-25T17:15:00.000Z"
+  }
+}
+```
+
+---
+
+#### `DELETE /teams/:id/members/:userId`
+
+| Parameter | Spesifikasi |
+|:---|:---|
+| **Protokol** | **REST API** |
+| **HTTP Method** | `DELETE` |
+| **Endpoint Path** | `/teams/:id/members/:userId` |
+| **Autentikasi** | `Authorization: Bearer <access_token>` |
+| **Role Izin** | **Leader Tim bersangkutan** atau **Admin** |
+
+Mengeluarkan anggota dari tim divisi.
+* **Proteksi Leader:** Leader tim tidak dapat dikeluarkan langsung. Alihkan posisi Leader terlebih dahulu melalui `PATCH /teams/:id` oleh Admin jika ingin mengganti anggota tersebut.
+
+##### Response Sukses: `200 OK`
+```json
+{
+  "success": true,
+  "statusCode": 200,
+  "message": "Anggota 'Doni Kurniawan' berhasil dikeluarkan dari tim",
+  "data": {
+    "message": "Anggota 'Doni Kurniawan' berhasil dikeluarkan dari tim"
+  }
+}
+```
+
+---
+
 ## 6. Ticket Management Module (`/tickets`)
 
 Mengelola siklus hidup tiket gangguan operasional Load Scanner (pelaporan, eskalasi ke tim software, penugasan tim, investigasi, hingga penyelesaian).
@@ -1301,7 +1625,7 @@ Mengambil daftar tiket dengan filter multi-kriteria dan pagination.
         "aftersalesUser": {
           "id": "981ba263-8103-4c76-a7ed-f241297e8b27",
           "name": "Bruno Aftersales",
-          "email": "bruno@erad.id",
+          "username": "bruno",
           "role": "coordinator",
           "division": "after_sales"
         },
@@ -1547,7 +1871,7 @@ Memperbarui status penanganan, severity, catatan, atau rincian analisis teknis t
 | Divisi / Peran | Persyaratan Izin Update |
 |:---|:---|
 | **Aftersales Coordinator** (`division: after_sales`) | **Hanya dapat mengupdate saat status tiket `open`** DAN **merupakan penanggung jawab Aftersales** (`aftersales_user_id`) tiket tersebut. |
-| **Software Coordinator** (`division: software`) | **Hanya dapat mengupdate saat status tiket `escalated`** DAN **wajib terdaftar** di `ticket_assignees` tiket bersangkutan. |
+| **RnD Coordinator** (`division: rnd`) | **Hanya dapat mengupdate saat status tiket `escalated`** DAN **wajib terdaftar** di `ticket_assignees` tiket bersangkutan. |
 | **Admin** (`role: admin`) | **Ditolak (`403 Forbidden`)**. Admin hanya dapat mengelola akses, mengalihkan penanggung jawab/leader, dan mengelola anggota tim, bukan memperbarui penanganan tiket. |
 | **Viewer** (`role: viewer`) | **Ditolak (`403 Forbidden`)**. Hanya memiliki hak baca (read-only). |
 
@@ -1607,7 +1931,7 @@ Memperbarui status penanganan, severity, catatan, atau rincian analisis teknis t
 | **HTTP Method** | `POST` |
 | **Endpoint Path** | `/tickets/:id/claim` |
 | **Autentikasi** | `Authorization: Bearer <access_token>` |
-| **Role Izin** | Tim Software (`division: software`) & Super Admin (`role: admin`) |
+| **Role Izin** | Tim RnD (`division: rnd`) & Super Admin (`role: admin`) |
 
 Mengambil alih (klaim) tiket yang berstatus `escalated` oleh anggota tim software.  
 * **Klaim Pertama Menjadi Leader**: Anggota pertama yang mengklaim tiket otomatis ditetapkan sebagai **Leader tim Software** (`leader_assignee_id`), ditambahkan ke tabel `ticket_assignees` dengan `isLeader: true`, dan mencatat riwayat klaim di `ticket_history`.
@@ -1660,18 +1984,18 @@ Mengambil daftar seluruh anggota tim software yang ditugaskan pada tiket, besert
         "ticketId": "ERR-20261007-0001",
         "isLeader": true,
         "name": "Siti Software Leader",
-        "email": "siti@erad.com",
+        "username": "siti",
         "role": "coordinator",
-        "division": "software"
+        "division": "rnd"
       },
       {
         "id": "550e8400-e29b-41d4-a716-446655440002",
         "ticketId": "ERR-20261007-0001",
         "isLeader": false,
         "name": "Joko Engineer",
-        "email": "joko@erad.com",
+        "username": "joko",
         "role": "coordinator",
-        "division": "software"
+        "division": "rnd"
       }
     ]
   }
@@ -1705,7 +2029,7 @@ Menambahkan anggota tim software baru ke tiket.
 Atau via email / Telegram:
 ```json
 {
-  "email": "joko@erad.com"
+  "username": "joko"
 }
 ```
 Atau:
@@ -1803,7 +2127,7 @@ Mengalihkan penanggung jawab Aftersales tiket (`aftersales_user_id`) ke pengguna
     "aftersalesUser": {
       "id": "981ba263-8103-4c76-a7ed-f241297e8b27",
       "name": "Budi Aftersales Baru",
-      "email": "budi.new@erad.id",
+      "username": "budi_new",
       "division": "after_sales"
     }
   }
@@ -1963,17 +2287,66 @@ Koneksi streaming waktu nyata (real-time) yang memancarkan event saat tiket dibu
 
 ---
 
+---
+
 ### Lampiran Tiket (`/tickets/:id/attachments`)
 
-Maksimal **5 gambar per tiket**, **5 MB per gambar**, satu file per request. Backend selalu mengonversi ke WebP (orientasi EXIF diterapkan, sisi terpanjang maksimal 1920 px, kualitas 82) lalu menyimpan byte di object storage; PostgreSQL hanya menyimpan key relatif.
+Layanan pengelolaan lampiran foto / bukti investigasi pada tiket.
+* **Format & Optimasi**: Sistem memproses file menggunakan library `sharp` (menerapkan rotasi EXIF otomatis, membatasi dimensi gambar terpanjang maksimal 1920 px, mengonversi gambar ke format WebP terkompresi dengan kualitas 82%). Format file SVG dilarang demi keamanan (`XXE/CPU DOS protection`).
+* **Penyimpanan**: Byte biner disimpan di Object Storage (RustFS / MinIO / S3) pada bucket `erad-attachments`, sedangkan database PostgreSQL hanya menyimpan metadata dan relative key object.
+* **Batasan**: Maksimal **5 gambar per tiket**, ukuran file maksimal **5 MB per file**, diunggah satu per satu.
 
-#### `POST /tickets/:id/attachments`
+---
 
-- Auth: `Bearer` — ADMIN, COORDINATOR, assignee tiket, atau penanggung jawab Aftersales tiket
-- Content-Type: `multipart/form-data`, field `file`
+### `GET /tickets/:id/attachments`
+
+| Parameter | Spesifikasi |
+|:---|:---|
+| **Protokol** | **REST API** |
+| **HTTP Method** | `GET` |
+| **Endpoint Path** | `/tickets/:id/attachments` |
+| **Autentikasi** | `Authorization: Bearer <access_token>` |
+| **Role Izin** | **Semua Role** (`admin`, `coordinator`, `viewer`) |
+
+Mengambil daftar seluruh lampiran gambar yang terhubung pada tiket tertentu, diurutkan secara kronologis (`uploaded_at` menaik).
+
+#### Response Sukses: `200 OK`
+```json
+{
+  "success": true,
+  "message": "Daftar lampiran berhasil diambil",
+  "data": {
+    "attachments": [
+      {
+        "id": "6f1c2b7e-1f0a-4a4e-9a4e-2f6d1c9b7a11",
+        "url": "/tickets/ERR-20261022-0001/attachments/6f1c2b7e-1f0a-4a4e-9a4e-2f6d1c9b7a11/content",
+        "fileName": "konektor.webp",
+        "mimeType": "image/webp",
+        "size": 214331,
+        "uploadedAt": "2026-10-22T04:00:00.000Z"
+      }
+    ]
+  }
+}
+```
+
+---
+
+### `POST /tickets/:id/attachments`
+
+| Parameter | Spesifikasi |
+|:---|:---|
+| **Protokol** | **REST API** |
+| **HTTP Method** | `POST` |
+| **Endpoint Path** | `/tickets/:id/attachments` |
+| **Header** | `Content-Type: multipart/form-data` |
+| **Body (Form-Data)**| `file` (Binary image file, maksimal 5 MB) |
+| **Autentikasi** | `Authorization: Bearer <access_token>` |
+| **Role Izin** | **Admin**, **Coordinator** (Assignee tim tiket atau Aftersales pelapor) |
+
+Mengunggah file lampiran gambar baru ke dalam tiket. File akan dikonversi ke WebP dan disimpan ke object storage sebelum relasi database dibuat.
 
 #### Response Sukses: `201 Created`
-
 ```json
 {
   "success": true,
@@ -1991,42 +2364,74 @@ Maksimal **5 gambar per tiket**, **5 MB per gambar**, satu file per request. Bac
 }
 ```
 
-#### Contoh Error
+#### ❌ Skenario Error & Kode HTTP
+| Status Code | Label Error | Penyebab |
+|:---:|:---|:---|
+| `400` | **Bad Request** | Field `file` kosong, file bukan gambar, atau format file adalah `image/svg+xml`. |
+| `401` | **Unauthorized** | Header `Authorization` tidak dikirim atau access token expired. |
+| `403` | **Forbidden** | Pengguna bukan admin dan bukan bagian dari tim tiket (bukan assignee maupun pelapor aftersales). |
+| `404` | **Not Found** | Tiket dengan ID tersebut tidak ditemukan. |
+| `409` | **Conflict** | Tiket sudah mencapai kuota maksimal 5 lampiran gambar. |
+| `413` | **Payload Too Large** | Ukuran file yang diunggah melebihi batas 5 MB. |
+| `502` | **Bad Gateway** | Object storage gagal menyimpan objek gambar. |
+| `503` | **Service Unavailable** | Object storage (RustFS/S3) belum dikonfigurasi (`S3_BUCKET` kosong) atau server storage tidak dapat dihubungi. |
 
-| Status | Penyebab |
-|:---:|---|
-| `400` | Field `file` kosong, file bukan gambar, atau `image/svg+xml` |
-| `403` | Pengguna bukan bagian dari tim tiket |
-| `404` | Tiket tidak ditemukan |
-| `409` | Tiket sudah memiliki 5 lampiran |
-| `413` | Ukuran file melebihi 5 MB |
-| `502` | Object storage gagal menyimpan |
-| `503` | Object storage belum dikonfigurasi (`S3_BUCKET` kosong) |
+---
 
-#### `GET /tickets/:id/attachments`
+### `GET /tickets/:id/attachments/:attachmentId/content`
 
-Metadata seluruh lampiran, urut `uploadedAt` menaik. Response `200`:
+| Parameter | Spesifikasi |
+|:---|:---|
+| **Protokol** | **REST API** |
+| **HTTP Method** | `GET` |
+| **Endpoint Path** | `/tickets/:id/attachments/:attachmentId/content` |
+| **Autentikasi** | `Authorization: Bearer <access_token>` |
+| **Role Izin** | **Semua Role** (`admin`, `coordinator`, `viewer`) |
 
-```json
-{ "success": true, "message": "Daftar lampiran berhasil diambil", "data": { "attachments": [] } }
-```
+Mengunduh atau melakukan streaming binary raw data gambar lampiran dari Object Storage ke browser / client. Response header yang disertakan:
+* `Content-Type: image/webp`
+* `Cache-Control: private, max-age=300`
+* `Content-Length: <ukuran_byte>`
 
-#### `GET /tickets/:id/attachments/:attachmentId/content`
+#### Response Sukses: `200 OK`
+*Mengembalikan raw image binary stream.*
 
-Mengembalikan byte gambar dengan `Content-Type: image/webp`. `401` tanpa token, `404` bila lampiran bukan milik tiket tersebut.
+#### ❌ Skenario Error:
+* `401 Unauthorized`: Token tidak disertakan.
+* `404 Not Found`: Lampiran tidak ditemukan atau bukan milik tiket yang bersangkutan.
+* `502 Bad Gateway`: Gagal membaca stream gambar dari Object Storage.
+* `503 Service Unavailable`: Konfigurasi Object Storage belum diisi.
 
-#### `DELETE /tickets/:id/attachments/:attachmentId`
+---
 
-Hanya ADMIN dan COORDINATOR. `204 No Content` saat sukses, `403` untuk peran lain, `502` bila objek gagal dihapus dari storage.
+### `DELETE /tickets/:id/attachments/:attachmentId`
 
-Catatan: `GET /tickets/:id` menyertakan array `attachments` dengan bentuk objek yang sama seperti di atas.
+| Parameter | Spesifikasi |
+|:---|:---|
+| **Protokol** | **REST API** |
+| **HTTP Method** | `DELETE` |
+| **Endpoint Path** | `/tickets/:id/attachments/:attachmentId` |
+| **Autentikasi** | `Authorization: Bearer <access_token>` |
+| **Role Izin** | **Admin** dan **Coordinator** |
+
+Menghapus file gambar lampiran dari Object Storage sekaligus menghapus baris metadata dari database dan mencatat audit log.
+
+#### Response Sukses: `204 No Content`
+*(Empty response body)*
+
+#### ❌ Skenario Error:
+* `403 Forbidden`: Pengguna dengan peran `viewer` dilarang menghapus lampiran.
+* `404 Not Found`: ID tiket atau ID lampiran tidak ditemukan.
+* `502 Bad Gateway`: Objek gagal dihapus dari backend Object Storage.
+
+---
 
 ## 7. Ticket Management Module (`/ticket-management`)
 
 Modul operasional untuk mengelola alur penanganan tiket sesuai tanggung jawab peran dan divisi:
 * **Divisi Aftersales (`division: "after_sales"`)**: Menampilkan dan mengelola tiket berstatus **`open`** di mana dirinya tercatat sebagai penanggung jawab (`aftersales_user_id`).
-* **Divisi Software (`division: "software"`)**: Menampilkan dan mengelola tiket berstatus **`escalated`** di mana dirinya terdaftar aktif dalam daftar **`ticket_assignees`**.
-* **Admin (`role: "admin"`)**: Memiliki akses ke modul ini untuk melihat seluruh tiket yang belum terselesaikan (status **`open`** & **`escalated`**). Admin bertugas mengelola penugasan tim, mengalihkan penanggung jawab Aftersales, mengalihkan Leader Software, dan mengelola akses penugasan. Admin **dilarang memperbarui status/tindakan tiket secara langsung** (`PATCH /ticket-management/:id` hanya untuk `coordinator`).
+* **Divisi RnD / Software (`division: "rnd"` atau `"software"`)**: Menampilkan dan mengelola tiket berstatus **`escalated`** di mana dirinya terdaftar aktif dalam daftar **`ticket_assignees`**.
+* **Admin (`role: "admin"`)**: Memiliki akses ke modul ini untuk melihat seluruh tiket yang belum terselesaikan (status **`open`** & **`escalated`**). Admin bertugas mengelola penugasan tim, mengalihkan penanggung jawab Aftersales, mengalihkan Leader RnD/Software, dan mengelola akses penugasan. Admin **dilarang memperbarui status/tindakan tiket secara langsung** (`PATCH /ticket-management/:id` hanya untuk `coordinator`).
 * **Proteksi Akses**: Pengguna dengan peran `viewer` dilarang mengakses modul ini (`403 Forbidden`).
 
 ---
@@ -2038,17 +2443,20 @@ Modul operasional untuk mengelola alur penanganan tiket sesuai tanggung jawab pe
 | **Protokol** | **REST API** |
 | **HTTP Method** | `GET` |
 | **Endpoint Path** | `/ticket-management` |
-| **Query Params** | `?search=&severity=` |
+| **Query Params** | `?search=&severity=&countOnly=true&page=1&limit=50` |
 | **Autentikasi** | `Authorization: Bearer <access_token>` |
 | **Role Izin** | **`coordinator`** dan **`admin`** |
 
 Mengambil daftar tiket yang dikelola beserta ringkasan KPI dan metadata:
 * **Jika Coordinator Aftersales:** Tiket berstatus `open` yang menjadi tanggung jawabnya.
-* **Jika Coordinator Software:** Tiket berstatus `escalated` yang ditugaskan kepadanya.
+* **Jika Coordinator RnD / Software:** Tiket berstatus `escalated` yang ditugaskan kepadanya.
 * **Jika Admin:** Seluruh tiket aktif belum selesai (status `open` & `escalated`).
 
 * **`search`** *(String, opsional)*: Pencarian teks bebas pada ID tiket, unit, modul komponen, client, atau deskripsi kerusakan.
 * **`severity`** *(String enum, opsional)*: `"rendah"`, `"sedang"`, atau `"tinggi"`.
+* **`countOnly`** *(String Boolean, opsional, contoh `"true"`)*: Jika bernilai `"true"`, backend mengoptimalkan query dengan mengembalikan array `data: []` kosong dan hanya menghitung metrik KPI serta badge count total (`kpi.total`, `kpi.highSeverityCount`). Sangat efisien untuk polling badge counter sidebar frontend tanpa overhead transfer data tiket.
+* **`page`** *(Integer, opsional, default `1`)*: Halaman data paginasi tiket.
+* **`limit`** *(Integer, opsional, default `50`)*: Jumlah data per halaman.
 
 #### Response Sukses: `200 OK` (Contoh Akun Coordinator Software)
 ```json
@@ -2087,7 +2495,7 @@ Mengambil daftar tiket yang dikelola beserta ringkasan KPI dan metadata:
       "aftersalesUser": {
         "id": "981ba263-8103-4c76-a7ed-f241297e8b27",
         "name": "Bruno Aftersales",
-        "email": "bruno@erad.id",
+        "username": "bruno",
         "role": "coordinator",
         "division": "after_sales"
       },
@@ -2106,7 +2514,7 @@ Mengambil daftar tiket yang dikelola beserta ringkasan KPI dan metadata:
   ],
   "meta": {
     "total": 1,
-    "division": "software",
+    "division": "rnd",
     "role": "coordinator",
     "coordinatorName": "Siti Software Leader",
     "coordinatorEmail": "siti@erad.id"
@@ -2376,6 +2784,119 @@ Menghapus anggota tim software dari penugasan tiket.
   "success": false,
   "statusCode": 400,
   "message": "Leader tim tidak dapat langsung dihapus dari tim. Silakan alihkan tanggung jawab Leader ke anggota lain terlebih dahulu sebelum menghapus."
+---
+
+### `PATCH /ticket-management/:id/team` (Handover Tim Tanggung Jawab Utama)
+
+| Parameter | Spesifikasi |
+|:---|:---|
+| **Protokol** | **REST API** |
+| **HTTP Method** | `PATCH` |
+| **Endpoint Path** | `/ticket-management/:id/team` |
+| **Autentikasi** | `Authorization: Bearer <access_token>` |
+| **Role Izin** | **Leader Tim Tiket Saat Ini** atau **Admin** |
+
+Mengalihkan tanggung jawab utama (*primary responsible team*) penanganan tiket ke tim divisi RnD lain (misal: dari *RnD Software* ke *RnD Hardware*).
+* **Mekanisme Handover:**
+  1. Hanya **Leader dari tim yang saat ini memegang tiket** (`tickets.current_team.leader_user_id`) atau **Admin** yang memiliki wewenang memanggil endpoint ini. Anggota biasa atau leader tim luar dilarang (`403 Forbidden`).
+  2. Tim target (`teamId`) otomatis dimasukkan ke dalam daftar kolaborasi `ticket_teams` jika belum ada.
+  3. Kolom `tickets.current_team_id` diperbarui ke `teamId` baru, dan Leader dari tim target secara otomatis menjadi pemegang hak kelola tiket yang baru.
+  4. Snapshot baru di `ticket_history` dibuat dengan mencatat `team_id`, nomor versi dinaikkan, dan alasan handover dicatat pada kolom `notes`.
+
+#### Request Body
+```json
+{
+  "teamId": "916e5839-f26c-41b6-bd7c-98c7736030a7",
+  "notes": "Eskalasi dialihkan ke tim Hardware karena kendala fisik pada konektor sensor LiDAR"
+}
+```
+
+#### Response Sukses: `200 OK`
+```json
+{
+  "success": true,
+  "statusCode": 200,
+  "message": "Tanggung jawab tim berhasil dialihkan",
+  "data": {
+    "id": "ERR-20261009-0005",
+    "currentVersion": 5,
+    "status": "Escalated",
+    "currentTeamId": "916e5839-f26c-41b6-bd7c-98c7736030a7",
+    "currentTeam": {
+      "id": "916e5839-f26c-41b6-bd7c-98c7736030a7",
+      "name": "RnD - Hardware",
+      "leader": {
+        "id": "916e5839-f26c-41b6-bd7c-98c7736030a7",
+        "name": "Surya RnD 2",
+        "username": "surya"
+      }
+    }
+  }
+}
+```
+
+---
+
+### `POST /ticket-management/:id/teams` (Tambah Tim Kolaborasi Multi-Divisi)
+
+| Parameter | Spesifikasi |
+|:---|:---|
+| **Protokol** | **REST API** |
+| **HTTP Method** | `POST` |
+| **Endpoint Path** | `/ticket-management/:id/teams` |
+| **Autentikasi** | `Authorization: Bearer <access_token>` |
+| **Role Izin** | **Leader Tim Tiket Saat Ini** atau **Admin** |
+
+Menambahkan tim divisi RnD lain ke dalam tiket (`ticket_teams`) untuk investigasi / penanganan bersama (kolaborasi lintas divisi).
+* Seluruh anggota dari tim yang ditambahkan mendapatkan hak akses untuk memperbarui tindakan investigasi (`damage_description`, `action_taken`, `root_cause`, notes, status) dan mengunggah gambar lampiran ke tiket ini.
+
+#### Request Body
+```json
+{
+  "teamId": "916e5839-f26c-41b6-bd7c-98c7736030a7"
+}
+```
+
+#### Response Sukses: `201 Created`
+```json
+{
+  "success": true,
+  "statusCode": 201,
+  "message": "Tim 'RnD - Hardware' berhasil ditambahkan ke tiket",
+  "data": {
+    "ticketId": "ERR-20261009-0005",
+    "team": {
+      "id": "916e5839-f26c-41b6-bd7c-98c7736030a7",
+      "name": "RnD - Hardware",
+    }
+  }
+}
+```
+
+---
+
+### `DELETE /ticket-management/:id/teams/:teamId` (Hapus Tim Kolaborasi)
+
+| Parameter | Spesifikasi |
+|:---|:---|
+| **Protokol** | **REST API** |
+| **HTTP Method** | `DELETE` |
+| **Endpoint Path** | `/ticket-management/:id/teams/:teamId` |
+| **Autentikasi** | `Authorization: Bearer <access_token>` |
+| **Role Izin** | **Leader Tim Tiket Saat Ini** atau **Admin** |
+
+Menghapus keterlibatan tim kolaborasi dari tiket.
+* **Proteksi Primary Team:** Tim penanggung jawab utama (`tickets.current_team_id`) dilarang dihapus dari tiket secara langsung (`400 Bad Request`). Jika ingin mengganti tim utama, gunakan endpoint `PATCH /ticket-management/:id/team`.
+
+#### Response Sukses: `200 OK`
+```json
+{
+  "success": true,
+  "statusCode": 200,
+  "message": "Tim 'RnD - Hardware' berhasil dihapus dari tiket",
+  "data": {
+    "message": "Tim 'RnD - Hardware' berhasil dihapus dari tiket"
+  }
 }
 ```
 
@@ -2497,11 +3018,14 @@ Jika mengirim query filter `?timeRange=10tahun`:
 | Status Code | Label Standar | Penyebab & Skenario Error | Contoh Respons JSON |
 |:---:|:---|:---|:---|
 | `400` | **Bad Request** | Sintaks request salah, mencoba mengubah status user menjadi `invited`, menghapus Leader tim secara langsung, atau foreign key constraint melarang operasi. | `{"success":false,"statusCode":400,"message":"Leader tim tidak dapat langsung dihapus dari tim. Silakan alihkan tanggung jawab Leader ke anggota lain terlebih dahulu sebelum menghapus."}` |
-| `401` | **Unauthorized** | Token tidak dikirim, token expired, atau kata sandi login salah. | `{"success":false,"statusCode":401,"message":"Email atau password salah. Sisa kesempatan login: 3 kali."}` |
+| `401` | **Unauthorized** | Token tidak dikirim, token expired, atau kata sandi login salah. | `{"success":false,"statusCode":401,"message":"Username atau password salah. Sisa kesempatan login: 3 kali."}` |
 | `403` | **Forbidden** | Akun dinonaktifkan (`suspended`), peran pengguna tidak memiliki izin (misal Viewer mencoba tambah user atau akses manajemen tiket), atau tim software mencoba edit tiket non-escalated. | `{"success":false,"statusCode":403,"message":"Akses dilarang: Peran tidak memiliki izin yang cukup"}` |
 | `404` | **Not Found** | ID data atau endpoint URL tidak ditemukan. | `{"success":false,"statusCode":404,"message":"Tiket dengan ID tersebut tidak ditemukan"}` |
 | `409` | **Conflict** | Terjadi duplikasi data unik (email sudah terdaftar, telegramId sudah ada, tiket sudah diklaim oleh leader lain, atau anggota sudah terdaftar di tiket). | `{"success":false,"statusCode":409,"message":"Email sudah terdaftar. Silakan gunakan email lain."}` |
+| `413` | **Payload Too Large** | Ukuran file yang diunggah (misal lampiran gambar tiket) melebihi batas maksimal 5 MB. | `{"success":false,"statusCode":413,"message":"Ukuran gambar maksimal 5 MB"}` |
 | `422` | **Unprocessable Entity** | Validasi input skema Zod gagal (panjang kurang, format UUID salah, enum tidak cocok). | `{"success":false,"statusCode":422,"message":"Validation Error","details":[{"field":"status","message":"Status harus berupa open, escalated, atau solved"}]}` |
 | `423` | **Locked** | Akun terkunci sementara selama 15 menit akibat 5 kali percobaan login berturut-turut gagal. | `{"success":false,"statusCode":423,"message":"Akun Anda terkunci selama 15 menit karena 5 kali percobaan login gagal."}` |
 | `500` | **Internal Server Error** | Kesalahan sistem atau database yang tidak terduga pada server backend. | `{"success":false,"statusCode":500,"message":"Terjadi kesalahan internal pada server"}` |
+| `502` | **Bad Gateway** | Layanan pihak ketiga (seperti Object Storage atau Redis downstream) mengalami kegagalan transmisi data atau stream error. | `{"success":false,"statusCode":502,"message":"Gagal menyimpan gambar ke penyimpanan"}` |
+| `503` | **Service Unavailable** | Layanan pendukung belum terkonfigurasi (misal bucket RustFS/S3 belum diisi di `.env`) atau server penyimpanan sedang tidak aktif. | `{"success":false,"statusCode":503,"message":"Penyimpanan lampiran belum dikonfigurasi"}` |
 

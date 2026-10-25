@@ -8,7 +8,7 @@ const PAGE_META = {
   "/": { title: "Ringkasan", subtitle: "Ringkasan dan status keseluruhan sistem aftersales" },
   "/analitik-error": { title: "Analitik Error", subtitle: "Distribusi kegagalan per component, failure code, dan unit" },
   "/daftar-tiket": { title: "Daftar Tiket", subtitle: "Telusuri, filter, dan tindak lanjuti tiket error" },
-  "/manajemen-tiket": { title: "Manajemen Tiket", subtitle: "Kelola dan perbarui tiket open aftersales & tiket eskalasi software" },
+  "/manajemen-tiket": { title: "Manajemen Tiket", subtitle: "Kelola dan perbarui tiket open aftersales & tiket eskalasi RnD" },
   "/master-data": { title: "Master Data", subtitle: "Pengelolaan data referensi dan konfigurasi sistem" },
   "/pengguna-whitelist": { title: "Pengguna & Whitelist", subtitle: "Akun dashboard dan pengguna bot Telegram" },
   "/audit-log": { title: "Audit Log", subtitle: "Jejak seluruh perubahan data pada sistem" },

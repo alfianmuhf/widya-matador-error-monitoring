@@ -173,14 +173,14 @@ export const recordLog = async ({
 
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-    // Jika finalActorUserId ada tetapi resolvedActor belum berupa email
-    if (finalActorUserId && (!resolvedActor || !resolvedActor.includes("@"))) {
+    // Jika finalActorUserId ada tetapi resolvedActor belum terisi
+    if (finalActorUserId && !resolvedActor) {
       try {
         const u = await prisma.users.findUnique({
           where: { id: finalActorUserId },
-          select: { email: true, name: true },
+          select: { username: true, name: true },
         });
-        if (u?.email) resolvedActor = u.email;
+        if (u?.username) resolvedActor = u.username;
       } catch (e) {
         // ignore
       }
@@ -281,7 +281,7 @@ export const getAuditLogs = async (query = {}) => {
       { entity_type: { contains: s, mode: "insensitive" } },
       { entity_id: { contains: s, mode: "insensitive" } },
       { action: { contains: s, mode: "insensitive" } },
-      { user: { email: { contains: s, mode: "insensitive" } } },
+      { user: { username: { contains: s, mode: "insensitive" } } },
       { user: { name: { contains: s, mode: "insensitive" } } },
     ];
   }

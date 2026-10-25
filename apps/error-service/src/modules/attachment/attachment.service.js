@@ -14,6 +14,22 @@ export const formatAttachment = (a) => ({
   mimeType: a.mime_type,
   size: a.file_size,
   uploadedAt: a.uploaded_at,
+  uploadedBy: a.uploaded_by_user
+    ? {
+        type: "user",
+        id: a.uploaded_by_user.id,
+        name: a.uploaded_by_user.name,
+        username: a.uploaded_by_user.username,
+        email: a.uploaded_by_user.username,
+      }
+    : a.uploaded_by_telegram
+    ? {
+        type: "telegram",
+        id: a.uploaded_by_telegram.id,
+        name: a.uploaded_by_telegram.full_name || a.uploaded_by_telegram.username,
+        username: a.uploaded_by_telegram.username,
+      }
+    : null,
 });
 
 const findTicket = async (ticketId) => {
@@ -22,7 +38,26 @@ const findTicket = async (ticketId) => {
     select: {
       id: true,
       aftersales_user_id: true,
-      ticket_assignees: { select: { user_id: true } },
+      current_team_id: true,
+      current_team: {
+        select: {
+          id: true,
+          leader_user_id: true,
+          members: { select: { user_id: true } },
+        },
+      },
+      ticket_teams: {
+        select: {
+          team_id: true,
+          team: {
+            select: {
+              id: true,
+              leader_user_id: true,
+              members: { select: { user_id: true } },
+            },
+          },
+        },
+      },
     },
   });
 
@@ -39,14 +74,24 @@ const assertCanUpload = (ticket, actor) => {
   }
 
   const role = (actor.role || "").toLowerCase();
-  if (role === "admin" || role === "coordinator") return;
+  if (role === "admin") return;
 
-  const isAssignee = ticket.ticket_assignees.some((a) => a.user_id === actor.id);
   const isAftersales = ticket.aftersales_user_id === actor.id;
 
-  if (isAssignee || isAftersales) return;
+  const isCurrentTeamLeaderOrMember =
+    ticket.current_team &&
+    (ticket.current_team.leader_user_id === actor.id ||
+      ticket.current_team.members.some((m) => m.user_id === actor.id));
 
-  throw createError(403, "Akses ditolak: hanya tim tiket yang dapat mengunggah lampiran");
+  const isAssignedTeamLeaderOrMember = (ticket.ticket_teams || []).some(
+    (tt) =>
+      tt.team?.leader_user_id === actor.id ||
+      tt.team?.members.some((m) => m.user_id === actor.id)
+  );
+
+  if (isAftersales || isCurrentTeamLeaderOrMember || isAssignedTeamLeaderOrMember) return;
+
+  throw createError(403, "Akses ditolak: hanya tim yang ditugaskan pada tiket yang dapat mengunggah lampiran");
 };
 
 const assertCanDelete = (actor) => {
@@ -77,6 +122,14 @@ export const listAttachments = async (ticketId) => {
 
   const rows = await prisma.ticket_attachments.findMany({
     where: { ticket_id: ticketId },
+    include: {
+      uploaded_by_user: {
+        select: { id: true, name: true, username: true },
+      },
+      uploaded_by_telegram: {
+        select: { id: true, username: true, full_name: true },
+      },
+    },
     orderBy: { uploaded_at: "asc" },
   });
 
@@ -130,11 +183,21 @@ export const uploadAttachment = async (ticketId, file, actor) => {
       file_name: sanitizeFileName(file.originalname),
       mime_type: "image/webp",
       file_size: webp.size,
+      uploaded_by_user_id: actor.id || null,
+      uploaded_by_telegram_user_id: actor.telegram_user_id || actor.telegramUserId || null,
+    },
+    include: {
+      uploaded_by_user: {
+        select: { id: true, name: true, username: true },
+      },
+      uploaded_by_telegram: {
+        select: { id: true, username: true, full_name: true },
+      },
     },
   });
 
   await recordLog({
-    actor: actor.email || actor.name || "Sistem",
+    actor: actor.username || actor.name || actor.email || "Sistem",
     actorUserId: actor.id || null,
     action: "CREATE",
     entityType: "TicketAttachment",

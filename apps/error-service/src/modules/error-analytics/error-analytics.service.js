@@ -1,9 +1,35 @@
+import { Prisma } from "@prisma/client";
 import prisma from "../../config/prisma.js";
-import { findTicketIdsByCurrentHistory } from "../ticket/ticket.repository.js";
+import { getCache, setCache } from "../../config/redis.js";
 
 /**
- * Service to aggregate and calculate Error Analytics metrics
- * Supports multi-dimensional filters: timeRange, componentId, clientId, locationId, status
+ * Build dynamic Prisma.sql conditions for Error Analytics SQL aggregation queries
+ */
+function buildConditions({ startDate, componentId, clientId, locationId, status }) {
+  const conditions = [Prisma.sql`1=1`];
+
+  if (startDate) {
+    conditions.push(Prisma.sql`t.open_at >= ${startDate}`);
+  }
+  if (status && status !== "all") {
+    const st = status.toLowerCase() === "monitor" ? "escalated" : status.toLowerCase();
+    conditions.push(Prisma.sql`th.status = ${st}::ticket_status`);
+  }
+  if (componentId && componentId !== "all") {
+    conditions.push(Prisma.sql`fc.component_id = ${componentId}::uuid`);
+  }
+  if (clientId && clientId !== "all") {
+    conditions.push(Prisma.sql`a.client_id = ${clientId}::uuid`);
+  }
+  if (locationId && locationId !== "all") {
+    conditions.push(Prisma.sql`a.location_id = ${locationId}::uuid`);
+  }
+
+  return Prisma.join(conditions, " AND ");
+}
+
+/**
+ * Service to aggregate and calculate Error Analytics metrics using PostgreSQL aggregations and Redis caching
  */
 export async function getErrorAnalyticsData(query = {}) {
   const {
@@ -13,6 +39,13 @@ export async function getErrorAnalyticsData(query = {}) {
     locationId,
     status,
   } = query;
+
+  // 1. Check Redis Cache
+  const cacheKey = `analytics:${timeRange}:${componentId || "all"}:${clientId || "all"}:${locationId || "all"}:${status || "all"}`;
+  const cachedData = await getCache(cacheKey);
+  if (cachedData) {
+    return cachedData;
+  }
 
   const now = new Date();
   let startDate = null;
@@ -27,192 +60,112 @@ export async function getErrorAnalyticsData(query = {}) {
     startDate = null;
   }
 
-  // 1. Build Where Clause
-  const where = {};
-  if (startDate) {
-    where.open_at = { gte: startDate };
-  }
-  if (status && status !== "all") {
-    const st = status.toLowerCase() === "monitor" ? "escalated" : status.toLowerCase();
-    const matchingIds = await findTicketIdsByCurrentHistory({ status: st });
-    if (matchingIds) {
-      where.id = { in: matchingIds };
-    }
-  }
-  if (componentId && componentId !== "all") {
-    where.failure_code = { component_id: componentId };
-  }
-  if ((clientId && clientId !== "all") || (locationId && locationId !== "all")) {
-    where.asset = {};
-    if (clientId && clientId !== "all") {
-      where.asset.client_id = clientId;
-    }
-    if (locationId && locationId !== "all") {
-      where.asset.location_id = locationId;
-    }
-  }
-
-  // 2. Fetch Tickets with relevant relations
-  const tickets = await prisma.tickets.findMany({
-    where,
-    include: {
-      failure_code: {
-        select: {
-          id: true,
-          code: true,
-          name: true,
-          description: true,
-          component: {
-            select: {
-              id: true,
-              name: true,
-              prefix: true,
-            },
-          },
-        },
-      },
-      asset: {
-        select: {
-          unit_code: true,
-          client: {
-            select: {
-              id: true,
-              name: true,
-            },
-          },
-          location: {
-            select: {
-              id: true,
-              name: true,
-            },
-          },
-        },
-      },
-      ticket_history: {
-        orderBy: { version: "desc" },
-        select: {
-          version: true,
-          status: true,
-        },
-      },
-    },
-    orderBy: {
-      open_at: "asc",
-    },
+  const whereSql = buildConditions({
+    startDate,
+    componentId,
+    clientId,
+    locationId,
+    status,
   });
 
-  const totalTickets = tickets.length;
+  // 2. Run Database Aggregations in parallel
+  const [
+    totalRes,
+    componentRows,
+    paretoRows,
+    clientRows,
+    topUnitsRes,
+    topCompsRes,
+    filterComponents,
+    filterClients,
+    filterLocations,
+  ] = await Promise.all([
+    // Total tickets count
+    prisma.$queryRaw(Prisma.sql`
+      SELECT COUNT(t.id)::int as total
+      FROM tickets t
+      JOIN ticket_history th ON th.ticket_id = t.id AND th.version = t.current_version
+      JOIN failure_codes fc ON fc.id = t.failure_code_id
+      JOIN assets a ON a.id = t.asset_id
+      WHERE ${whereSql}
+    `),
 
-  // 3. Dataset 1: Tiket per component
-  const componentMap = new Map();
-  for (const t of tickets) {
-    const compName = t.failure_code?.component?.name || "Lain-Lain";
-    const compId = t.failure_code?.component?.id || null;
-    if (!componentMap.has(compName)) {
-      componentMap.set(compName, { componentId: compId, name: compName, count: 0 });
-    }
-    componentMap.get(compName).count++;
-  }
+    // Dataset 1: Tickets per component
+    prisma.$queryRaw(Prisma.sql`
+      SELECT 
+        c.id as "componentId",
+        c.name as name,
+        COUNT(t.id)::int as count
+      FROM tickets t
+      JOIN ticket_history th ON th.ticket_id = t.id AND th.version = t.current_version
+      JOIN failure_codes fc ON fc.id = t.failure_code_id
+      JOIN components c ON c.id = fc.component_id
+      JOIN assets a ON a.id = t.asset_id
+      WHERE ${whereSql}
+      GROUP BY c.id, c.name
+      ORDER BY count ASC
+    `),
 
-  const ticketsPerComponent = Array.from(componentMap.values()).sort(
-    (a, b) => a.count - b.count
-  );
+    // Dataset 2: Pareto failure code
+    prisma.$queryRaw(Prisma.sql`
+      SELECT 
+        fc.code,
+        COALESCE(fc.description, fc.name, 'Kerusakan tidak terdefinisi') as description,
+        COUNT(t.id)::int as count
+      FROM tickets t
+      JOIN ticket_history th ON th.ticket_id = t.id AND th.version = t.current_version
+      JOIN failure_codes fc ON fc.id = t.failure_code_id
+      JOIN assets a ON a.id = t.asset_id
+      WHERE ${whereSql}
+      GROUP BY fc.code, fc.description, fc.name
+      ORDER BY count DESC
+    `),
 
-  // 4. Dataset 2: Pareto failure code
-  const failureCodeMap = new Map();
-  for (const t of tickets) {
-    const code = t.failure_code?.code || "UNKNOWN";
-    const description = t.failure_code?.description || t.failure_code?.name || "Kerusakan tidak terdefinisi";
-    if (!failureCodeMap.has(code)) {
-      failureCodeMap.set(code, { code, description, count: 0 });
-    }
-    failureCodeMap.get(code).count++;
-  }
+    // Dataset 3: Sebaran per client (top 8)
+    prisma.$queryRaw(Prisma.sql`
+      SELECT 
+        cl.id as "clientId",
+        cl.name as "clientName",
+        COUNT(t.id)::int as count
+      FROM tickets t
+      JOIN ticket_history th ON th.ticket_id = t.id AND th.version = t.current_version
+      JOIN failure_codes fc ON fc.id = t.failure_code_id
+      JOIN assets a ON a.id = t.asset_id
+      JOIN clients cl ON cl.id = a.client_id
+      WHERE ${whereSql}
+      GROUP BY cl.id, cl.name
+      ORDER BY count DESC
+      LIMIT 8
+    `),
 
-  const sortedFailureCodes = Array.from(failureCodeMap.values()).sort(
-    (a, b) => b.count - a.count
-  );
+    // Heatmap top units (top 8)
+    prisma.$queryRaw(Prisma.sql`
+      SELECT a.unit_code, COUNT(t.id)::int as count
+      FROM tickets t
+      JOIN ticket_history th ON th.ticket_id = t.id AND th.version = t.current_version
+      JOIN failure_codes fc ON fc.id = t.failure_code_id
+      JOIN assets a ON a.id = t.asset_id
+      WHERE ${whereSql}
+      GROUP BY a.unit_code
+      ORDER BY count DESC
+      LIMIT 8
+    `),
 
-  let runningCount = 0;
-  const paretoFailureCode = sortedFailureCodes.map((item) => {
-    runningCount += item.count;
-    const cumulativePercent =
-      totalTickets > 0
-        ? Number(((runningCount / totalTickets) * 100).toFixed(1))
-        : 0;
-    return {
-      code: item.code,
-      description: item.description,
-      count: item.count,
-      cumulativePercent,
-    };
-  });
+    // Heatmap top components (top 6)
+    prisma.$queryRaw(Prisma.sql`
+      SELECT c.name, COUNT(t.id)::int as count
+      FROM tickets t
+      JOIN ticket_history th ON th.ticket_id = t.id AND th.version = t.current_version
+      JOIN failure_codes fc ON fc.id = t.failure_code_id
+      JOIN components c ON c.id = fc.component_id
+      JOIN assets a ON a.id = t.asset_id
+      WHERE ${whereSql}
+      GROUP BY c.name
+      ORDER BY count DESC
+      LIMIT 6
+    `),
 
-  // 5. Dataset 3: Sebaran per client (top 8)
-  const clientMap = new Map();
-  for (const t of tickets) {
-    const clientName = t.asset?.client?.name || "Klien Umum / Tidak Terdaftar";
-    const clId = t.asset?.client?.id || null;
-    if (!clientMap.has(clientName)) {
-      clientMap.set(clientName, { clientId: clId, clientName, count: 0 });
-    }
-    clientMap.get(clientName).count++;
-  }
-
-  const sebaranPerClient = Array.from(clientMap.values())
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 8);
-
-  // 6. Dataset 4: Peta panas unit × component (Heatmap)
-  const unitCountMap = new Map();
-  for (const t of tickets) {
-    const u = t.asset?.unit_code;
-    if (u) {
-      unitCountMap.set(u, (unitCountMap.get(u) || 0) + 1);
-    }
-  }
-
-  const topUnits = Array.from(unitCountMap.entries())
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 8)
-    .map(([unitCode]) => unitCode);
-
-  const compCountMap = new Map();
-  for (const t of tickets) {
-    const cName = t.failure_code?.component?.name;
-    if (cName) {
-      compCountMap.set(cName, (compCountMap.get(cName) || 0) + 1);
-    }
-  }
-
-  const topHeatmapComponents = Array.from(compCountMap.entries())
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 6)
-    .map(([name]) => name);
-
-  const heatmapUnits = topUnits;
-  const heatmapComponents = topHeatmapComponents;
-
-  const matrixCounts = {};
-  for (const t of tickets) {
-    const u = t.asset?.unit_code;
-    const c = t.failure_code?.component?.name;
-    if (u && c && heatmapUnits.includes(u) && heatmapComponents.includes(c)) {
-      const key = `${u}:::${c}`;
-      matrixCounts[key] = (matrixCounts[key] || 0) + 1;
-    }
-  }
-
-  const heatmapData = [];
-  heatmapUnits.forEach((unit, unitIdx) => {
-    heatmapComponents.forEach((comp, compIdx) => {
-      const count = matrixCounts[`${unit}:::${comp}`] || 0;
-      heatmapData.push([compIdx, unitIdx, count]);
-    });
-  });
-
-  // 7. Filter Options
-  const [components, clients, locations] = await Promise.all([
+    // Filter Options
     prisma.components.findMany({
       where: { is_active: true },
       select: { id: true, name: true, prefix: true },
@@ -230,7 +183,72 @@ export async function getErrorAnalyticsData(query = {}) {
     }),
   ]);
 
-  return {
+  const totalTickets = Number(totalRes[0]?.total || 0);
+
+  // 3. Dataset 1: Tickets per component
+  const ticketsPerComponent = componentRows.map((r) => ({
+    componentId: r.componentId,
+    name: r.name,
+    count: Number(r.count),
+  }));
+
+  // 4. Dataset 2: Pareto failure code calculation
+  let runningCount = 0;
+  const paretoFailureCode = paretoRows.map((item) => {
+    const c = Number(item.count);
+    runningCount += c;
+    const cumulativePercent =
+      totalTickets > 0
+        ? Number(((runningCount / totalTickets) * 100).toFixed(1))
+        : 0;
+    return {
+      code: item.code,
+      description: item.description,
+      count: c,
+      cumulativePercent,
+    };
+  });
+
+  // 5. Dataset 3: Sebaran per client (top 8)
+  const sebaranPerClient = clientRows.map((r) => ({
+    clientId: r.clientId,
+    clientName: r.clientName,
+    count: Number(r.count),
+  }));
+
+  // 6. Dataset 4: Heatmap unit x component
+  const heatmapUnits = topUnitsRes.map((u) => u.unit_code);
+  const heatmapComponents = topCompsRes.map((c) => c.name);
+
+  let matrixCounts = {};
+  if (heatmapUnits.length > 0 && heatmapComponents.length > 0) {
+    const matrixRows = await prisma.$queryRaw(Prisma.sql`
+      SELECT a.unit_code, c.name as comp_name, COUNT(t.id)::int as count
+      FROM tickets t
+      JOIN ticket_history th ON th.ticket_id = t.id AND th.version = t.current_version
+      JOIN failure_codes fc ON fc.id = t.failure_code_id
+      JOIN components c ON c.id = fc.component_id
+      JOIN assets a ON a.id = t.asset_id
+      WHERE ${whereSql}
+        AND a.unit_code IN (${Prisma.join(heatmapUnits)})
+        AND c.name IN (${Prisma.join(heatmapComponents)})
+      GROUP BY a.unit_code, c.name
+    `);
+
+    for (const row of matrixRows) {
+      matrixCounts[`${row.unit_code}:::${row.comp_name}`] = Number(row.count);
+    }
+  }
+
+  const heatmapData = [];
+  heatmapUnits.forEach((unit, unitIdx) => {
+    heatmapComponents.forEach((comp, compIdx) => {
+      const count = matrixCounts[`${unit}:::${comp}`] || 0;
+      heatmapData.push([compIdx, unitIdx, count]);
+    });
+  });
+
+  const result = {
     totalTickets,
     ticketsPerComponent,
     paretoFailureCode,
@@ -241,13 +259,13 @@ export async function getErrorAnalyticsData(query = {}) {
       data: heatmapData,
     },
     filterOptions: {
-      components: components.map((c) => ({
+      components: filterComponents.map((c) => ({
         id: c.id,
         label: `${c.prefix ? c.prefix + " - " : ""}${c.name}`,
         name: c.name,
       })),
-      clients: clients.map((c) => ({ id: c.id, label: c.name })),
-      locations: locations.map((l) => ({ id: l.id, label: l.name })),
+      clients: filterClients.map((c) => ({ id: c.id, label: c.name })),
+      locations: filterLocations.map((l) => ({ id: l.id, label: l.name })),
       statuses: [
         { value: "all", label: "Semua status" },
         { value: "open", label: "Open" },
@@ -256,4 +274,9 @@ export async function getErrorAnalyticsData(query = {}) {
       ],
     },
   };
+
+  // Cache in Redis for 60 seconds
+  await setCache(cacheKey, result, 60);
+
+  return result;
 }

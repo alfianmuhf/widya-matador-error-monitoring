@@ -9,9 +9,12 @@ function UserModalContent({ onClose, user, onSuccess }) {
   const originalStatus = (user?.status || "").toLowerCase();
   const [formData, setFormData] = useState(() => ({
     name: user?.name || "",
-    email: user?.email || "",
+    username: user?.username || user?.email || "",
     role: (user?.role || "viewer").toLowerCase(),
-    division: (user?.division || "none").toLowerCase(),
+    division: (() => {
+      const d = (user?.division || "none").toLowerCase();
+      return d === "software" ? "rnd" : d;
+    })(),
     status: originalStatus || "active",
     telegram_user_id: user?.telegram_user_id || user?.telegram_user?.id || "",
   }));
@@ -60,7 +63,7 @@ function UserModalContent({ onClose, user, onSuccess }) {
       if (isEdit) {
         const payload = {
           name: formData.name,
-          email: formData.email,
+          username: formData.username,
           role: (formData.role || "viewer").toLowerCase(),
           division: (formData.division || "none").toLowerCase(),
           telegram_user_id: formData.telegram_user_id ? formData.telegram_user_id : null,
@@ -91,7 +94,7 @@ function UserModalContent({ onClose, user, onSuccess }) {
       } else {
         const payload = {
           name: formData.name,
-          email: formData.email,
+          username: formData.username,
           role: (formData.role || "viewer").toLowerCase(),
           division: (formData.division || "none").toLowerCase(),
           telegram_user_id: formData.telegram_user_id ? formData.telegram_user_id : null,
@@ -113,7 +116,7 @@ function UserModalContent({ onClose, user, onSuccess }) {
 
         const initialPassword = res.data?.data?.initialPassword;
         setCreatedInfo({
-          email: formData.email,
+          username: formData.username,
           initialPassword,
         });
         onSuccess();
@@ -170,8 +173,8 @@ function UserModalContent({ onClose, user, onSuccess }) {
           }}
         >
           <div style={{ marginBottom: "6px" }}>
-            <span style={{ color: "var(--text-muted)" }}>Email: </span>
-            <strong>{createdInfo.email}</strong>
+            <span style={{ color: "var(--text-muted)" }}>Username: </span>
+            <strong>{createdInfo.username}</strong>
           </div>
           <div>
             <span style={{ color: "var(--text-muted)" }}>Password Awal: </span>
@@ -241,31 +244,31 @@ function UserModalContent({ onClose, user, onSuccess }) {
         {errors.name && <span style={{ color: "#ef4444", fontSize: "12px", marginTop: "4px", display: "block" }}>{errors.name}</span>}
       </div>
 
-      {/* Email */}
+      {/* Username */}
       <div>
         <label style={{ display: "block", fontSize: "var(--text-sm)", fontWeight: 600, marginBottom: "6px" }}>
-          Email
+          Username
         </label>
         <input
-          type="email"
-          name="email"
-          value={formData.email}
+          type="text"
+          name="username"
+          value={formData.username}
           onChange={handleChange}
-          placeholder="Contoh: bruno@erad.id"
+          placeholder="Contoh: bruno"
           style={{
             width: "100%",
             padding: "9px 12px",
             borderRadius: "8px",
-            border: `1px solid ${errors.email ? "#ef4444" : "var(--border-light)"}`,
+            border: `1px solid ${errors.username ? "#ef4444" : "var(--border-light)"}`,
             outline: "none",
             fontSize: "var(--text-sm)",
           }}
           required
         />
-        {errors.email && <span style={{ color: "#ef4444", fontSize: "12px", marginTop: "4px", display: "block" }}>{errors.email}</span>}
+        {errors.username && <span style={{ color: "#ef4444", fontSize: "12px", marginTop: "4px", display: "block" }}>{errors.username}</span>}
         {!isEdit && (
           <small style={{ color: "var(--text-muted)", fontSize: "12px", marginTop: "4px", display: "block" }}>
-            Password awal otomatis dibuat dari nama email + <code>12345</code> (contoh: <code>bruno12345</code>)
+            Password awal otomatis dibuat dari username + <code>12345</code> (contoh: <code>bruno12345</code>)
           </small>
         )}
       </div>
@@ -317,7 +320,7 @@ function UserModalContent({ onClose, user, onSuccess }) {
         >
           <option value="none">Tidak Ada (None)</option>
           <option value="after_sales">After Sales</option>
-          <option value="software">Software</option>
+          <option value="rnd">RnD</option>
         </select>
         {errors.division && <span style={{ color: "#ef4444", fontSize: "12px", marginTop: "4px", display: "block" }}>{errors.division}</span>}
       </div>

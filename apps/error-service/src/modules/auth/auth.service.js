@@ -17,16 +17,17 @@ const LOCKOUT_DURATION_MINUTES = 15;
 /**
  * Register a new user
  */
-export const register = async ({ email, password, name, role, division }) => {
-  const existingUser = await authRepository.findUserByEmail(email);
+export const register = async ({ username, email, password, name, role, division }) => {
+  const targetUsername = (username || email || "").trim();
+  const existingUser = await authRepository.findUserByUsername(targetUsername);
   if (existingUser) {
-    throw createError(409, "Email sudah terdaftar. Silakan gunakan email lain.");
+    throw createError(409, "Username sudah terdaftar. Silakan gunakan username lain.");
   }
 
   const hashedPassword = await hashPassword(password);
 
   const newUser = await authRepository.createUser({
-    email,
+    username: targetUsername,
     password_hash: hashedPassword,
     name,
     role: role ? role.toLowerCase() : "viewer",
@@ -36,16 +37,16 @@ export const register = async ({ email, password, name, role, division }) => {
   });
 
   await recordLog({
-    actor: newUser.email,
+    actor: newUser.username,
     actorUserId: newUser.id,
     action: "CREATE",
     deleteAction: "NONE",
     entityType: "User",
     entityId: newUser.id,
     details: {
-      identifier: newUser.email,
+      identifier: newUser.username,
       changeSummary: `Registrasi akun baru '${newUser.name}' (${newUser.role})`,
-      email: newUser.email,
+      username: newUser.username,
       name: newUser.name,
       role: newUser.role,
       division: newUser.division,
@@ -59,11 +60,12 @@ export const register = async ({ email, password, name, role, division }) => {
  * Authenticate user and issue access + refresh tokens
  * Includes Account Lockout Protection (FR-SEC-01/02)
  */
-export const login = async ({ email, password }, { userAgent, ipAddress } = {}) => {
-  const user = await authRepository.findUserByEmail(email);
+export const login = async ({ username, email, password }, { userAgent, ipAddress } = {}) => {
+  const targetUsername = (username || email || "").trim();
+  const user = await authRepository.findUserByUsername(targetUsername);
 
   if (!user) {
-    throw createError(401, "Email atau password salah");
+    throw createError(401, "Username atau password salah");
   }
 
   // 1. Check if account is currently locked
@@ -107,7 +109,7 @@ export const login = async ({ email, password }, { userAgent, ipAddress } = {}) 
       const remainingAttempts = MAX_FAILED_ATTEMPTS - currentAttempts;
       throw createError(
         401,
-        `Email atau password salah. Sisa kesempatan login: ${remainingAttempts} kali.`
+        `Username atau password salah. Sisa kesempatan login: ${remainingAttempts} kali.`
       );
     }
   }
@@ -118,7 +120,7 @@ export const login = async ({ email, password }, { userAgent, ipAddress } = {}) 
   // 5. Issue Token Pair
   const accessTokenPayload = {
     id: user.id,
-    email: user.email,
+    username: user.username,
     role: user.role,
     division: user.division,
   };
@@ -139,7 +141,7 @@ export const login = async ({ email, password }, { userAgent, ipAddress } = {}) 
   return {
     user: {
       id: user.id,
-      email: user.email,
+      username: user.username,
       name: user.name,
       role: user.role,
       division: user.division,
@@ -194,7 +196,7 @@ export const refreshToken = async (oldToken, { userAgent, ipAddress } = {}) => {
       if (latestToken && user && (status === "active" || status === "invited")) {
         const accessTokenPayload = {
           id: user.id,
-          email: user.email,
+          username: user.username,
           role: user.role,
           division: user.division,
         };
@@ -203,7 +205,7 @@ export const refreshToken = async (oldToken, { userAgent, ipAddress } = {}) => {
         return {
           user: {
             id: user.id,
-            email: user.email,
+            username: user.username,
             name: user.name,
             role: user.role,
             division: user.division,
@@ -243,7 +245,7 @@ export const refreshToken = async (oldToken, { userAgent, ipAddress } = {}) => {
   // 7. Generate new token pair
   const accessTokenPayload = {
     id: user.id,
-    email: user.email,
+    username: user.username,
     role: user.role,
     division: user.division,
   };
@@ -264,7 +266,7 @@ export const refreshToken = async (oldToken, { userAgent, ipAddress } = {}) => {
   return {
     user: {
       id: user.id,
-      email: user.email,
+      username: user.username,
       name: user.name,
       role: user.role,
       division: user.division,
@@ -351,7 +353,7 @@ export const changePassword = async (userId, { currentPassword, newPassword }, m
   // 6. Generate fresh active session token pair for current device
   const accessTokenPayload = {
     id: updatedUser.id,
-    email: updatedUser.email,
+    username: updatedUser.username,
     role: updatedUser.role,
     division: updatedUser.division,
   };
@@ -369,14 +371,14 @@ export const changePassword = async (userId, { currentPassword, newPassword }, m
   });
 
   await recordLog({
-    actor: updatedUser.email || updatedUser.name || "User",
+    actor: updatedUser.username || updatedUser.name || "User",
     actorUserId: updatedUser.id,
     action: "UPDATE",
     deleteAction: "NONE",
     entityType: "User",
     entityId: updatedUser.id,
     details: {
-      identifier: updatedUser.email,
+      identifier: updatedUser.username,
       changeSummary: "Ubah kata sandi akun pengguna",
       action: "change_password",
     },

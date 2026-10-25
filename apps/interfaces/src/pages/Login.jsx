@@ -7,7 +7,7 @@ export default function Login() {
   const { login } = useAuth();
   const navigate = useNavigate();
 
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState({});
@@ -15,10 +15,10 @@ export default function Login() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const result = loginSchema.safeParse({ email, password });
+    const result = loginSchema.safeParse({ username, password });
     if (!result.success) {
       const f = result.error.flatten().fieldErrors;
-      setErrors({ email: f.email?.[0], password: f.password?.[0] });
+      setErrors({ username: f.username?.[0], password: f.password?.[0] });
       return;
     }
 
@@ -26,7 +26,7 @@ export default function Login() {
     setLoading(true);
 
     try {
-      await login(email, password);
+      await login(username, password);
       navigate("/", { replace: true });
     } catch (error) {
       const status = error.response?.status;
@@ -42,7 +42,7 @@ export default function Login() {
           setErrors({ form: "Validasi gagal, periksa kembali format data yang dimasukkan." });
         }
       } else if (status === 401) {
-        setErrors({ form: "Email atau kata sandi tidak sesuai. Silakan coba lagi." });
+        setErrors({ form: "Username atau kata sandi tidak sesuai. Silakan coba lagi." });
       } else {
         setErrors({ form: error.response?.data?.message || "Terjadi kendala koneksi ke server. Coba beberapa saat lagi." });
       }
@@ -158,7 +158,7 @@ export default function Login() {
                 lineHeight: 1.4,
               }}
             >
-              Gunakan email dan kata sandi yang telah terdaftar di sistem.
+              Gunakan username dan kata sandi yang telah terdaftar di sistem.
             </p>
           </div>
 
@@ -197,10 +197,10 @@ export default function Login() {
           )}
 
           <form onSubmit={handleSubmit} noValidate>
-            {/* Email Field */}
+            {/* Username Field */}
             <div style={{ marginBottom: "18px" }}>
               <label
-                htmlFor="email"
+                htmlFor="username"
                 style={{
                   display: "block",
                   fontSize: "0.825rem",
@@ -209,37 +209,37 @@ export default function Login() {
                   marginBottom: "8px",
                 }}
               >
-                Email
+                Username
               </label>
               <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
                 <div
                   style={{
                     position: "absolute",
                     left: "14px",
-                    color: errors.email ? "#ef4444" : "#94a3b8",
+                    color: errors.username ? "#ef4444" : "#94a3b8",
                     display: "flex",
                     alignItems: "center",
                     pointerEvents: "none",
                   }}
                 >
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <rect width="20" height="16" x="2" y="4" rx="2" />
-                    <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
+                    <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+                    <circle cx="12" cy="7" r="4" />
                   </svg>
                 </div>
 
                 <input
-                  id="email"
-                  type="email"
-                  value={email}
-                  autoComplete="email"
-                  placeholder="admin@widya.com"
-                  onChange={(e) => setEmail(e.target.value)}
+                  id="username"
+                  type="text"
+                  value={username}
+                  autoComplete="username"
+                  placeholder="admin"
+                  onChange={(e) => setUsername(e.target.value)}
                   style={{
                     width: "100%",
                     padding: "11px 14px 11px 42px",
                     borderRadius: "10px",
-                    border: `1px solid ${errors.email ? "#ef4444" : "#cbd5e1"}`,
+                    border: `1px solid ${errors.username ? "#ef4444" : "#cbd5e1"}`,
                     fontSize: "0.9rem",
                     color: "#0f172a",
                     backgroundColor: "#ffffff",
@@ -247,18 +247,18 @@ export default function Login() {
                     transition: "all 0.15s ease",
                   }}
                   onFocus={(e) => {
-                    e.target.style.borderColor = errors.email ? "#ef4444" : "var(--primary-teal)";
+                    e.target.style.borderColor = errors.username ? "#ef4444" : "var(--primary-teal)";
                     e.target.style.boxShadow = "0 0 0 3px rgba(14, 133, 135, 0.12)";
                   }}
                   onBlur={(e) => {
-                    e.target.style.borderColor = errors.email ? "#ef4444" : "#cbd5e1";
+                    e.target.style.borderColor = errors.username ? "#ef4444" : "#cbd5e1";
                     e.target.style.boxShadow = "none";
                   }}
                 />
               </div>
-              {errors.email && (
+              {errors.username && (
                 <p style={{ fontSize: "0.775rem", color: "#dc2626", marginTop: "6px" }}>
-                  {errors.email}
+                  {errors.username}
                 </p>
               )}
             </div>

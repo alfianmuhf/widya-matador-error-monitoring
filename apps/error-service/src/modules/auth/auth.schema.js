@@ -1,30 +1,39 @@
 import { z } from "zod";
 
 export const loginSchema = z.object({
-  email: z
-    .string({ required_error: "Email wajib diisi" })
+  username: z
+    .string({ required_error: "Username wajib diisi" })
     .trim()
-    .toLowerCase()
-    .email("Format email tidak valid"),
+    .min(3, "Username minimal 3 karakter")
+    .optional(),
+  email: z.string().trim().optional(),
   password: z
     .string({ required_error: "Password wajib diisi" })
     .min(6, "Password minimal 6 karakter"),
+}).refine((data) => data.username || data.email, {
+  message: "Username wajib diisi",
+  path: ["username"],
 });
 
 export const forgotPasswordSchema = z.object({
-  email: z
-    .string({ required_error: "Email wajib diisi" })
+  username: z
+    .string({ required_error: "Username wajib diisi" })
     .trim()
-    .toLowerCase()
-    .email("Format email tidak valid"),
+    .min(3, "Username minimal 3 karakter")
+    .optional(),
+  email: z.string().trim().optional(),
+}).refine((data) => data.username || data.email, {
+  message: "Username wajib diisi",
+  path: ["username"],
 });
 
 export const resetPasswordSchema = z.object({
-  email: z
-    .string({ required_error: "Email wajib diisi" })
+  username: z
+    .string({ required_error: "Username wajib diisi" })
     .trim()
-    .toLowerCase()
-    .email("Format email tidak valid"),
+    .min(3, "Username minimal 3 karakter")
+    .optional(),
+  email: z.string().trim().optional(),
   otp: z
     .string({ required_error: "OTP wajib diisi" })
     .trim()
@@ -32,14 +41,16 @@ export const resetPasswordSchema = z.object({
   newPassword: z
     .string({ required_error: "Password baru wajib diisi" })
     .min(6, "Password minimal 6 karakter"),
+}).refine((data) => data.username || data.email, {
+  message: "Username wajib diisi",
+  path: ["username"],
 });
 
 export const registerSchema = z.object({
-  email: z
-    .string({ required_error: "Email wajib diisi" })
+  username: z
+    .string({ required_error: "Username wajib diisi" })
     .trim()
-    .toLowerCase()
-    .email("Format email tidak valid"),
+    .min(3, "Username minimal 3 karakter"),
   password: z
     .string({ required_error: "Password wajib diisi" })
     .min(6, "Password minimal 6 karakter"),
@@ -48,11 +59,12 @@ export const registerSchema = z.object({
     .trim()
     .min(2, "Nama minimal 2 karakter"),
   role: z
-    .enum(["VIEWER", "COORDINATOR", "ADMIN"], {
+    .enum(["VIEWER", "COORDINATOR", "ADMIN", "viewer", "coordinator", "admin"], {
       errorMap: () => ({ message: "Role harus berupa VIEWER, COORDINATOR, atau ADMIN" }),
     })
     .optional()
-    .default("VIEWER"),
+    .default("viewer"),
+  division: z.string().optional(),
 });
 
 export const changePasswordSchema = z

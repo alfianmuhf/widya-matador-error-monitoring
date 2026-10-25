@@ -10,6 +10,7 @@ Layanan di `infra/docker-compose.yml` dan konfigurasi terkait.
 | **frontend** | Development server, port **5173** |
 | **rabbitmq** | `rabbitmq:4-management`. Port: 5672 (AMQP) + 15672 (Management UI). Kredensial default: `guest`/`guest` |
 | **rustfs** | `rustfs/rustfs:1.0.3`. S3 API `9000`, Console `9001` (default `rustfsadmin`/`rustfsadmin`). Volume: `rustfs_data` |
+| **redis** | `redis:8-alpine`. Port: 6379 (bind `127.0.0.1`). Password via Docker secret `redis_password.txt`. Volume: `redis_data` |
 
 ## Cara Menjalankan
 

@@ -6,6 +6,7 @@ import TicketDetailDrawer from "../components/tickets/TicketDetailDrawer.jsx";
 import AddAssigneeModal from "../components/tickets/AddAssigneeModal.jsx";
 import TransferAftersalesModal from "../components/tickets/TransferAftersalesModal.jsx";
 import CreateTicketModal from "../components/tickets/CreateTicketModal.jsx";
+import TicketAttachmentModal from "../components/tickets/TicketAttachmentModal.jsx";
 
 const formatDateTime = (val) => {
   if (!val) return "-";
@@ -52,6 +53,7 @@ export default function ManajemenTiket() {
   const [detailTicket, setDetailTicket] = useState(null);
   const [assigneeTicket, setAssigneeTicket] = useState(null);
   const [transferAftersalesTicket, setTransferAftersalesTicket] = useState(null);
+  const [attachmentTicket, setAttachmentTicket] = useState(null);
   const [isCreateTicketOpen, setIsCreateTicketOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState(null);
 
@@ -168,8 +170,11 @@ export default function ManajemenTiket() {
     fetchManagedTickets();
   };
 
-  const handleAssigneeSuccess = () => {
-    showToast("Daftar tim software & leader berhasil diperbarui!");
+  const handleAssigneeSuccess = (updated) => {
+    showToast("Daftar tim RnD & kolaborasi berhasil diperbarui!");
+    if (updated && updated.id) {
+      setAssigneeTicket(updated);
+    }
     fetchManagedTickets();
   };
 
@@ -286,7 +291,6 @@ export default function ManajemenTiket() {
                   <th style={{ padding: "12px 16px", fontWeight: 700, color: "#475569" }}>Unit</th>
                   <th style={{ padding: "12px 16px", fontWeight: 700, color: "#475569" }}>Modul & Failure Code</th>
                   <th style={{ padding: "12px 16px", fontWeight: 700, color: "#475569" }}>Status</th>
-                  <th style={{ padding: "12px 16px", fontWeight: 700, color: "#475569" }}>Waktu Siklus</th>
                   <th style={{ padding: "12px 16px", fontWeight: 700, color: "#475569", textAlign: "right" }}>Aksi</th>
                 </tr>
               </thead>
@@ -302,9 +306,11 @@ export default function ManajemenTiket() {
                     (t.aftersalesUserId && t.aftersalesUserId === currentUser.id);
 
                   const isSoftwareAssignee = (t.assignees || []).some((a) => a.userId === currentUser.id);
-                  const isSoftwareLeader = (t.assignees || []).some(
-                    (a) => a.userId === currentUser.id && a.isLeader
-                  );
+                  const isCurrentTeamLeader =
+                    (t.currentTeam?.leader_user_id && t.currentTeam.leader_user_id === currentUser.id) ||
+                    (t.currentTeam?.leader?.id && t.currentTeam.leader.id === currentUser.id) ||
+                    (t.current_team?.leader_user_id && t.current_team.leader_user_id === currentUser.id) ||
+                    (t.current_team?.leader?.id && t.current_team.leader.id === currentUser.id);
 
                   // Open status:
                   // - Update: HANYA koordinator Aftersales penanggung jawab (Admin TIDAK BISA update tiket)
@@ -313,10 +319,10 @@ export default function ManajemenTiket() {
                   const canTransferAftersales = statusStr === "open" && (isAdmin || (isCoordinator && isCurrentAftersalesOwner));
 
                   // Escalated status:
-                  // - Update: HANYA koordinator Software yang ditugaskan (Admin TIDAK BISA update tiket)
-                  // - Kelola Tim Software: koordinator Software leader ATAU Admin (kelola akses & tim)
+                  // - Update: Koordinator yang tergabung dalam tim penanganan tiket
+                  // - Kelola Tim RnD & Handover: Koordinator Leader tim saat ini ATAU Admin
                   const canUpdateEscalated = statusStr === "escalated" && isCoordinator && isSoftwareAssignee;
-                  const canManageSoftwareTeam = statusStr === "escalated" && (isAdmin || (isCoordinator && isSoftwareLeader));
+                  const canManageSoftwareTeam = statusStr === "escalated" && (isAdmin || (isCoordinator && isCurrentTeamLeader));
 
                   const currentVersionNum = t.currentVersion ?? t.current_version ?? 0;
 
@@ -407,25 +413,7 @@ export default function ManajemenTiket() {
                         </span>
                       </td>
 
-                      {/* 5. Waktu Siklus (Open, Escalated, Solved) */}
-                      <td style={{ padding: "12px 16px", verticalAlign: "middle" }}>
-                        <div style={{ display: "flex", flexDirection: "column", gap: "2px", fontSize: "11.5px" }}>
-                          <div style={{ color: "#334155" }}>
-                            <span style={{ color: "#64748b", fontWeight: 600 }}>Open:</span>{" "}
-                            {t.openDateTimeText || t.openDateText || (t.open_at || t.openAt || t.createdAt ? formatDateTime(t.open_at || t.openAt || t.createdAt) : "-")}
-                          </div>
-                          <div style={{ color: t.escalated_at || t.escalatedAt ? "#b45309" : "#94a3b8" }}>
-                            <span style={{ color: "#64748b", fontWeight: 600 }}>Esc:</span>{" "}
-                            {t.escalated_at || t.escalatedAt ? (t.escalatedDateTimeText || t.escalatedDateText || formatDateTime(t.escalated_at || t.escalatedAt)) : "-"}
-                          </div>
-                          <div style={{ color: t.solved_at || t.solvedAt || t.resolvedAt ? "#15803d" : "#94a3b8" }}>
-                            <span style={{ color: "#64748b", fontWeight: 600 }}>Solved:</span>{" "}
-                            {t.solved_at || t.solvedAt || t.resolvedAt ? (t.solvedDateTimeText || t.solvedDateText || formatDateTime(t.solved_at || t.solvedAt || t.resolvedAt)) : "-"}
-                          </div>
-                        </div>
-                      </td>
-
-                      {/* 6. Aksi (Tanpa Ikon / Emoji) */}
+                      {/* 5. Aksi (Tanpa Ikon / Emoji) */}
                       <td
                         style={{ padding: "12px 16px", verticalAlign: "middle", textAlign: "right" }}
                         onClick={(e) => e.stopPropagation()}
@@ -454,6 +442,38 @@ export default function ManajemenTiket() {
                                   title="Alihkan penanggung jawab Aftersales tiket ini"
                                 >
                                   Alihkan PJ
+                                </button>
+                              )}
+
+                              {/* TOMBOL UNGGAH FOTO (MENU FORM SENDIRI) */}
+                              {(canUpdateOpen || isAdmin) && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setAttachmentTicket(t);
+                                  }}
+                                  style={{
+                                    padding: "5px 10px",
+                                    borderRadius: "6px",
+                                    fontSize: "12px",
+                                    fontWeight: 650,
+                                    border: "1px solid #99f6e4",
+                                    backgroundColor: "#f0fdfa",
+                                    color: "#0f766e",
+                                    cursor: "pointer",
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: "4px",
+                                  }}
+                                  title="Unggah lampiran gambar bukti penanganan"
+                                >
+                                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                                    <circle cx="8.5" cy="8.5" r="1.5" />
+                                    <polyline points="21 15 16 10 5 21" />
+                                  </svg>
+                                  Upload Foto
                                 </button>
                               )}
 
@@ -516,9 +536,41 @@ export default function ManajemenTiket() {
                                     color: "#b45309",
                                     cursor: "pointer",
                                   }}
-                                  title="Kelola anggota dan leader tim software"
+                                  title="Kelola anggota dan leader tim RnD"
                                 >
                                   Kelola Tim
+                                </button>
+                              )}
+
+                              {/* TOMBOL UNGGAH FOTO (MENU FORM SENDIRI) */}
+                              {(canUpdateEscalated || isAdmin) && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setAttachmentTicket(t);
+                                  }}
+                                  style={{
+                                    padding: "5px 10px",
+                                    borderRadius: "6px",
+                                    fontSize: "12px",
+                                    fontWeight: 650,
+                                    border: "1px solid #99f6e4",
+                                    backgroundColor: "#f0fdfa",
+                                    color: "#0f766e",
+                                    cursor: "pointer",
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: "4px",
+                                  }}
+                                  title="Unggah lampiran gambar bukti penanganan"
+                                >
+                                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                                    <circle cx="8.5" cy="8.5" r="1.5" />
+                                    <polyline points="21 15 16 10 5 21" />
+                                  </svg>
+                                  Upload Foto
                                 </button>
                               )}
 
@@ -672,6 +724,15 @@ export default function ManajemenTiket() {
           onClose={() => setAssigneeTicket(null)}
           ticket={assigneeTicket}
           onSuccess={handleAssigneeSuccess}
+        />
+      )}
+
+      {/* MODAL FORM UNGGAH GAMBAR (FORM SENDIRI) */}
+      {attachmentTicket && (
+        <TicketAttachmentModal
+          isOpen={Boolean(attachmentTicket)}
+          onClose={() => setAttachmentTicket(null)}
+          ticket={attachmentTicket}
         />
       )}
     </div>

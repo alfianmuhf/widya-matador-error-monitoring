@@ -36,10 +36,10 @@ export const formatAuditLog = (log) => {
   const entityId = log.entity_id || log.entityId;
   const deleteType = (log.delete_type || log.deleteAction || "none").toLowerCase();
 
-  // 2. Format Pelaku (Web User: email, Telegram User: @username)
+  // 2. Format Pelaku (Web User: username / name / email, Telegram User: @username)
   let pelaku = "Sistem";
-  if (user?.email) {
-    pelaku = user.email;
+  if (user?.username || user?.name || user?.email) {
+    pelaku = user.username || user.name || user.email;
   } else if (telegramUser) {
     if (telegramUser.username) {
       const u = telegramUser.username.trim();
@@ -52,7 +52,7 @@ export const formatAuditLog = (log) => {
       pelaku = actorName || "Telegram User";
     }
   } else if (actorUserId) {
-    pelaku = user?.email || (actorName?.includes("@") ? actorName : null) || actorName || "Sistem";
+    pelaku = user?.username || user?.name || user?.email || (actorName?.includes("@") ? actorName : null) || actorName || "Sistem";
   } else if (actorTelegramId) {
     if (telegramUser?.username) {
       const u = telegramUser.username.trim();

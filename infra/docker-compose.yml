@@ -1,4 +1,14 @@
+# Production Docker Compose Configuration
+
+# Rotasi log supaya disk tidak penuh oleh json-file
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
+  # Application Services
   backend:
     build:
       context: ..
@@ -7,10 +17,23 @@ services:
     restart: unless-stopped
     env_file:
       - ../../config/.env.backend
-    network_mode: host
+    ports:
+      - "127.0.0.1:3000:3000"
+    networks:
+      - app-network
     depends_on:
-      - rabbitmq
-      - redis
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider -q http://127.0.0.1:3000/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+    mem_limit: 512m
+    logging: *default-logging
 
   frontend:
     build:
@@ -23,23 +46,42 @@ services:
     env_file:
       - ../../config/.env.frontend
     ports:
-      - "5173:5173"
+      - "127.0.0.1:5173:80"
+    networks:
+      - app-network
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider -q http://127.0.0.1/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    mem_limit: 128m
+    logging: *default-logging
 
-  # Event bus: error-service → RabbitMQ → n8n → Telegram
+  # Infrastructure Services
   rabbitmq:
     image: rabbitmq:4-management
     container_name: after-sales-rabbitmq
     restart: unless-stopped
     ports:
-      - "5672:5672"    # AMQP (dipakai backend)
-      - "15672:15672"  # Management dashboard (user: guest, pass: guest)
+      - "127.0.0.1:5672:5672"   # AMQP Message Broker
+      - "127.0.0.1:15672:15672" # Management Dashboard
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    mem_limit: 512m
+    logging: *default-logging
 
-  # Object storage lampiran tiket (S3-compatible).
-  # Container RustFS jalan sebagai UID 10001, jadi named volume harus di-chown sekali.
   rustfs-permissions:
     image: busybox:1.36
     command: sh -c "mkdir -p /data /logs && chown -R 10001:10001 /data /logs"
@@ -47,8 +89,6 @@ services:
       - rustfs_data:/data
       - rustfs_logs:/logs
 
-  # Backend sengaja TIDAK depends_on rustfs: tanpa storage, tiket tetap jalan
-  # dan endpoint lampiran mengembalikan 503.
   rustfs:
     image: rustfs/rustfs:1.0.3
     container_name: after-sales-rustfs
@@ -59,16 +99,20 @@ services:
     secrets:
       - rustfs_password
     environment:
-      RUSTFS_ACCESS_KEY: rustfsadmin
+      RUSTFS_ACCESS_KEY: ${RUSTFS_ACCESS_KEY:-rustfsadmin}
       RUSTFS_SECRET_KEY_FILE: /run/secrets/rustfs_password
     ports:
-      - "9000:9000"  # S3 API — harus bisa dijangkau backend
-      - "9001:9001"  # Console
+      - "127.0.0.1:9000:9000" # S3 API Endpoint
+      - "127.0.0.1:9001:9001" # Web Console
     volumes:
       - rustfs_data:/data
       - rustfs_logs:/logs
+    networks:
+      - app-network
+    mem_limit: 512m
+    logging: *default-logging
 
-  # In-memory Cache & Session Store
+  # Cache dashboard (opsional): tanpa Redis, query dihitung ulang setiap request
   redis:
     image: redis:8-alpine
     container_name: redis
@@ -83,6 +127,8 @@ services:
       - "127.0.0.1:6379:6379"
     volumes:
       - redis_data:/data
+    networks:
+      - app-network
     healthcheck:
       test:
         - CMD-SHELL
@@ -90,6 +136,13 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    mem_limit: 128m
+    logging: *default-logging
+
+# Network & Storage Definitions
+networks:
+  app-network:
+    driver: bridge
 
 volumes:
   rabbitmq_data:

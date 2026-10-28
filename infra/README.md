@@ -17,15 +17,15 @@ Semua port dipublikasikan ke `127.0.0.1` saja. Akses publik harus lewat nginx ho
 
 ## Cara Menjalankan
 
-1. Siapkan file environment di **luar** repo, dua tingkat di atas folder `infra/`:
+1. Siapkan file environment backend di **luar** repo, dua tingkat di atas folder `infra/`:
    - `config/.env.backend` (salin dari `.env.backend.example`)
-   - `config/.env.frontend` (salin dari `.env.frontend.example`)
-2. Tanpa `RABBITMQ_URL` di `.env` Backend → notifikasi Telegram mati tapi sistem tetap jalan (publish dilewati + warning).
-3. Dari direktori `infra/`:
+2. Frontend dibangun dengan `VITE_API_BASE_URL=/api` secara default. Nilai Vite dibaca saat `docker compose build`, bukan saat container berjalan; untuk API lain, export `VITE_API_BASE_URL` sebelum `docker compose up -d --build`. File `config/.env.frontend` tidak dipakai oleh Compose.
+3. Tanpa `RABBITMQ_URL` di `.env` Backend → notifikasi Telegram mati tapi sistem tetap jalan (publish dilewati + warning).
+4. Dari direktori `infra/`:
 
    ```bash
    docker compose up -d --build
-   docker compose ps          # pastikan semua service "healthy"
+   docker compose ps          # backend/frontend/rabbitmq/redis: healthy; rustfs: running; rustfs-permissions: exited (0)
    docker compose logs -f backend
    ```
 
@@ -64,7 +64,7 @@ server {
 
 **2. `trust proxy`** sudah diset di `src/app.js` (`1` saat production) supaya `ip_address` pada audit log dan refresh token mencatat IP klien, bukan IP proxy.
 
-**3. Kredensial storage.** `RUSTFS_ACCESS_KEY` diambil dari environment (`${RUSTFS_ACCESS_KEY:-rustfsadmin}`); jangan biarkan nilai default di produksi. Secret key dibaca dari Docker secret `config/rustfs_pw.txt` (`chmod 600`).
+**3. Kredensial storage.** Secara default RustFS dan contoh backend memakai access key `rustfsadmin`; secret key dibaca dari Docker secret `config/rustfs_pw.txt` (`chmod 600`). Untuk menggantinya, export `RUSTFS_ACCESS_KEY` sebelum menjalankan Compose dan set `S3_ACCESS_KEY` yang sama di `config/.env.backend`. Compose interpolation tidak membaca nilai dari `env_file` backend.
 
 **4. Port storage** `9000`/`9001` hanya bind `127.0.0.1`. Kalau RustFS beda host, batasi lewat firewall — jangan buka ke internet.
 
@@ -115,26 +115,16 @@ docker compose run --rm backend npm run seed
 
 Buka satu tiket yang punya lampiran dan pastikan gambarnya masih tampil. Kalau jumlah baris `ticket_attachments` berubah setelah restart, ada yang masih memakai `db push --force-reset` — periksa `infra/backend/Dockerfile`.
 
-### GC lampiran
-
-`npm run attachments:gc -- --dry-run` untuk melihat, tanpa `--dry-run` untuk menghapus objek yatim. Objek yang lebih muda dari 60 menit dilewati karena bisa jadi milik upload yang sedang berjalan.
-
-Perintah ini belum terjadwal. Pasang cron di host, misalnya mingguan:
-
-```cron
-0 3 * * 0 cd /path/ke/repo/infra && docker compose exec -T backend npm run attachments:gc >> /var/log/attachments-gc.log 2>&1
-```
-
 ## Object Storage (RustFS) — Lampiran Tiket
 
 1. Jalankan service: `docker compose up -d rustfs`
 2. Buka console `http://<IP>:9001`, login sesuai kredensial, lalu buat bucket `erad-attachments`.
 3. Isi `.env.backend`:
    ```ini
-   S3_ENDPOINT=http://127.0.0.1:9000
+   S3_ENDPOINT=http://rustfs:9000
    S3_REGION=us-east-1
    S3_BUCKET=erad-attachments
-   S3_ACCESS_KEY=<access_key>
+   S3_ACCESS_KEY=rustfsadmin
    S3_SECRET_KEY=<secret_key>
    S3_FORCE_PATH_STYLE=true
    ```
@@ -142,6 +132,7 @@ Perintah ini belum terjadwal. Pasang cron di host, misalnya mingguan:
 
 Catatan:
 
+- Dalam Compose, backend memakai DNS `rustfs` dan Redis memakai DNS `redis`. Untuk storage atau Redis eksternal, set `S3_ENDPOINT` atau `REDIS_HOST` ke host eksternal di `config/.env.backend`; Compose tidak menimpanya.
 - Port `9000` harus bisa dijangkau backend. Kalau storage dan backend beda host, pakai `http://<IP-storage>:9000` dan batasi lewat firewall — **jangan** buka `9000` ke internet.
 - Console `9001` hanya untuk admin.
 - `S3_FORCE_PATH_STYLE=true` wajib untuk RustFS, MinIO, dan SeaweedFS — tanpa itu SDK memanggil `bucket.<host>` dan gagal.

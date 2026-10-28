@@ -19,13 +19,16 @@ services:
       - ../../config/.env.backend
     environment:
       NODE_ENV: production
+    # Makes the host reachable as host.docker.internal on Linux Docker Engine.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "127.0.0.1:3000:3000"
     networks:
       - app-network
     depends_on:
       rabbitmq:
-        condition: service_healthy
+        condition: service_started
       redis:
         condition: service_started
     healthcheck:

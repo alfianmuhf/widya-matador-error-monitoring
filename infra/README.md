@@ -20,7 +20,7 @@ Semua port dipublikasikan ke `127.0.0.1` saja. Akses publik harus lewat nginx ho
 1. Siapkan file environment backend di **luar** repo, dua tingkat di atas folder `infra/`:
    - `config/.env.backend` (salin dari `.env.backend.example`)
 2. Frontend dibangun dengan `VITE_API_BASE_URL=/api` secara default. Nilai Vite dibaca saat `docker compose build`, bukan saat container berjalan; untuk API lain, export `VITE_API_BASE_URL` sebelum `docker compose up -d --build`. File `config/.env.frontend` tidak dipakai oleh Compose.
-3. Tanpa `RABBITMQ_URL` di `.env` Backend → notifikasi Telegram mati tapi sistem tetap jalan (publish dilewati + warning).
+3. Tanpa `RABBITMQ_URL` di `.env` Backend → notifikasi Telegram mati tapi sistem tetap jalan (publish dilewati + warning); backend tidak menunggu healthcheck RabbitMQ.
 4. Dari direktori `infra/`:
 
    ```bash
@@ -32,11 +32,17 @@ Semua port dipublikasikan ke `127.0.0.1` saja. Akses publik harus lewat nginx ho
 ## Catatan Penting
 
 - **Log & resource**: setiap service memakai rotasi `json-file` 10 MB × 3 berkas dan `mem_limit` (backend/rabbitmq/rustfs 512 MB, frontend 128 MB). Kalau backend kehabisan memori saat ekspor besar, naikkan `mem_limit` backend.
-- **Healthcheck**: backend menunggu RabbitMQ `healthy`; frontend menunggu backend `healthy`. RabbitMQ yang mati tidak menggagalkan start backend, tetapi memperlambat hingga healthcheck pertama selesai.
+- **Healthcheck**: backend hanya menunggu container RabbitMQ dimulai, bukan `healthy`; frontend menunggu backend `healthy`. Saat `RABBITMQ_URL` kosong, RabbitMQ tidak diperlukan oleh aplikasi. Saat URL diisi, backend menangani koneksi broker sendiri.
 - **RabbitMQ** memakai volume persisten, jadi queue/DLQ tidak hilang saat container direcreate.
 - **Management UI**: `http://localhost:15672`. Kredensial default `guest`/`guest` — ganti sebelum produksi.
 - **Nginx host**: `nginx/after-sales.conf` (reverse proxy + header keamanan + SSE non-buffering).
 - **Dokumentasi webhook**: `../docs/webhook-telegram/`.
+
+### PostgreSQL di host
+
+Backend berjalan di jaringan bridge, sehingga `localhost` berarti container backend, bukan host Docker. Gunakan `host.docker.internal` pada `DATABASE_URL` dan `DIRECT_URL` (lihat `.env.backend.example`). Compose memetakan nama ini ke `host-gateway` pada Linux Docker Engine; Docker Desktop sudah menyediakan nama tersebut. PostgreSQL host harus menerima koneksi dari jaringan Docker dan firewall harus mengizinkan portnya.
+
+Untuk RabbitMQ bawaan Compose, gunakan hostname service `rabbitmq`, misalnya `amqp://<username>:<password>@rabbitmq:5672`. Kosongkan `RABBITMQ_URL` bila notifikasi tidak diperlukan.
 
 ## Keamanan Produksi
 
@@ -56,6 +62,9 @@ server {
     ssl_certificate     /etc/letsencrypt/live/domain.anda/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/domain.anda/privkey.pem;
     add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
 
     client_max_body_size 10M;
     # ... salin blok location / dan /api/ dari after-sales.conf ...

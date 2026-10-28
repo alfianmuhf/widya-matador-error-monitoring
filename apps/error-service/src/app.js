@@ -10,6 +10,9 @@ const app = express();
 // Disable X-Powered-By header to prevent server fingerprinting
 app.disable("x-powered-by");
 
+// Di belakang reverse proxy, req.ip harus dibaca dari X-Forwarded-For
+app.set("trust proxy", env.NODE_ENV === "production" ? 1 : false);
+
 // Allowed origins for CORS
 const allowedOrigins = [
   env.FRONTEND_URL,

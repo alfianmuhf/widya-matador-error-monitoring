@@ -15,7 +15,7 @@ export default function TicketFilterBar({
   components = [],
   clients = [],
   locations = [],
-  statuses = ["Open", "Escalated", "Solved", "Closed"],
+  statuses = ["Open", "Escalated", "Solved"],
 }) {
   const timeRanges = [
     { label: "30 hari", value: "30d" },

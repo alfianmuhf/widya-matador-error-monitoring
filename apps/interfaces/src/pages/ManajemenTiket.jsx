@@ -446,7 +446,7 @@ export default function ManajemenTiket() {
                               )}
 
                               {/* TOMBOL UNGGAH FOTO (MENU FORM SENDIRI) */}
-                              {(canUpdateOpen || isAdmin) && (
+                              {canUpdateOpen && (
                                 <button
                                   type="button"
                                   onClick={(e) => {
@@ -543,7 +543,7 @@ export default function ManajemenTiket() {
                               )}
 
                               {/* TOMBOL UNGGAH FOTO (MENU FORM SENDIRI) */}
-                              {(canUpdateEscalated || isAdmin) && (
+                              {canUpdateEscalated && (
                                 <button
                                   type="button"
                                   onClick={(e) => {

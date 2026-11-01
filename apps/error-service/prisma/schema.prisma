@@ -83,6 +83,18 @@ enum severity {
   tinggi
 }
 
+enum attachment_status {
+  pending
+  processing
+  ready
+  failed
+}
+
+enum attachment_media_type {
+  image
+  video
+}
+
 // ==================================================
 // 2. USER & TELEGRAM USER (+ tabel pendukungnya)
 // ==================================================
@@ -398,21 +410,27 @@ model ticket_teams {
 // ==================================================
 
 model ticket_attachments {
-  id                          String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  ticket_id                   String          @db.VarChar(50)
-  file_url                    String
-  file_name                   String          @db.VarChar(255)
-  mime_type                   String          @db.VarChar(100)
-  file_size                   Int
-  uploaded_by_user_id          String?         @db.Uuid
-  uploaded_by_telegram_user_id String?         @db.Uuid
-  uploaded_at                 DateTime        @default(now()) @db.Timestamptz
+  id                          String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  ticket_id                   String                @db.VarChar(50)
+  file_type                   attachment_media_type @default(image)
+  file_url                    String?
+  thumbnail_url               String?
+  file_name                   String                @db.VarChar(255)
+  mime_type                   String                @db.VarChar(100)
+  file_size                   Int?
+  status                      attachment_status     @default(ready)
+  duration                    Float?
+  error_message               String?
+  uploaded_by_user_id         String?               @db.Uuid
+  uploaded_by_telegram_user_id String?              @db.Uuid
+  uploaded_at                 DateTime              @default(now()) @db.Timestamptz
 
   ticket               tickets         @relation(fields: [ticket_id], references: [id], onDelete: Cascade)
   uploaded_by_user     users?          @relation("attachment_uploaded_by_user", fields: [uploaded_by_user_id], references: [id], onDelete: SetNull)
   uploaded_by_telegram telegram_users? @relation("attachment_uploaded_by_telegram", fields: [uploaded_by_telegram_user_id], references: [id], onDelete: SetNull)
 
   @@index([ticket_id])
+  @@index([ticket_id, file_type])
   @@index([uploaded_by_user_id])
   @@index([uploaded_by_telegram_user_id])
 }

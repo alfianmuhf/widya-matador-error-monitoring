@@ -71,7 +71,7 @@ export default function ExportReportModal({ isOpen, onClose, totalTickets = 0, o
         </div>
 
         <p style={{ fontSize: "var(--text-sm)", color: "var(--text-muted)", marginBottom: "18px", lineHeight: 1.4 }}>
-          Ekspor rekapitulasi data tiket aftersales{totalTickets > 0 ? ` (${totalTickets} tiket)` : ""} ke dalam format dokumen yang Anda pilih.
+          Ekspor rekapitulasi data tiket aftersales{totalTickets > 0 ? ` (${Number(totalTickets).toLocaleString("id-ID")} tiket)` : ""} ke dalam format dokumen yang Anda pilih.
         </p>
 
         {/* Format Selection */}

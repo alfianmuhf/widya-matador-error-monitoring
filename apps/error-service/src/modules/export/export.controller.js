@@ -16,20 +16,29 @@ const getDateSlug = () => {
  */
 export const exportTicketsExcel = async (req, res, next) => {
   try {
-    // Fetch all matching tickets without low pagination limit
-    const query = {
-      ...req.query,
-      limit: 5000,
-      page: 1,
-    };
-    const { tickets } = await ticketService.getTickets(query);
-    const buffer = await exportService.generateTicketsExcel(tickets, { user: req.user });
-
     const filename = `laporan-tiket-erad-${getDateSlug()}.xlsx`;
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
-    res.setHeader("Content-Length", buffer.length);
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Pragma", "no-cache");
 
+    // Initialize streaming Excel writer directly connected to HTTP response
+    const writer = exportService.createExcelStreamWriter(res, { user: req.user });
+
+    const query = {
+      ...req.query,
+      isExport: true,
+      onBatch: async (batch) => {
+        writer.writeBatch(batch);
+      },
+    };
+    delete query.limit;
+    delete query.page;
+
+    const { meta } = await ticketService.getTickets(query);
+    await writer.end();
+
+    const exportedCount = writer.getProcessedCount();
     await recordLog({
       actor: req.user?.username || req.user?.name || "User",
       actorUserId: req.user?.id || null,
@@ -39,14 +48,17 @@ export const exportTicketsExcel = async (req, res, next) => {
       details: {
         identifier: filename,
         format: "excel",
-        totalTickets: tickets.length,
-        changeSummary: `ekspor ${tickets.length} tiket ke file Excel '${filename}'`,
+        totalTickets: exportedCount,
+        changeSummary: `ekspor ${exportedCount} tiket ke file Excel '${filename}' (streaming)`,
       },
     });
-
-    res.send(buffer);
   } catch (error) {
-    next(error);
+    if (!res.headersSent) {
+      next(error);
+    } else {
+      console.error("Error during streaming Excel export:", error);
+      res.end();
+    }
   }
 };
 
@@ -58,9 +70,10 @@ export const exportTicketsPdf = async (req, res, next) => {
   try {
     const query = {
       ...req.query,
-      limit: 5000,
-      page: 1,
+      isExport: true,
     };
+    delete query.limit;
+    delete query.page;
     const { tickets } = await ticketService.getTickets(query);
     const buffer = await exportService.generateTicketsPdf(tickets, { user: req.user });
 

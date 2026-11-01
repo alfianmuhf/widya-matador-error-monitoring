@@ -182,6 +182,208 @@ export const generateTicketsExcel = async (tickets = [], meta = {}) => {
   return Buffer.from(buffer);
 };
 
+
+/**
+ * Create a streaming Excel writer that writes chunks directly to a writable stream (e.g. Express res)
+ * Uses ExcelJS.stream.xlsx.WorkbookWriter with constant low memory usage.
+ *
+ * @param {import("stream").Writable} outStream
+ * @param {Object} options
+ * @returns {{ writeBatch: (batch: Array) => void, end: () => Promise<void>, getProcessedCount: () => number }}
+ */
+export const createExcelStreamWriter = (outStream, options = {}) => {
+  const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({
+    stream: outStream,
+    useStyles: true,
+    useSharedStrings: false,
+  });
+
+  const sheet = workbook.addWorksheet("Rekapitulasi Tiket", {
+    views: [{ showGridLines: true }],
+  });
+
+  // Set column widths
+  sheet.columns = [
+    { width: 6 },  // No
+    { width: 22 }, // Ticket ID
+    { width: 14 }, // Unit Code
+    { width: 12 }, // Tipe
+    { width: 20 }, // Client
+    { width: 18 }, // Lokasi
+    { width: 20 }, // Komponen
+    { width: 14 }, // Kode Failure
+    { width: 22 }, // Nama Failure
+    { width: 12 }, // Severity
+    { width: 14 }, // Status
+    { width: 18 }, // Pelapor
+    { width: 12 }, // Sumber
+    { width: 30 }, // Kerusakan
+    { width: 30 }, // Penanganan
+    { width: 24 }, // Penyebab
+    { width: 20 }, // Open At
+    { width: 20 }, // Escalated At
+    { width: 20 }, // Solved At
+    { width: 18 }, // Time To Analyst
+    { width: 18 }, // Time To Solved
+    { width: 16 }, // Durasi (MTTR)
+  ];
+
+  // 1. Title Banner
+  sheet.mergeCells("A1:V1");
+  const titleRow = sheet.getRow(1);
+  const titleCell = titleRow.getCell(1);
+  titleCell.value = "LAPORAN REKAPITULASI TIKET AFTERSALES — ERAD";
+  titleCell.font = { name: "Arial", size: 16, bold: true, color: { argb: "FFFFFFFF" } };
+  titleCell.fill = {
+    type: "pattern",
+    pattern: "solid",
+    fgColor: { argb: "FF0E7490" }, // Primary Teal
+  };
+  titleCell.alignment = { vertical: "middle", horizontal: "center" };
+  titleRow.height = 36;
+  titleRow.commit();
+
+  // 2. Metadata Information
+  sheet.mergeCells("A2:V2");
+  const metaRow = sheet.getRow(2);
+  const metaCell = metaRow.getCell(1);
+  const printTime = formatDateTimeWIB(new Date());
+  metaCell.value = `Tanggal Unduh: ${printTime} WIB | Sistem: ERAD Load Scanner Aftersales`;
+  metaCell.font = { name: "Arial", size: 10, italic: true, color: { argb: "FF475569" } };
+  metaCell.fill = {
+    type: "pattern",
+    pattern: "solid",
+    fgColor: { argb: "FFF1F5F9" },
+  };
+  metaCell.alignment = { vertical: "middle", horizontal: "center" };
+  metaRow.height = 22;
+  metaRow.commit();
+
+  // Row 3 blank separator
+  const blankRow = sheet.addRow([]);
+  blankRow.height = 10;
+  blankRow.commit();
+
+  // 3. Table Column Headers
+  const headerTitles = [
+    "No", "Ticket ID", "Unit Code", "Tipe", "Client", "Lokasi", "Komponen",
+    "Kode Failure", "Nama Failure", "Severity", "Status", "Pelapor", "Sumber",
+    "Kerusakan", "Penanganan", "Penyebab", "Open At", "Escalated At", "Solved At",
+    "Time To Analyst", "Time To Solved", "Durasi (MTTR)"
+  ];
+  const headerRow = sheet.addRow(headerTitles);
+  headerRow.height = 28;
+  headerRow.eachCell((cell) => {
+    cell.font = { name: "Arial", size: 10, bold: true, color: { argb: "FFFFFFFF" } };
+    cell.fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: "FF11222C" }, // Deep Navy
+    };
+    cell.alignment = { vertical: "middle", horizontal: "center" };
+    cell.border = {
+      top: { style: "thin", color: { argb: "FF94A3B8" } },
+      left: { style: "thin", color: { argb: "FF94A3B8" } },
+      bottom: { style: "medium", color: { argb: "FF0E7490" } },
+      right: { style: "thin", color: { argb: "FF94A3B8" } },
+    };
+  });
+  headerRow.commit();
+
+  let currentIndex = 0;
+
+  const writeBatch = (batch = []) => {
+    for (const t of batch) {
+      currentIndex += 1;
+      const isEven = currentIndex % 2 === 0;
+      const rowBg = isEven ? "FFF8FAFC" : "FFFFFFFF";
+
+      const values = [
+        currentIndex,
+        t.id || t.ticketId,
+        t.unit || t.unitCode,
+        t.unitType || "portable",
+        t.client || "-",
+        t.location || "-",
+        t.component || "-",
+        t.failureCode || "-",
+        t.failureName || "-",
+        t.severity || "Rendah",
+        t.status || "Open",
+        t.reporter || "-",
+        t.source || "dashboard",
+        t.description || "-",
+        t.handling || "-",
+        t.cause || "-",
+        t.openDateTimeText || (t.open_at ? formatDateTimeWIB(t.open_at) : (t.createdAt ? formatDateTimeWIB(t.createdAt) : "-")),
+        t.escalated_at ? (t.escalatedDateTimeText || formatDateTimeWIB(t.escalated_at)) : "—",
+        t.solved_at ? (t.solvedDateTimeText || formatDateTimeWIB(t.solved_at)) : "—",
+        t.timeToAnalysisText || (t.escalated_at ? computeDurationText(t.open_at || t.createdAt, t.escalated_at) : "—"),
+        t.timeToSolveText || (t.solved_at ? computeDurationText(t.open_at || t.createdAt, t.solved_at) : "—"),
+        t.durationText || "—",
+      ];
+
+      const row = sheet.addRow(values);
+      row.height = 22;
+
+      row.eachCell((cell, colNumber) => {
+        cell.font = { name: "Arial", size: 9 };
+        cell.fill = {
+          type: "pattern",
+          pattern: "solid",
+          fgColor: { argb: rowBg },
+        };
+        cell.border = {
+          top: { style: "thin", color: { argb: "FFE2E8F0" } },
+          left: { style: "thin", color: { argb: "FFE2E8F0" } },
+          bottom: { style: "thin", color: { argb: "FFE2E8F0" } },
+          right: { style: "thin", color: { argb: "FFE2E8F0" } },
+        };
+
+        if ([1, 2, 3, 4, 8, 10, 11, 13, 17, 18, 19, 20, 21, 22].includes(colNumber)) {
+          cell.alignment = { vertical: "middle", horizontal: "center" };
+        } else {
+          cell.alignment = { vertical: "middle", horizontal: "left" };
+        }
+
+        if (colNumber === 2 || colNumber === 8) {
+          cell.font = { name: "Courier New", size: 9, bold: true };
+        }
+
+        if (colNumber === 11) {
+          const st = String(cell.value || "").toLowerCase();
+          if (st === "open") {
+            cell.font = { name: "Arial", size: 9, bold: true, color: { argb: "FFDC2626" } };
+            cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFEF2F2" } };
+          } else if (st === "escalated" || st === "monitor") {
+            cell.font = { name: "Arial", size: 9, bold: true, color: { argb: "FFD97706" } };
+            cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFFBEB" } };
+          } else if (st === "solved") {
+            cell.font = { name: "Arial", size: 9, bold: true, color: { argb: "FF16A34A" } };
+            cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF0FDF4" } };
+          } else {
+            cell.font = { name: "Arial", size: 9, bold: true, color: { argb: "FF475569" } };
+            cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF1F5F9" } };
+          }
+        }
+      });
+
+      row.commit();
+    }
+  };
+
+  const end = async () => {
+    sheet.commit();
+    await workbook.commit();
+  };
+
+  return {
+    writeBatch,
+    end,
+    getProcessedCount: () => currentIndex,
+  };
+};
+
 /**
  * Generate formatted PDF buffer for tickets (A4 Landscape)
  * @param {Array} tickets
@@ -191,6 +393,10 @@ export const generateTicketsExcel = async (tickets = [], meta = {}) => {
 export const generateTicketsPdf = async (tickets = [], meta = {}) => {
   return new Promise((resolve, reject) => {
     try {
+      const maxPdfRows = 2000;
+      const isTruncated = tickets.length > maxPdfRows;
+      const activeTickets = isTruncated ? tickets.slice(0, maxPdfRows) : tickets;
+
       // Landscape A4 (841.89 x 595.28 points)
       const doc = new PDFDocument({
         size: "A4",
@@ -221,7 +427,13 @@ export const generateTicketsPdf = async (tickets = [], meta = {}) => {
         .fontSize(9)
         .font("Helvetica")
         .fillColor("#94a3b8")
-        .text("Laporan Rekapitulasi Tiket Aftersales Load Scanner", 45, 54);
+        .text(
+          isTruncated
+            ? `Laporan Rekapitulasi Tiket Aftersales (Dibatasi ${maxPdfRows.toLocaleString("id-ID")} tiket terbaru dari ${tickets.length.toLocaleString("id-ID")})`
+            : "Laporan Rekapitulasi Tiket Aftersales Load Scanner",
+          45,
+          54
+        );
 
       const printDateText = formatDateTimeWIB(new Date());
       doc
@@ -308,7 +520,7 @@ export const generateTicketsPdf = async (tickets = [], meta = {}) => {
           .text("Tidak ada tiket yang ditemukan.", 30, yPos + 10, { align: "center", width: pageWidth });
       } else {
         const rowHeight = 24;
-        tickets.forEach((t, i) => {
+        activeTickets.forEach((t, i) => {
           // Check page break
           if (yPos + rowHeight > 535) {
             doc.addPage({ size: "A4", layout: "landscape", margin: 30 });

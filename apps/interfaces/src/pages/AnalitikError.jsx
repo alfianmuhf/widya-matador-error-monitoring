@@ -714,7 +714,6 @@ export default function AnalitikError() {
             <option value="open">Open</option>
             <option value="escalated">Escalated</option>
             <option value="solved">Solved</option>
-            <option value="closed">Closed</option>
           </select>
 
           {/* Reset Filter Button if active */}

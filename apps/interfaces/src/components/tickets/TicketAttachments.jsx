@@ -62,7 +62,7 @@ export default function TicketAttachments({ ticket, allowUpload = false, onAttac
     (ticket.assignees || []).some(
       (a) => (a.userId || a.user_id) === currentUser?.id
     ) || ticket.aftersalesUserId === currentUser?.id;
-  const canUpload = Boolean(currentUser?.id) && allowUpload && (role === "admin" || role === "coordinator" || isTeamMember);
+  const canUpload = Boolean(currentUser?.id) && allowUpload && role === "coordinator" && isTeamMember;
 
   // Komponen memegang daftarnya sendiri: drawer bisa dibuka dari baris list yang
   // tidak membawa lampiran, jadi prop saja tidak cukup dan bisa basi.

@@ -14,6 +14,7 @@ import {
 } from "../ticket/services/ticket-assignee.service.js";
 import * as ticketRepo from "../ticket/ticket.repository.js";
 import * as managementRepo from "./ticket-management.repository.js";
+import { checkManageTicketTeamsPermission } from "./ticket-permission.service.js";
 export * from "./ticket-permission.service.js";
 
 /**

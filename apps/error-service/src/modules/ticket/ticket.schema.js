@@ -7,7 +7,7 @@ const validStatuses = ["open", "escalated", "solved"];
  */
 export const queryTicketsSchema = z.object({
   page: z.coerce.number().int().positive().optional().default(1),
-  limit: z.coerce.number().int().positive().max(1000).optional().default(10),
+  limit: z.coerce.number().int().positive().max(10000).optional().default(10),
   search: z.string().trim().optional(),
   status: z
     .string()

@@ -53,11 +53,12 @@ export const putObject = async (key, body, contentType) => {
   );
 };
 
-export const getObject = async (key) => {
+export const getObject = async (key, range) => {
   return getClient().send(
     new GetObjectCommand({
       Bucket: env.S3_BUCKET,
       Key: key,
+      Range: range || undefined,
     })
   );
 };

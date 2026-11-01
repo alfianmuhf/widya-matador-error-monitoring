@@ -9,7 +9,8 @@ import {
   MAX_IMAGES_PER_TICKET,
   VIDEO_STAGING_DIR,
   safeUnlink,
-  inspectVideoWithFfprobe,
+  resolveResolutionWidth,
+  getVideoTranscodeConfig,
 } from "./attachment.video.js";
 import { formatAttachment } from "./attachment.service.js";
 
@@ -19,6 +20,29 @@ test("video specifications and constants are strictly defined", () => {
   assert.equal(MAX_VIDEOS_PER_TICKET, 5, "Max videos per ticket should be 5");
   assert.equal(MAX_IMAGES_PER_TICKET, 5, "Max images per ticket should be 5");
   assert.ok(VIDEO_STAGING_DIR, "Staging directory should be defined");
+});
+
+test("resolveResolutionWidth parses resolution strings and numbers correctly", () => {
+  assert.equal(resolveResolutionWidth("1080p"), 1920);
+  assert.equal(resolveResolutionWidth("1080"), 1920);
+  assert.equal(resolveResolutionWidth("720p"), 1280);
+  assert.equal(resolveResolutionWidth("720"), 1280);
+  assert.equal(resolveResolutionWidth("480p"), 854);
+  assert.equal(resolveResolutionWidth("360p"), 640);
+  assert.equal(resolveResolutionWidth("4k"), 3840);
+  assert.equal(resolveResolutionWidth("2160p"), 3840);
+  assert.equal(resolveResolutionWidth(1280), 1280);
+  assert.equal(resolveResolutionWidth("1920"), 1920);
+  assert.equal(resolveResolutionWidth(null), 1920);
+  assert.equal(resolveResolutionWidth("invalid"), 1920);
+});
+
+test("getVideoTranscodeConfig provides defaults and reads env values", () => {
+  const config = getVideoTranscodeConfig();
+  assert.ok(typeof config.crf === "number");
+  assert.ok(config.crf >= 0 && config.crf <= 51);
+  assert.ok(typeof config.maxWidth === "number");
+  assert.ok(config.maxWidth > 0);
 });
 
 test("safeUnlink safely handles existing and non-existing files", async () => {
@@ -87,4 +111,3 @@ test("formatAttachment handles pending video without thumbnail and file_url", ()
   assert.equal(formatted.thumbnailUrl, null);
   assert.equal(formatted.duration, null);
 });
-

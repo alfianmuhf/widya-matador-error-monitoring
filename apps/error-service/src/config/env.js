@@ -20,6 +20,8 @@ const envSchema = z.object({
   REDIS_HOST: z.string().default("localhost"),
   REDIS_PORT: z.coerce.number().default(6379),
   REDIS_PASSWORD: z.string().optional(),
+  VIDEO_CRF: z.coerce.number().min(0).max(51).default(28),
+  VIDEO_MAX_RESOLUTION: z.string().default("1080p"),
 });
 
 const parseEnv = () => {

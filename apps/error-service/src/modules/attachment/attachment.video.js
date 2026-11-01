@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 import fsSync from "node:fs";
 import path from "node:path";
 import os from "node:os";
+import { env } from "../../config/env.js";
 
 export const MAX_VIDEO_SIZE = 350 * 1024 * 1024; // 350 MB
 export const MAX_VIDEO_DURATION = 120; // 120 detik (2 menit)
@@ -19,6 +20,30 @@ export const VIDEO_STAGING_DIR =
 if (!fsSync.existsSync(VIDEO_STAGING_DIR)) {
   fsSync.mkdirSync(VIDEO_STAGING_DIR, { recursive: true, mode: 0o700 });
 }
+
+/**
+ * Konversi input resolusi (contoh: '1080p', '720p', '480p' atau angka) menjadi nilai pixel width maksimal
+ */
+export const resolveResolutionWidth = (resolutionSetting) => {
+  if (!resolutionSetting) return 1920;
+  const str = String(resolutionSetting).trim().toLowerCase();
+  if (str === "1080p" || str === "1080") return 1920;
+  if (str === "720p" || str === "720") return 1280;
+  if (str === "480p" || str === "480") return 854;
+  if (str === "360p" || str === "360") return 640;
+  if (str === "4k" || str === "2160p" || str === "2160") return 3840;
+  const num = parseInt(str, 10);
+  return isNaN(num) || num <= 0 ? 1920 : num;
+};
+
+/**
+ * Konfigurasi default transkoding video dari environment variable (.env)
+ */
+export const getVideoTranscodeConfig = () => {
+  const crf = typeof env?.VIDEO_CRF === "number" ? env.VIDEO_CRF : 28;
+  const maxWidth = resolveResolutionWidth(env?.VIDEO_MAX_RESOLUTION || "1080p");
+  return { crf, maxWidth };
+};
 
 /**
  * Hapus file sementara dengan aman (tidak melempar error jika file tidak ada)
@@ -106,11 +131,18 @@ export const inspectVideoWithFfprobe = (inputPath) => {
 };
 
 /**
- * Transkoding video ke MP4 H.264 1080p CRF 28 + generate Thumbnail WebP
+ * Transkoding video ke MP4 H.264 (resolusi & CRF dinamis dari .env) + generate Thumbnail WebP
  */
-export const transcodeVideoWithFfmpeg = (inputPath, outputVideoPath, outputThumbPath, duration = 10) => {
+export const transcodeVideoWithFfmpeg = (
+  inputPath,
+  outputVideoPath,
+  outputThumbPath,
+  duration = 10,
+  options = {}
+) => {
   return new Promise((resolve, reject) => {
     const ffmpegBinary = process.env.FFMPEG_PATH || "ffmpeg";
+    const { crf, maxWidth } = { ...getVideoTranscodeConfig(), ...options };
 
     // Jika durasi < 1 detik, ambil snapshot di detik 00:00:00
     const snapshotTime = duration < 1 ? "00:00:00" : "00:00:01";
@@ -119,11 +151,11 @@ export const transcodeVideoWithFfmpeg = (inputPath, outputVideoPath, outputThumb
       "-nostdin",
       "-protocol_whitelist", "file,crypto,data",
       "-i", inputPath,
-      // Output 1: MP4 terkompresi H.264 1080p
+      // Output 1: MP4 terkompresi H.264
       "-c:v", "libx264",
       "-preset", "veryfast",
-      "-crf", "28",
-      "-vf", "scale='min(1920,iw)':-2",
+      "-crf", String(crf),
+      "-vf", `scale='min(${maxWidth},iw)':-2`,
       "-c:a", "aac",
       "-b:a", "128k",
       "-movflags", "+faststart",
@@ -152,8 +184,7 @@ export const transcodeVideoWithFfmpeg = (inputPath, outputVideoPath, outputThumb
           new Error(`Konversi ffmpeg gagal: ${stderr.slice(-500).trim() || `exit code ${code}`}`)
         );
       }
-      resolve({ outputVideoPath, outputThumbPath });
+      resolve({ outputVideoPath, outputThumbPath, crf, maxWidth });
     });
   });
 };
-

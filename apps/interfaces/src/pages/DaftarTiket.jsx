@@ -24,6 +24,7 @@ export default function DaftarTiket() {
   const [currentPage, setCurrentPage] = useState(1);
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState(null);
+  const [serverTotal, setServerTotal] = useState(0);
 
   // Available users for assignment directly from database API
   const [availableUsers, setAvailableUsers] = useState([]);
@@ -104,10 +105,14 @@ export default function DaftarTiket() {
       setLoading(true);
       const res = await api.get("/tickets", {
         params: {
-          limit: 500, // fetch all tickets for interactive filtering and pagination
+          limit: 1000,
         },
       });
       const data = res.data?.data || [];
+      const metaTotal = res.data?.meta?.total;
+      if (typeof metaTotal === "number") {
+        setServerTotal(metaTotal);
+      }
       setRawTickets(data);
     } catch (err) {
       console.error("Failed to fetch tickets:", err);
@@ -168,6 +173,7 @@ export default function DaftarTiket() {
         const full = { ...created, assignees: freshAssignees, assignedMembers: freshAssignees };
 
         setRawTickets((prev) => [full, ...prev.filter((t) => t.id !== full.id)]);
+        setServerTotal((prev) => (prev > 0 ? prev + 1 : prev));
         showToast(`Tiket baru masuk: ${full.id}`);
       } catch (err) {
         console.error("Error parsing ticket_created SSE:", err);
@@ -299,6 +305,21 @@ export default function DaftarTiket() {
   }, [tickets, searchTerm, timeRange, selectedComponent, selectedClient, selectedLocation, selectedStatus, selectedAssignee]);
 
   // Pagination calculation
+  // Cek apakah filter sedang aktif
+  const isFilterActive =
+    Boolean(searchTerm) ||
+    Boolean(timeRange && timeRange !== "all") ||
+    Boolean(selectedComponent) ||
+    Boolean(selectedClient) ||
+    Boolean(selectedLocation) ||
+    Boolean(selectedStatus) ||
+    Boolean(selectedAssignee);
+
+  // Jika tidak ada filter aktif, gunakan total tiket riil dari server
+  // Selalu tampilkan total tiket riil dari database server jika tersedia
+  const displayTotalTickets = serverTotal > 0 ? serverTotal : filteredTickets.length;
+
+
   const totalPages = Math.ceil(filteredTickets.length / itemsPerPage) || 1;
   const paginatedTickets = useMemo(() => {
     const start = (currentPage - 1) * itemsPerPage;
@@ -552,7 +573,7 @@ export default function DaftarTiket() {
       {/* Main Ticket Table Card */}
       <TicketTable
         tickets={paginatedTickets}
-        totalTickets={filteredTickets.length}
+        totalTickets={displayTotalTickets}
         searchTerm={searchTerm}
         setSearchTerm={setSearchTerm}
         onSelectTicket={handleSelectTicket}
@@ -581,7 +602,7 @@ export default function DaftarTiket() {
       <ExportReportModal
         isOpen={isExportModalOpen}
         onClose={() => setIsExportModalOpen(false)}
-        totalTickets={filteredTickets.length}
+        totalTickets={displayTotalTickets}
         onExport={handleExportDownload}
       />
     </div>

@@ -32,9 +32,14 @@ const resolveEscalatedGroup = async (ticket) => {
  * Get tickets list with filtering, searching, and pagination
  */
 export const getTickets = async (query = {}) => {
+  const isExport = Boolean(query.all || query.isExport);
   const page = Math.max(1, parseInt(query.page, 10) || 1);
-  const limit = Math.max(1, Math.min(10000, parseInt(query.limit, 10) || 10));
-  const skip = (page - 1) * limit;
+  const limit = isExport
+    ? (query.limit !== undefined && query.limit !== null ? parseInt(query.limit, 10) : null)
+    : Math.max(1, Math.min(10000, parseInt(query.limit, 10) || 10));
+  const skip = isExport && !query.page ? null : (limit ? (page - 1) * limit : null);
+
+  const onBatch = typeof query.onBatch === "function" ? query.onBatch : null;
 
   const where = {};
 
@@ -78,23 +83,31 @@ export const getTickets = async (query = {}) => {
       take: limit,
     });
 
-    const rawTickets =
-      ids.length > 0
-        ? await ticketRepo.findMany({
-            where: { id: { in: ids } },
-            orderBy,
-          })
-        : [];
-
-    const tickets = rawTickets.map(formatTicket);
+    let rawTickets = [];
+    if (ids.length > 0) {
+      const chunkSize = 5000;
+      for (let c = 0; c < ids.length; c += chunkSize) {
+        const chunkIds = ids.slice(c, c + chunkSize);
+        const chunkRows = await ticketRepo.findMany({
+          where: { id: { in: chunkIds } },
+          orderBy,
+        });
+        if (onBatch) {
+          await onBatch(chunkRows.map(formatTicket));
+        } else {
+          rawTickets.push(...chunkRows);
+        }
+      }
+    }
+    const tickets = onBatch ? [] : rawTickets.map(formatTicket);
 
     return {
       tickets,
       meta: {
         total,
         page,
-        limit,
-        totalPages: Math.ceil(total / limit) || 1,
+        limit: limit || total,
+        totalPages: limit ? Math.ceil(total / limit) || 1 : 1,
       },
     };
   }
@@ -153,20 +166,47 @@ export const getTickets = async (query = {}) => {
   }
 
 
-  const [rawTickets, total] = await Promise.all([
-    ticketRepo.findMany({ skip, take: limit, where, orderBy }),
-    ticketRepo.count(where),
-  ]);
+  let rawTickets = [];
+  let total = 0;
 
-  const tickets = rawTickets.map(formatTicket);
+  if (!limit) {
+    total = await ticketRepo.count(where);
+    const batchSize = 5000;
+    let skipCount = 0;
+    while (skipCount < total) {
+      const batch = await ticketRepo.findMany({
+        skip: skipCount,
+        take: batchSize,
+        where,
+        orderBy,
+      });
+      if (!batch || batch.length === 0) break;
+      if (onBatch) {
+        await onBatch(batch.map(formatTicket));
+      } else {
+        rawTickets.push(...batch);
+      }
+      skipCount += batch.length;
+      if (batch.length < batchSize) break;
+    }
+  } else {
+    const [fetched, cnt] = await Promise.all([
+      ticketRepo.findMany({ skip, take: limit, where, orderBy }),
+      ticketRepo.count(where),
+    ]);
+    rawTickets = fetched;
+    total = cnt;
+  }
+
+  const tickets = onBatch ? [] : rawTickets.map(formatTicket);
 
   return {
     tickets,
     meta: {
       total,
       page,
-      limit,
-      totalPages: Math.ceil(total / limit) || 1,
+        limit: limit || total,
+        totalPages: limit ? Math.ceil(total / limit) || 1 : 1,
     },
   };
 };

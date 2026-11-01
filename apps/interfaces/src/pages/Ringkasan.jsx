@@ -423,7 +423,6 @@ export default function Ringkasan() {
             <option value="open">Open</option>
             <option value="escalated">Escalated</option>
             <option value="solved">Solved</option>
-            <option value="closed">Closed</option>
           </select>
 
           {/* Reset Filter Button if active (dropdowns only) */}
@@ -618,7 +617,7 @@ export default function Ringkasan() {
             <span style={{ fontSize: "1.25rem", fontWeight: 600, color: "#475569" }}>%</span>
           </div>
           <div style={{ fontSize: "12px", color: "var(--text-muted)", marginTop: "8px" }}>
-            {kpis.completedTickets} solved/closed
+            {kpis.completedTickets} solved
           </div>
         </div>
 

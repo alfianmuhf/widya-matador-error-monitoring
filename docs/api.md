@@ -111,10 +111,11 @@ Tabel berikut menyajikan seluruh endpoint yang tersedia pada sistem, metode HTTP
 | 65 | **Tiket** | REST API | `DELETE` | `/tickets/:id/assignees/:assigneeId` | Leader / Admin / Self | Hapus anggota dari tim tiket |
 | 66 | **Tiket** | REST API | `GET` | `/tickets/:id/history` | Semua Role | Linimasa riwayat versi tiket |
 | 67 | **Tiket** | REST API | `GET` | `/tickets/:id/history/:version` | Semua Role | Detail snapshot versi riwayat tiket tertentu |
-| 68 | **Lampiran Tiket** | REST API | `GET` | `/tickets/:id/attachments` | Semua Role | Ambil daftar lampiran gambar tiket & uploader |
-| 69 | **Lampiran Tiket** | REST API | `POST` | `/tickets/:id/attachments` | Anggota Tim Tiket / Admin | Unggah lampiran gambar tiket (WebP, tercatat ID pengunggah) |
-| 70 | **Lampiran Tiket** | REST API | `GET` | `/tickets/:id/attachments/:attachmentId/content` | Semua Role | Stream / download file gambar lampiran tiket |
-| 71 | **Lampiran Tiket** | REST API | `DELETE` | `/tickets/:id/attachments/:attachmentId` | `admin`, `coordinator` | Hapus lampiran gambar dari tiket dan Object Storage |
+| 68 | **Lampiran Tiket** | REST API | `GET` | `/tickets/:id/attachments` | Semua Role | Ambil daftar lampiran foto & video tiket beserta status antrean |
+| 69 | **Lampiran Tiket** | REST API | `POST` | `/tickets/:id/attachments` | Anggota Tim Tiket / Admin | Unggah lampiran foto (WebP) atau video (MP4 H.264 via antrean BullMQ) |
+| 70 | **Lampiran Tiket** | REST API | `GET` | `/tickets/:id/attachments/:attachmentId/content` | Semua Role | Stream / download lampiran (mendukung HTTP 206 Range video playback) |
+| 71 | **Lampiran Tiket** | REST API | `GET` | `/tickets/:id/attachments/:attachmentId/thumbnail` | Semua Role | Ambil gambar thumbnail (WebP) dari lampiran video |
+| 72 | **Lampiran Tiket** | REST API | `DELETE` | `/tickets/:id/attachments/:attachmentId` | `admin`, `coordinator` | Hapus file lampiran & thumbnail dari tiket dan Object Storage |
 | 72 | **Manajemen Tiket** | REST API | `GET` | `/ticket-management` | `coordinator`, `admin` | Ambil tiket yang dikelola (Aftersales: open & miliknya; RnD: escalated & timnya; Admin: semua belum solved) |
 | 73 | **Manajemen Tiket** | REST API | `PATCH` | `/ticket-management/:id` | Anggota Tim Tiket | Update status & tindakan tiket dari manajemen tiket |
 | 74 | **Manajemen Tiket** | REST API | `PATCH` | `/ticket-management/:id/aftersales-lead` | Aftersales PJ / Admin | Alihkan penanggung jawab Aftersales saat tiket status open |
@@ -2291,10 +2292,12 @@ Koneksi streaming waktu nyata (real-time) yang memancarkan event saat tiket dibu
 
 ### Lampiran Tiket (`/tickets/:id/attachments`)
 
-Layanan pengelolaan lampiran foto / bukti investigasi pada tiket.
-* **Format & Optimasi**: Sistem memproses file menggunakan library `sharp` (menerapkan rotasi EXIF otomatis, membatasi dimensi gambar terpanjang maksimal 1920 px, mengonversi gambar ke format WebP terkompresi dengan kualitas 82%). Format file SVG dilarang demi keamanan (`XXE/CPU DOS protection`).
-* **Penyimpanan**: Byte biner disimpan di Object Storage (RustFS / MinIO / S3) pada bucket `erad-attachments`, sedangkan database PostgreSQL hanya menyimpan metadata dan relative key object.
-* **Batasan**: Maksimal **5 gambar per tiket**, ukuran file maksimal **5 MB per file**, diunggah satu per satu.
+Layanan pengelolaan lampiran foto dan video bukti investigasi pada tiket.
+* **Foto (Image Processing)**: File gambar diproses menggunakan library `sharp` (rotasi EXIF otomatis, dimensi terpanjang maksimal 1920 px, dikonversi ke format WebP kualitas 82%). Format file SVG dilarang demi keamanan (`XXE/CPU DOS protection`).
+* **Video (Queue & Transcoding Processing)**: File video diunggah sementara ke staging disk dengan penamaan UUID acak (`.raw`), divalidasi integritas dan durasinya menggunakan `ffprobe` (maksimal 2 menit / 120 detik), lalu diantrekan secara asinkron menggunakan antrean **BullMQ**. Worker mengeksekusi **FFmpeg** untuk mengonversi video ke MP4 H.264 1080p CRF 28 (`-movflags +faststart`) serta menghasilkan snapshot thumbnail WebP (`-thumb.webp`) pada detik `00:00:01`.
+* **Streaming Bertahap (YouTube-like Streaming)**: Endpoint konten lampiran mendukung **HTTP 206 Partial Content** (`Range: bytes=...`) langsung dari API Backend Express ke Object Storage, memungkinkan pemutaran video secara instan dan pencarian linimasa (*seeking/scrubbing*) tanpa perlu mengunduh seluruh file 350 MB.
+* **Penyimpanan**: Byte biner disimpan di Object Storage (RustFS / MinIO / S3) pada bucket `erad-attachments`. Database PostgreSQL menyimpan metadata, relative key objek, durasi, tipe media (`file_type`), dan status antrean (`status`).
+* **Batasan Kuota**: Kuota dihitung terpisah: Maksimal **5 foto per tiket** (maksimal 5 MB per file) dan maksimal **5 video per tiket** (maksimal 350 MB per file, durasi maksimal 120 detik).
 
 ---
 
@@ -2308,7 +2311,7 @@ Layanan pengelolaan lampiran foto / bukti investigasi pada tiket.
 | **Autentikasi** | `Authorization: Bearer <access_token>` |
 | **Role Izin** | **Semua Role** (`admin`, `coordinator`, `viewer`) |
 
-Mengambil daftar seluruh lampiran gambar yang terhubung pada tiket tertentu, diurutkan secara kronologis (`uploaded_at` menaik).
+Mengambil daftar seluruh lampiran foto dan video yang terhubung pada tiket tertentu beserta status antrean pemrosesan, diurutkan secara kronologis (`uploaded_at` menaik).
 
 #### Response Sukses: `200 OK`
 ```json
@@ -2319,11 +2322,43 @@ Mengambil daftar seluruh lampiran gambar yang terhubung pada tiket tertentu, diu
     "attachments": [
       {
         "id": "6f1c2b7e-1f0a-4a4e-9a4e-2f6d1c9b7a11",
+        "fileType": "IMAGE",
+        "status": "READY",
         "url": "/tickets/ERR-20261022-0001/attachments/6f1c2b7e-1f0a-4a4e-9a4e-2f6d1c9b7a11/content",
+        "thumbnailUrl": null,
         "fileName": "konektor.webp",
         "mimeType": "image/webp",
         "size": 214331,
-        "uploadedAt": "2026-10-22T04:00:00.000Z"
+        "duration": null,
+        "errorMessage": null,
+        "uploadedAt": "2026-10-22T04:00:00.000Z",
+        "uploadedBy": {
+          "type": "user",
+          "id": "8f2a1b3c-4d5e-6f7a-8b9c-0d1e2f3a4b5c",
+          "name": "Budi Santoso",
+          "username": "budi",
+          "email": "budi"
+        }
+      },
+      {
+        "id": "8a3b5c7d-2e1f-4b6a-8c9d-1e2f3a4b5c6d",
+        "fileType": "VIDEO",
+        "status": "READY",
+        "url": "/tickets/ERR-20261022-0001/attachments/8a3b5c7d-2e1f-4b6a-8c9d-1e2f3a4b5c6d/content",
+        "thumbnailUrl": "/tickets/ERR-20261022-0001/attachments/8a3b5c7d-2e1f-4b6a-8c9d-1e2f3a4b5c6d/thumbnail",
+        "fileName": "rekaman-error-scanner.mp4",
+        "mimeType": "video/mp4",
+        "size": 18450120,
+        "duration": 48.5,
+        "errorMessage": null,
+        "uploadedAt": "2026-10-22T04:05:00.000Z",
+        "uploadedBy": {
+          "type": "user",
+          "id": "8f2a1b3c-4d5e-6f7a-8b9c-0d1e2f3a4b5c",
+          "name": "Budi Santoso",
+          "username": "budi",
+          "email": "budi"
+        }
       }
     ]
   }
@@ -2340,13 +2375,15 @@ Mengambil daftar seluruh lampiran gambar yang terhubung pada tiket tertentu, diu
 | **HTTP Method** | `POST` |
 | **Endpoint Path** | `/tickets/:id/attachments` |
 | **Header** | `Content-Type: multipart/form-data` |
-| **Body (Form-Data)**| `file` (Binary image file, maksimal 5 MB) |
+| **Body (Form-Data)**| `file` (Binary file: foto maks 5 MB, atau video maks 350 MB durasi $\le$ 120 detik) |
 | **Autentikasi** | `Authorization: Bearer <access_token>` |
 | **Role Izin** | **Admin**, **Coordinator** (Assignee tim tiket atau Aftersales pelapor) |
 
-Mengunggah file lampiran gambar baru ke dalam tiket. File akan dikonversi ke WebP dan disimpan ke object storage sebelum relasi database dibuat.
+Mengunggah file lampiran foto atau video baru ke dalam tiket.
+* **Foto:** Diproses secara sinkron melalui `sharp` dan langsung disimpan ke object storage (`status: READY`).
+* **Video:** Disimpan dengan UUID acak di staging disk, dibuatkan baris database dengan status `PENDING`, lalu dimasukkan ke antrean BullMQ untuk divalidasi `ffprobe` dan dikonversi `ffmpeg` di latar belakang.
 
-#### Response Sukses: `201 Created`
+#### Response Sukses Foto: `201 Created`
 ```json
 {
   "success": true,
@@ -2354,11 +2391,39 @@ Mengunggah file lampiran gambar baru ke dalam tiket. File akan dikonversi ke Web
   "data": {
     "attachment": {
       "id": "6f1c2b7e-1f0a-4a4e-9a4e-2f6d1c9b7a11",
+      "fileType": "IMAGE",
+      "status": "READY",
       "url": "/tickets/ERR-20261022-0001/attachments/6f1c2b7e-1f0a-4a4e-9a4e-2f6d1c9b7a11/content",
+      "thumbnailUrl": null,
       "fileName": "konektor.webp",
       "mimeType": "image/webp",
       "size": 214331,
+      "duration": null,
+      "errorMessage": null,
       "uploadedAt": "2026-10-22T04:00:00.000Z"
+    }
+  }
+}
+```
+
+#### Response Sukses Video: `202 Accepted`
+```json
+{
+  "success": true,
+  "message": "Video berhasil diunggah dan sedang diproses dalam antrean",
+  "data": {
+    "attachment": {
+      "id": "8a3b5c7d-2e1f-4b6a-8c9d-1e2f3a4b5c6d",
+      "fileType": "VIDEO",
+      "status": "PENDING",
+      "url": "/tickets/ERR-20261022-0001/attachments/8a3b5c7d-2e1f-4b6a-8c9d-1e2f3a4b5c6d/content",
+      "thumbnailUrl": null,
+      "fileName": "rekaman-error-scanner.mp4",
+      "mimeType": "video/mp4",
+      "size": 45000000,
+      "duration": null,
+      "errorMessage": null,
+      "uploadedAt": "2026-10-22T04:05:00.000Z"
     }
   }
 }
@@ -2367,13 +2432,13 @@ Mengunggah file lampiran gambar baru ke dalam tiket. File akan dikonversi ke Web
 #### ❌ Skenario Error & Kode HTTP
 | Status Code | Label Error | Penyebab |
 |:---:|:---|:---|
-| `400` | **Bad Request** | Field `file` kosong, file bukan gambar, atau format file adalah `image/svg+xml`. |
+| `400` | **Bad Request** | Field `file` kosong, format file bukan foto/video yang didukung, atau SVG (`image/svg+xml`). |
 | `401` | **Unauthorized** | Header `Authorization` tidak dikirim atau access token expired. |
 | `403` | **Forbidden** | Pengguna bukan admin dan bukan bagian dari tim tiket (bukan assignee maupun pelapor aftersales). |
 | `404` | **Not Found** | Tiket dengan ID tersebut tidak ditemukan. |
-| `409` | **Conflict** | Tiket sudah mencapai kuota maksimal 5 lampiran gambar. |
-| `413` | **Payload Too Large** | Ukuran file yang diunggah melebihi batas 5 MB. |
-| `502` | **Bad Gateway** | Object storage gagal menyimpan objek gambar. |
+| `409` | **Conflict** | Tiket sudah mencapai kuota maksimal (maksimal 5 foto atau maksimal 5 video). |
+| `413` | **Payload Too Large** | Ukuran file melebihi batas (foto > 5 MB atau video > 350 MB). |
+| `502` | **Bad Gateway** | Object storage gagal menyimpan objek. |
 | `503` | **Service Unavailable** | Object storage (RustFS/S3) belum dikonfigurasi (`S3_BUCKET` kosong) atau server storage tidak dapat dihubungi. |
 
 ---
@@ -2385,22 +2450,55 @@ Mengunggah file lampiran gambar baru ke dalam tiket. File akan dikonversi ke Web
 | **Protokol** | **REST API** |
 | **HTTP Method** | `GET` |
 | **Endpoint Path** | `/tickets/:id/attachments/:attachmentId/content` |
-| **Autentikasi** | `Authorization: Bearer <access_token>` |
+| **Header (Opsional)** | `Range: bytes=start-end` (untuk partial streaming video) |
+| **Autentikasi** | `Authorization: Bearer <access_token>` atau query param `?token=<access_token>` |
 | **Role Izin** | **Semua Role** (`admin`, `coordinator`, `viewer`) |
 
-Mengunduh atau melakukan streaming binary raw data gambar lampiran dari Object Storage ke browser / client. Response header yang disertakan:
-* `Content-Type: image/webp`
+Mengunduh atau melakukan streaming binary raw data lampiran foto atau video dari Object Storage ke browser / client.
+* **Foto:** Mengembalikan stream binary gambar WebP dengan status `200 OK`.
+* **Video:** Mendukung pemutaran bertahap (*progressive buffering*) dan seeking timeline via header `Range`. Mengembalikan status **`206 Partial Content`**, `Content-Range`, dan `Accept-Ranges: bytes`.
+
+#### Response Sukses: `200 OK` / `206 Partial Content`
+Response headers yang disertakan:
+* `Content-Type: image/webp` atau `video/mp4`
+* `Accept-Ranges: bytes`
+* `Content-Range: bytes 0-1048575/18450120` *(khusus video range request)*
 * `Cache-Control: private, max-age=300`
-* `Content-Length: <ukuran_byte>`
+* `Content-Length: <ukuran_chunk_byte>`
+
+#### ❌ Skenario Error:
+* `401 Unauthorized`: Token tidak disertakan atau telah kedaluwarsa.
+* `404 Not Found`: Lampiran tidak ditemukan atau file belum selesai diunggah.
+* `409 Conflict`: Video masih dalam antrean pemrosesan (`status: PENDING` atau `PROCESSING`).
+* `422 Unprocessable Entity`: Video gagal diproses/dikonversi (`status: FAILED`), menyertakan alasan kegagalan pada `message`.
+* `502 Bad Gateway`: Gagal membaca stream dari Object Storage.
+* `503 Service Unavailable`: Konfigurasi Object Storage belum diisi.
+
+---
+
+### `GET /tickets/:id/attachments/:attachmentId/thumbnail`
+
+| Parameter | Spesifikasi |
+|:---|:---|
+| **Protokol** | **REST API** |
+| **HTTP Method** | `GET` |
+| **Endpoint Path** | `/tickets/:id/attachments/:attachmentId/thumbnail` |
+| **Autentikasi** | `Authorization: Bearer <access_token>` atau query param `?token=<access_token>` |
+| **Role Izin** | **Semua Role** (`admin`, `coordinator`, `viewer`) |
+
+Mengambil gambar cover thumbnail (format WebP snapshot detik `00:00:01`) dari lampiran video untuk ditampilkan pada kartu antarmuka UI.
 
 #### Response Sukses: `200 OK`
-*Mengembalikan raw image binary stream.*
+*Mengembalikan raw WebP binary image.*
+Response headers:
+* `Content-Type: image/webp`
+* `Cache-Control: public, max-age=86400` (Cache 1 hari)
+* `Content-Length: <ukuran_byte>`
 
 #### ❌ Skenario Error:
 * `401 Unauthorized`: Token tidak disertakan.
-* `404 Not Found`: Lampiran tidak ditemukan atau bukan milik tiket yang bersangkutan.
-* `502 Bad Gateway`: Gagal membaca stream gambar dari Object Storage.
-* `503 Service Unavailable`: Konfigurasi Object Storage belum diisi.
+* `404 Not Found`: Lampiran bukan bertipe video atau thumbnail belum tersedia.
+* `502 Bad Gateway`: Gagal membaca thumbnail dari Object Storage.
 
 ---
 
@@ -2414,7 +2512,7 @@ Mengunduh atau melakukan streaming binary raw data gambar lampiran dari Object S
 | **Autentikasi** | `Authorization: Bearer <access_token>` |
 | **Role Izin** | **Admin** dan **Coordinator** |
 
-Menghapus file gambar lampiran dari Object Storage sekaligus menghapus baris metadata dari database dan mencatat audit log.
+Menghapus file lampiran (termasuk file video utama dan thumbnail jika ada) dari Object Storage sekaligus menghapus baris metadata dari database dan mencatat audit log.
 
 #### Response Sukses: `204 No Content`
 *(Empty response body)*

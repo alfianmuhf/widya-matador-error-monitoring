@@ -200,10 +200,10 @@ export const ticketDetailIncludes = {
 /**
  * Find paginated list of tickets with filters
  */
-export const findMany = async ({ skip = 0, take = 10, where = {}, orderBy = { open_at: "desc" } }) => {
+export const findMany = async ({ skip, take, where = {}, orderBy = { open_at: "desc" } }) => {
   return prisma.tickets.findMany({
-    skip,
-    take,
+    ...(skip !== undefined && skip !== null ? { skip } : {}),
+    ...(take !== undefined && take !== null ? { take } : {}),
     where,
     orderBy,
     include: ticketIncludes,
@@ -309,8 +309,8 @@ export const findFilteredTicketIdsAndCount = async ({
   search,
   sortBy = "open_at",
   sortOrder = "desc",
-  skip = 0,
-  take = 10,
+  skip,
+  take,
 }) => {
   const conditions = [Prisma.sql`1=1`];
   if (status) {
@@ -380,7 +380,7 @@ export const findFilteredTicketIdsAndCount = async ({
       JOIN assets a ON a.id = t.asset_id
       WHERE ${whereClause}
       ORDER BY ${sortCol} ${sortDir}
-      LIMIT ${take} OFFSET ${skip}
+      ${(take !== undefined && take !== null) ? Prisma.sql`LIMIT ${take} OFFSET ${skip || 0}` : ((skip !== undefined && skip !== null) ? Prisma.sql`OFFSET ${skip}` : Prisma.sql``)}
     `),
   ]);
 

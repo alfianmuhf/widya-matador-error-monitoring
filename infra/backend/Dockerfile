@@ -1,9 +1,10 @@
 # ==========================================
 # Optimized Multi-Stage Backend Dockerfile
 # ==========================================
-FROM node:22-alpine AS builder
+FROM node:24-alpine AS builder
 WORKDIR /app
-RUN apk add --no-cache openssl libc6-compat
+RUN apk add --no-cache openssl libc6-compat ffmpeg
+RUN mkdir -p /tmp/video-staging && chown -R node:node /tmp/video-staging
 COPY apps/error-service/package*.json ./
 COPY apps/error-service/prisma.config.js ./
 COPY apps/error-service/prisma ./prisma/
@@ -11,9 +12,10 @@ RUN npm ci
 COPY apps/error-service/src ./src
 RUN DATABASE_URL="postgresql://placeholder:placeholder@localhost:5432/placeholder" npx prisma generate
 
-FROM node:22-alpine AS runner
+FROM node:24-alpine AS runner
 WORKDIR /app
-RUN apk add --no-cache openssl libc6-compat
+RUN apk add --no-cache openssl libc6-compat ffmpeg
+RUN mkdir -p /tmp/video-staging && chown -R node:node /tmp/video-staging
 ENV NODE_ENV=production
 
 COPY apps/error-service/package*.json ./

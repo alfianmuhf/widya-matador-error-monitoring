@@ -1,6 +1,7 @@
 import app from "./app.js";
 import { env } from "./config/env.js";
 import { prisma } from "./config/prisma.js";
+import { createVideoWorker } from "./modules/attachment/attachment.queue.js";
 
 const PORT = env.PORT || 3000;
 
@@ -12,9 +13,28 @@ const server = app.listen(PORT, () => {
   console.log(`========================================`);
 });
 
+// Inisialisasi BullMQ Worker untuk antrean pemrosesan video
+let videoWorker = null;
+try {
+  videoWorker = createVideoWorker();
+  console.log("🎬 BullMQ Video Transcode Worker initialized.");
+} catch (workerErr) {
+  console.warn("⚠️ Failed to initialize BullMQ Video Worker:", workerErr.message);
+}
+
 // Graceful shutdown
 const gracefulShutdown = async (signal) => {
   console.log(`\n🛑 [${signal}] signal received: closing HTTP server...`);
+  
+  if (videoWorker) {
+    try {
+      await videoWorker.close();
+      console.log("🎬 BullMQ Video Worker closed.");
+    } catch (err) {
+      console.warn("⚠️ Error closing BullMQ worker:", err.message);
+    }
+  }
+
   server.close(async () => {
     console.log("🔒 HTTP server closed.");
     try {

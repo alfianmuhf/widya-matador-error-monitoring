@@ -226,70 +226,9 @@ export default function TicketTable({
               color: "var(--text-dark)",
             }}
           >
-            {totalTickets} tiket
+            {Number(totalTickets).toLocaleString("id-ID")} tiket
           </span>
 
-          {/* Excel Export Button */}
-          <button
-            type="button"
-            onClick={onExportExcel}
-            title="Download Excel"
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "6px",
-              padding: "7px 14px",
-              borderRadius: "8px",
-              border: "1px solid var(--border-light)",
-              backgroundColor: "#ffffff",
-              color: "var(--text-dark)",
-              fontSize: "13px",
-              fontWeight: 600,
-              cursor: "pointer",
-              boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
-              transition: "all 0.15s ease",
-            }}
-            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "var(--surface-hover)")}
-            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#ffffff")}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-              <polyline points="7 10 12 15 17 10" />
-              <line x1="12" y1="15" x2="12" y2="3" />
-            </svg>
-            Excel
-          </button>
-
-          {/* PDF Export Button */}
-          <button
-            type="button"
-            onClick={onExportPdf}
-            title="Download PDF"
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "6px",
-              padding: "7px 14px",
-              borderRadius: "8px",
-              border: "none",
-              backgroundColor: "#11222c",
-              color: "#ffffff",
-              fontSize: "13px",
-              fontWeight: 600,
-              cursor: "pointer",
-              boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
-              transition: "background-color 0.15s ease",
-            }}
-            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#1a3443")}
-            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#11222c")}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-              <polyline points="7 10 12 15 17 10" />
-              <line x1="12" y1="15" x2="12" y2="3" />
-            </svg>
-            PDF
-          </button>
         </div>
       </div>
 

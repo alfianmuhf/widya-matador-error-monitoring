@@ -186,6 +186,47 @@ Per event:
 - **Routing**: DM `data.telegram.telegramId`, berisi OTP 6 digit + `expiresInMinutes`.
 - **Catatan keamanan**: OTP dikirim sekali lewat bus; disimpan di memori proses.
 
+### `attachment.video_ready` (dari worker BullMQ)
+
+```json
+{
+  "deliveryId": "uuid",
+  "event": "attachment.video_ready",
+  "occurredAt": "2026-11-03T02:10:15.000Z",
+  "data": {
+    "ticketId": "ERR-20261022-0001",
+    "attachmentId": "6f1c2b7e-1f0a-4a4e-9a4e-2f6d1c9b7a11",
+    "chatId": "-1001234567890",
+    "duration": 48.5,
+    "fileSizeBytes": 2097152
+  }
+}
+```
+
+- **Sumber**: published oleh worker transkoding (`attachment.queue.js`) tepat setelah video `ready`.
+- **Routing n8n**: bila `data.chatId` ada → balas chat asal (reply) "video siap"; bila `null` → ikuti fallback workflow.
+- **Catatan**: `chatId` diteruskan dari unggahan ingest (`POST /api/telegram/attachments`), BE tidak menyimpan state chat.
+
+### `attachment.video_failed` (dari worker BullMQ)
+
+```json
+{
+  "deliveryId": "uuid",
+  "event": "attachment.video_failed",
+  "occurredAt": "2026-11-03T02:11:40.000Z",
+  "data": {
+    "ticketId": "ERR-20261022-0001",
+    "attachmentId": "8a3b5c7d-2e1f-4b6a-8c9d-1e2f3a4b5c6d",
+    "chatId": "-1001234567890",
+    "errorSummary": "ffprobe: Invalid data found when processing input"
+  }
+}
+```
+
+- **Sumber**: published saat percobaan terakhir gagal (`attempts: 1`, raw file dihapus di akhir — tidak ada retry otomatis).
+- **Routing n8n**: balas chat asal "pemrosesan video gagal, silakan kirim ulang" bila `chatId` ada; n8n harus memakai `Idempotency-Key` **baru** (mis. `message_id` reply) pada pengiriman ulang agar tidak menabrak replay 409.
+- **Catatan**: kegagalan publish tidak menghentikan pipeline (fire-and-forget; kegagalan broker dicatat audit log).
+
 ---
 
 ## Semantik Pengiriman

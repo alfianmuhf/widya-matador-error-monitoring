@@ -116,6 +116,7 @@ Tabel berikut menyajikan seluruh endpoint yang tersedia pada sistem, metode HTTP
 | 70 | **Lampiran Tiket** | REST API | `GET` | `/tickets/:id/attachments/:attachmentId/content` | Semua Role | Stream / download lampiran (mendukung HTTP 206 Range video playback) |
 | 71 | **Lampiran Tiket** | REST API | `GET` | `/tickets/:id/attachments/:attachmentId/thumbnail` | Semua Role | Ambil gambar thumbnail (WebP) dari lampiran video |
 | 72 | **Lampiran Tiket** | REST API | `DELETE` | `/tickets/:id/attachments/:attachmentId` | `admin`, `coordinator` | Hapus file lampiran & thumbnail dari tiket dan Object Storage |
+| 73 | **Telegram Ingest** | REST API | `POST` | `/telegram/attachments` (eksternal: `/api/telegram/attachments`) | Workflow n8n (API key) | Terima unggahan bukti relai n8n/Telegram: otorisasi whitelist + relasi tiket, idempotency, event balik-status |
 | 72 | **Manajemen Tiket** | REST API | `GET` | `/ticket-management` | `coordinator`, `admin` | Ambil tiket yang dikelola (Aftersales: open & miliknya; RnD: escalated & timnya; Admin: semua belum solved) |
 | 73 | **Manajemen Tiket** | REST API | `PATCH` | `/ticket-management/:id` | Anggota Tim Tiket | Update status & tindakan tiket dari manajemen tiket |
 | 74 | **Manajemen Tiket** | REST API | `PATCH` | `/ticket-management/:id/aftersales-lead` | Aftersales PJ / Admin | Alihkan penanggung jawab Aftersales saat tiket status open |
@@ -3126,4 +3127,84 @@ Jika mengirim query filter `?timeRange=10tahun`:
 | `500` | **Internal Server Error** | Kesalahan sistem atau database yang tidak terduga pada server backend. | `{"success":false,"statusCode":500,"message":"Terjadi kesalahan internal pada server"}` |
 | `502` | **Bad Gateway** | Layanan pihak ketiga (seperti Object Storage atau Redis downstream) mengalami kegagalan transmisi data atau stream error. | `{"success":false,"statusCode":502,"message":"Gagal menyimpan gambar ke penyimpanan"}` |
 | `503` | **Service Unavailable** | Layanan pendukung belum terkonfigurasi (misal bucket RustFS/S3 belum diisi di `.env`) atau server penyimpanan sedang tidak aktif. | `{"success":false,"statusCode":503,"message":"Penyimpanan lampiran belum dikonfigurasi"}` |
+
+## 12. Modul Ingest Telegram Jalur n8n (`/telegram`)
+
+### `POST /telegram/attachments`
+
+| Parameter | Spesifikasi |
+|:---|:---|
+| **Protokol** | **REST API** |
+| **HTTP Method** | `POST` |
+| **Endpoint Path** | `/telegram/attachments` (eksternal via nginx: `/api/telegram/attachments`) |
+| **Header** | `X-API-Key: <TELEGRAM_API_KEY>` (wajib, dibandingkan *timing-safe*; slot `TELEGRAM_API_KEY_PREVIOUS` ikut diterima selama masa rotasi), `Content-Type: multipart/form-data`, opsional `Idempotency-Key: <telegram message_id>` (maks 64 karakter) |
+| **Body (Form-Data)** | `file` (Binary: foto maks 5 MB, video maks `TELEGRAM_MAX_VIDEO_MB`, default 20 MB), `ticket_id` (wajib), `telegram_user_id` **atau** `telegram_username` (wajib minimal satu), `chat_id` (opsional — diteruskan ke event balik-status) |
+| **Autentikasi** | API key (`X-API-Key`) — **bukan JWT**. Otorisasi orang dilakukan BE dua lapis: identitas harus terdaftar di whitelist `telegram_users` **dan** tertaut ke akun platform yang lolos aturan relasi tiket (`assertCanUpload`): admin, pelapor aftersales, atau leader/anggota tim tiket |
+
+Endpoint khusus workflow n8n untuk menyerahkan bukti lampiran langsung dari chat Telegram ke pipeline lampiran yang sama dengan unggahan frontend (transformasi WebP untuk foto, BullMQ + FFmpeg untuk video). Tanpa `TELEGRAM_API_KEY` di env, endpoint balik `503` (feature-disabled) dan jalur frontend tidak terpengaruh.
+
+#### Contoh request (curl)
+```bash
+curl -X POST https://<host>/api/telegram/attachments \
+  -H "X-API-Key: $TELEGRAM_API_KEY" \
+  -H "Idempotency-Key: 51234" \
+  -F "file=@bukti.jpg" \
+  -F "ticket_id=ERR-20261022-0001" \
+  -F "telegram_user_id=123456789" \
+  -F "chat_id=-1001234567890"
+```
+
+#### Contoh konfigurasi node HTTP Request (n8n)
+| Field | Nilai |
+|:---|:---|
+| Method | `POST` |
+| URL | `https://<host-be>/api/telegram/attachments` |
+| Header | `X-API-Key: {{ $credentials.telemetryApiKey }}` |
+| Header | `Idempotency-Key: {{ $json.message_id }}` |
+| Select Body Type | `Form Data` (multipart) |
+| Field `file` | `n8n` Binary Property hasil node Telegram *Get File* |
+| Field `ticket_id` | dari mapping caption `/ticket <ref>` |
+| Field `telegram_user_id` | `{{ $json.from.id }}` |
+| Field `chat_id` | `{{ $json.chat.id }}` |
+
+#### Response Sukses Foto: `201 Created`
+* **Video:** `202 Accepted` dengan `status: PENDING` — balasan akhir dikirim BE melalui event `attachment.video_ready` / `attachment.video_failed` (lihat `docs/webhook-telegram/README.md`).
+
+```json
+{
+  "success": true,
+  "message": "Lampiran berhasil diunggah",
+  "data": {
+    "replayed": false,
+    "attachment": {
+      "id": "6f1c2b7e-1f0a-4a4e-9a4e-2f6d1c9b7a11",
+      "fileType": "IMAGE",
+      "status": "READY",
+      "url": "/tickets/ERR-20261022-0001/attachments/6f1c2b7e-1f0a-4a4e-9a4e-2f6d1c9b7a11/content",
+      "fileName": "bukti.jpg",
+      "mimeType": "image/webp",
+      "size": 104857
+    }
+  }
+}
+```
+
+#### Response Replay Idempoten: `200 OK`
+```json
+{ "success": true, "message": "Lampiran sudah dibuat sebelumnya (Idempotency-Key sama)", "data": { "replayed": true, "attachment": { "...": "..." } } }
+```
+* Replay dengan key sama pada row `pending`/`processing`/`ready` → `200` (n8n membaca `status` dan menunggu event).
+* Replay dengan key sama pada row `failed` → `409` — kirim ulang dengan `Idempotency-Key` baru.
+
+#### ❌ Skenario Error & Kode HTTP
+| Status Code | Label Error | Penyebab |
+|:---:|:---|:---|
+| `400` | **Bad Request** | Field `file` kosong, format tidak didukung (termasuk SVG), `telegram_user_id`/`telegram_username` tidak lengkap, atau `Idempotency-Key` > 64 karakter. |
+| `401` | **Unauthorized** | Header `X-API-Key` salah/hilang (dibandingkan *timing-safe*; log hanya memuat 4 karakter terakhir). |
+| `403` | **Forbidden** | Identitas Telegram tidak ada di whitelist, whitelist nonaktif, belum tertaut ke akun platform, atau akun platform tidak memiliki relasi ke tiket. |
+| `404` | **Not Found** | Tiket dengan ID tersebut tidak ditemukan. |
+| `409` | **Conflict** | Kuota lampiran tiket penuh (maks 5 foto / 5 video), atau replay idempoten pada row berstatus `failed`. |
+| `413` | **Payload Too Large** | Ukuran file melebihi batas parser jalur Telegram (foto > 5 MB atau video > `TELEGRAM_MAX_VIDEO_MB`). |
+| `503` | **Service Unavailable** | `TELEGRAM_API_KEY` belum diset (endpoint dinonaktifkan) atau object storage belum dikonfigurasi. |
+
 

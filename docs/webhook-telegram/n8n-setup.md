@@ -14,6 +14,22 @@ Workflow importable: `n8n-workflow.json` (di folder ini).
 4. **Activate** workflow, lalu pastikan RabbitMQ jalan: `docker compose up -d rabbitmq`
    (dari folder `infra/`) dan set `RABBITMQ_URL=amqp://localhost:5672` di `.env.backend`.
 
+## Workflow Unggahan Ingest (Telegram → BE)
+
+Workflow pertama di atas adalah **konsumen** bus. Jalur unggahan **balik arah** (n8n mengunggah media dari
+chat Telegram ke backend) sepertinya workflow kedua yang belum ada di `n8n-workflow.json` — dibangun dengan:
+
+1. **Trigger**: Telegram Trigger (`message: photo | video`), atau queue worker pathway.
+2. **Get File**: Telegram node unduh media (note Bot API `getFile` maks 20 MB — set `TELEGRAM_MAX_VIDEO_MB` cocok).
+3. **HTTP Request → `POST /api/telegram/attachments`**:
+   - Header `X-API-Key` dari credential teks (jangan plaintext di node).
+   - Header `Idempotency-Key: {{ $json.message_id }}` — retry aman.
+   - Body Form Data: `file` (binary), `ticket_id` (mapping caption `/ticket <ref>`), `telegram_user_id: {{ $json.from.id }}`, `chat_id: {{ $json.chat.id }}`.
+4. **Consumer event balik-status**: flow kedua konsumen RabbitMQ yang juga menangkap routing key `attachment.video_ready` dan
+   `attachment.video_failed` (payload `data.chatId`, `data.attachmentId`, `data.errorSummary`) → balas chat asal.
+5. **Retry policy**: `200` dengan `replayed: true` + `status: PENDING/PROCESSING` → tunggu event; `409` pada replay row
+   `failed` → kirim ulang dengan `Idempotency-Key` baru.
+
 ## Perilaku
 
 - Queue `erad.telegram.notify`, ack **Execution Finishes Successfully** — bila eksekusi gagal,
@@ -28,3 +44,5 @@ Workflow importable: `n8n-workflow.json` (di folder ini).
   - `ticket.member_added` → DM `data.addedMember.telegram.telegramId` saja; tanpa telegram → tidak ada pesan.
   - `ticket.member_removed` → DM ke removed member + current leader.
   - `otp.password_reset` → DM `data.telegram.telegramId` berisi OTP 6 digit.
+  - `attachment.video_ready` → balas chat asal `data.chatId` "video siap diputar" (jalur ingest unggahan).
+  - `attachment.video_failed` → balas chat asal `data.chatId` + `data.errorSummary` ringkas.

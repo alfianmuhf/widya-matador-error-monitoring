@@ -12,6 +12,7 @@ import ticketRoutes from "../modules/ticket/ticket.route.js";
 import ticketManagementRoutes from "../modules/ticket-management/ticket-management.route.js";
 import exportRoutes from "../modules/export/export.route.js";
 import auditLogRoutes from "../modules/audit-log/audit-log.route.js";
+import telegramIngestRoutes from "../modules/telegram-ingest/route.js";
 import summaryRoutes from "../modules/summary/summary.route.js";
 import errorAnalyticsRoutes from "../modules/error-analytics/error-analytics.route.js";
 import teamRoutes from "../modules/team/team.route.js";
@@ -58,6 +59,9 @@ router.use("/tickets", ticketRoutes);
 
 // Ticket Management Service khusus Coordinator (/ticket-management)
 router.use("/ticket-management", ticketManagementRoutes);
+
+// Telegram ingest khusus n8n (tanpa JWT; digardi API key) — eksternal: /api/telegram/attachments
+router.use("/telegram", telegramIngestRoutes);
 
 // Export Service (/exports)
 router.use("/exports", exportRoutes);

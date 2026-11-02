@@ -11,6 +11,7 @@ import {
   transcodeVideoWithFfmpeg,
   safeUnlink,
 } from "./attachment.video.js";
+import { publish as publishWebhook } from "../webhook/webhook.publisher.js";
 
 export const QUEUE_NAME = "video-transcoding";
 
@@ -24,7 +25,9 @@ export const getVideoTranscodeQueue = () => {
     _queue = new Queue(QUEUE_NAME, {
       connection: queueRedisOptions,
       defaultJobOptions: {
-        attempts: 2,
+        // attempts: 1 — rawFilePath dihapus di finally (zero garbage guarantee), percobaan kedua
+        // pasti ENOENT; "failed" setelah 1 percobaan berarti fail-final yang sesungguhnya.
+        attempts: 1,
         backoff: {
           type: "exponential",
           delay: 5000,
@@ -44,7 +47,7 @@ export const createVideoWorker = () => {
   const worker = new Worker(
     QUEUE_NAME,
     async (job) => {
-      const { attachmentId, ticketId, rawFilePath, originalFileName, actor } = job.data;
+      const { attachmentId, ticketId, rawFilePath, originalFileName, chatId, actor } = job.data;
       console.log(`[Queue Worker] Mulai memproses video job #${job.id} (attachment: ${attachmentId})`);
 
       const outputVideoPath = path.join(VIDEO_STAGING_DIR, `${attachmentId}.mp4`);
@@ -90,7 +93,18 @@ export const createVideoWorker = () => {
           },
         });
 
-        // 7. Catat audit log sukses
+        // 7. Publish event hasil video (bus erad.events yang sudah ada; fire-and-forget)
+        publishWebhook("attachment.video_ready", {
+          data: {
+            ticketId,
+            attachmentId,
+            chatId: chatId || null,
+            duration: meta.duration,
+            fileSizeBytes: videoBuffer.length,
+          },
+        });
+
+        // 8. Catat audit log sukses
         if (actor) {
           await recordLog({
             actor: actor.username || actor.name || actor.email || "Sistem",
@@ -114,6 +128,16 @@ export const createVideoWorker = () => {
             error_message: error.message.slice(0, 500),
           },
         }).catch((dbErr) => console.error("[Queue Worker] Gagal update status failed di DB:", dbErr.message));
+
+        // attempts: 1 ⇒ catch ini adalah fail-final yang sesungguhnya
+        publishWebhook("attachment.video_failed", {
+          data: {
+            ticketId,
+            attachmentId,
+            chatId: chatId || null,
+            errorSummary: error.message.slice(0, 200),
+          },
+        });
 
         throw error;
       } finally {

@@ -109,6 +109,9 @@ Layanan backend dibangun dengan Node.js dan Express untuk menangani pencatatan e
 9. **Reset password via OTP 6 digit**:
    - Reset password via OTP 6 digit yang dikirim ke Telegram (tanpa tabel baru, in-memory, TTL 5 menit, single-use).
 
+10. **Ingest unggahan dari Telegram (jalur n8n)**:
+    - Endpoint `POST /api/telegram/attachments` digardi API key (`X-API-Key`, timing-safe, rotasi dua slot env). Identitas pengunggah diverifikasi lewat whitelist `telegram_users` + tautan akun platform, lalu otorisasi relasi tiket yang sama dengan jalur JWT. Idempotency via header `Idempotency-Key` (kolom `ticket_attachments.idempotency_key`). Hasil transkoding video dipublish balik ke bus sebagai `attachment.video_ready` / `attachment.video_failed` agar n8n membalas chat.
+
 ---
 
 ## 🚀 Panduan Memulai (Setup untuk Developer)
@@ -126,7 +129,7 @@ Pastikan perangkat Anda telah terpasang:
 
 ## Alur Notifikasi Telegram (Webhook)
 
-Error service mempublish event JSON ke RabbitMQ (exchange `erad.events`, routing key `user.invited` / `ticket.claimed` / `ticket.member_added` / `otp.password_reset`) → queue `erad.telegram.notify` → workflow n8n → Bot API Telegram. Tanpa `RABBITMQ_URL` sistem tetap jalan tanpa notifikasi; detail kontrak event + panduan import workflow ada di `docs/webhook-telegram/`, konfigurasi infra di `infra/` (docker compose RabbitMQ), referensi API HTTP di `docs/api.md`.
+Error service mempublish event JSON ke RabbitMQ (exchange `erad.events`, routing key `user.invited` / `ticket.claimed` / `ticket.member_added` / `otp.password_reset` / `attachment.video_ready` / `attachment.video_failed`) → queue `erad.telegram.notify` → workflow n8n → Bot API Telegram. Sebaliknya, workflow n8n dapat menyerahkan bukti media dari chat Telegram ke `POST /api/telegram/attachments` (API key, whitelist, idempotency). Tanpa `RABBITMQ_URL` sistem tetap jalan tanpa notifikasi; detail kontrak event + panduan import workflow ada di `docs/webhook-telegram/`, konfigurasi infra di `infra/` (docker compose RabbitMQ), referensi API HTTP di `docs/api.md`.
 
 ### 2. Clone Repository
 Buka terminal dan clone repository menggunakan salah satu protokol:

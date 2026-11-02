@@ -152,7 +152,8 @@ export const listAttachments = async (ticketId) => {
   return rows.map(formatAttachment);
 };
 
-export const uploadAttachment = async (ticketId, file, actor) => {
+export const uploadAttachment = async (ticketId, file, actor, options = {}) => {
+  const { idempotencyKey = null, chatId = null } = options;
   if (!file || (!file.buffer && !file.path)) {
     throw createError(400, "File wajib diunggah pada field 'file'");
   }
@@ -219,6 +220,7 @@ export const uploadAttachment = async (ticketId, file, actor) => {
         file_name: sanitizeFileName(file.originalname),
         mime_type: "video/mp4", // target MIME setelah konversi
         file_size: file.size,
+        idempotency_key: idempotencyKey,
         uploaded_by_user_id: actor.id || null,
         uploaded_by_telegram_user_id: actor.telegram_user_id || actor.telegramUserId || null,
       },
@@ -239,6 +241,7 @@ export const uploadAttachment = async (ticketId, file, actor) => {
         ticketId,
         rawFilePath,
         originalFileName: sanitizeFileName(file.originalname),
+        chatId, // passthrough n8n → event video_ready/video_failed
         actor: {
           id: actor.id || null,
           username: actor.username || null,
@@ -320,6 +323,7 @@ export const uploadAttachment = async (ticketId, file, actor) => {
       file_name: sanitizeFileName(file.originalname),
       mime_type: "image/webp",
       file_size: webp.size,
+      idempotency_key: idempotencyKey,
       uploaded_by_user_id: actor.id || null,
       uploaded_by_telegram_user_id: actor.telegram_user_id || actor.telegramUserId || null,
     },

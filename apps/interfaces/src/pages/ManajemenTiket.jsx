@@ -445,7 +445,7 @@ export default function ManajemenTiket() {
                                 </button>
                               )}
 
-                              {/* TOMBOL UNGGAH FOTO (MENU FORM SENDIRI) */}
+                              {/* TOMBOL UNGGAH LAMPIRAN MEDIA (FOTO & VIDEO) */}
                               {canUpdateOpen && (
                                 <button
                                   type="button"
@@ -466,14 +466,14 @@ export default function ManajemenTiket() {
                                     alignItems: "center",
                                     gap: "4px",
                                   }}
-                                  title="Unggah lampiran gambar bukti penanganan"
+                                  title="Kelola lampiran foto & video tiket"
                                 >
                                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                     <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
                                     <circle cx="8.5" cy="8.5" r="1.5" />
                                     <polyline points="21 15 16 10 5 21" />
                                   </svg>
-                                  Upload Foto
+                                  Upload Media
                                 </button>
                               )}
 
@@ -542,7 +542,7 @@ export default function ManajemenTiket() {
                                 </button>
                               )}
 
-                              {/* TOMBOL UNGGAH FOTO (MENU FORM SENDIRI) */}
+                              {/* TOMBOL UNGGAH LAMPIRAN MEDIA (FOTO & VIDEO) */}
                               {canUpdateEscalated && (
                                 <button
                                   type="button"
@@ -563,14 +563,14 @@ export default function ManajemenTiket() {
                                     alignItems: "center",
                                     gap: "4px",
                                   }}
-                                  title="Unggah lampiran gambar bukti penanganan"
+                                  title="Kelola lampiran foto & video tiket"
                                 >
                                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                     <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
                                     <circle cx="8.5" cy="8.5" r="1.5" />
                                     <polyline points="21 15 16 10 5 21" />
                                   </svg>
-                                  Upload Foto
+                                  Upload Media
                                 </button>
                               )}
 
@@ -727,7 +727,7 @@ export default function ManajemenTiket() {
         />
       )}
 
-      {/* MODAL FORM UNGGAH GAMBAR (FORM SENDIRI) */}
+      {/* MODAL FORM UNGGAH MEDIA (FOTO & VIDEO) */}
       {attachmentTicket && (
         <TicketAttachmentModal
           isOpen={Boolean(attachmentTicket)}

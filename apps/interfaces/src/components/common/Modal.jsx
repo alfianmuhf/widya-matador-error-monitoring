@@ -34,6 +34,9 @@ export default function Modal({ isOpen, onClose, title, children, maxWidth = "48
           borderRadius: "12px",
           width: "100%",
           maxWidth,
+          maxHeight: "90vh",
+          display: "flex",
+          flexDirection: "column",
           boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)",
           overflow: "hidden",
         }}
@@ -46,9 +49,10 @@ export default function Modal({ isOpen, onClose, title, children, maxWidth = "48
             justifyContent: "space-between",
             padding: "16px 20px",
             borderBottom: "1px solid var(--border-light)",
+            flexShrink: 0,
           }}
         >
-          <h3 style={{ fontSize: "var(--text-base)", fontWeight: 600, color: "var(--text-dark)" }}>
+          <h3 style={{ fontSize: "var(--text-base)", fontWeight: 600, color: "var(--text-dark)", margin: 0 }}>
             {title}
           </h3>
           <button
@@ -72,7 +76,7 @@ export default function Modal({ isOpen, onClose, title, children, maxWidth = "48
             </svg>
           </button>
         </div>
-        <div style={{ padding: "20px" }}>{children}</div>
+        <div style={{ padding: "20px", overflowY: "auto", flex: "1 1 auto" }}>{children}</div>
       </div>
     </div>
   );

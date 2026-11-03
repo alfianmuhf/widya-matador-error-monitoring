@@ -693,6 +693,9 @@ export default function TicketAttachments({ ticket, allowUpload = false, onAttac
             display: "grid",
             gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))",
             gap: "12px",
+            maxHeight: "360px",
+            overflowY: "auto",
+            padding: "2px 4px 6px 2px",
           }}
         >
           {displayedList.map((attachment) => {
@@ -744,12 +747,12 @@ export default function TicketAttachments({ ticket, allowUpload = false, onAttac
                       }}
                     />
                   ) : (
-                    <div style={{ color: "#94a3b8", fontSize: "11px", textAlign: "center", padding: "8px", display: "flex", flexDirection: "column", alignItems: "center", gap: "4px" }}>
+                    <div style={{ color: isProcessing ? "#38bdf8" : "#94a3b8", fontSize: "11px", textAlign: "center", padding: "8px", display: "flex", flexDirection: "column", alignItems: "center", gap: "6px" }}>
                       {isVideo ? (
                         isProcessing ? (
                           <>
-                            <SpinnerIcon size={16} />
-                            <span>Memproses…</span>
+                            <SpinnerIcon size={18} />
+                            <span style={{ fontWeight: 650 }}>Memproses…</span>
                           </>
                         ) : (
                           <>
@@ -776,26 +779,10 @@ export default function TicketAttachments({ ticket, allowUpload = false, onAttac
                         alignItems: "center",
                         justifyContent: "center",
                         backgroundColor: isProcessing ? "rgba(15, 23, 42, 0.4)" : "rgba(0, 0, 0, 0.2)",
+                        pointerEvents: "none",
                       }}
                     >
-                      {isProcessing ? (
-                        <div
-                          style={{
-                            padding: "4px 8px",
-                            backgroundColor: "rgba(15, 23, 42, 0.8)",
-                            color: "#38bdf8",
-                            borderRadius: "5px",
-                            fontSize: "10.5px",
-                            fontWeight: 700,
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "5px",
-                          }}
-                        >
-                          <SpinnerIcon size={12} />
-                          <span>Proses...</span>
-                        </div>
-                      ) : isFailed ? (
+                      {isProcessing ? null : isFailed ? (
                         <div
                           style={{
                             padding: "4px 8px",

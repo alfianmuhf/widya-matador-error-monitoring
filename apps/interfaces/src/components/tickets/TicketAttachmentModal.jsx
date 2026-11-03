@@ -65,6 +65,11 @@ export default function TicketAttachmentModal({ isOpen, onClose, ticket }) {
             justifyContent: "flex-end",
             paddingTop: "12px",
             borderTop: "1px solid #edf2f7",
+            position: "sticky",
+            bottom: "-20px",
+            backgroundColor: "#ffffff",
+            paddingBottom: "4px",
+            zIndex: 10,
           }}
         >
           <button

@@ -11,6 +11,7 @@ Layanan di `infra/docker-compose.yml` dan konfigurasi terkait.
 | **rabbitmq** | `rabbitmq:4-management`. Port: 5672 (AMQP) + 15672 (Management UI). Volume `rabbitmq_data` bersifat persisten. Ganti kredensial default `guest`/`guest` sebelum produksi. |
 | **rustfs** | `rustfs/rustfs:1.0.3`. S3 API `9000`, Console `9001`. Volume: `rustfs_data`, `rustfs_logs`. |
 | **rustfs-permissions** | One-shot `busybox` untuk `chown` volume ke UID 10001 sebelum RustFS start. |
+| **postgres** | `postgres:18.6-bookworm`. Port `127.0.0.1:5432`. User: `appuser`, DB: `monitor_ticket`. Password dibaca dari secret `infra/db_password.txt`. Volume persisten `pgdata`. |
 | **redis** | `redis:8-alpine`. Cache dashboard (`summary`, `error-analytics`, `ticket-management`). Opsional: tanpa Redis, query dihitung ulang setiap request dan sistem tetap jalan. |
 
 Semua port dipublikasikan ke `127.0.0.1` saja. Akses publik harus lewat nginx host (`infra/nginx/after-sales.conf`).
@@ -19,9 +20,11 @@ Semua port dipublikasikan ke `127.0.0.1` saja. Akses publik harus lewat nginx ho
 
 1. Siapkan file environment backend di **luar** repo, dua tingkat di atas folder `infra/`:
    - `config/.env.backend` (salin dari `.env.backend.example`)
-2. Frontend dibangun dengan `VITE_API_BASE_URL=/api` secara default. Nilai Vite dibaca saat `docker compose build`, bukan saat container berjalan; untuk API lain, export `VITE_API_BASE_URL` sebelum `docker compose up -d --build`. File `config/.env.frontend` tidak dipakai oleh Compose.
-3. Tanpa `RABBITMQ_URL` di `.env` Backend → notifikasi Telegram mati tapi sistem tetap jalan (publish dilewati + warning); backend tidak menunggu healthcheck RabbitMQ.
-4. Dari direktori `infra/`:
+2. Siapkan file secret password PostgreSQL di dalam folder `infra/`:
+   - Salin `infra/db_password.txt.example` ke `infra/db_password.txt` lalu sesuaikan passwordnya.
+3. Frontend dibangun dengan `VITE_API_BASE_URL=/api` secara default. Nilai Vite dibaca saat `docker compose build`, bukan saat container berjalan; untuk API lain, export `VITE_API_BASE_URL` sebelum `docker compose up -d --build`. File `config/.env.frontend` tidak dipakai oleh Compose.
+4. Tanpa `RABBITMQ_URL` di `.env` Backend → notifikasi Telegram mati tapi sistem tetap jalan (publish dilewati + warning); backend tidak menunggu healthcheck RabbitMQ.
+5. Dari direktori `infra/`:
 
    ```bash
    docker compose up -d --build
@@ -38,9 +41,12 @@ Semua port dipublikasikan ke `127.0.0.1` saja. Akses publik harus lewat nginx ho
 - **Nginx host**: `nginx/after-sales.conf` (reverse proxy + header keamanan + SSE non-buffering).
 - **Dokumentasi webhook**: `../docs/webhook-telegram/`.
 
-### PostgreSQL di host
+### PostgreSQL (Docker Compose & Host)
 
-Backend berjalan di jaringan bridge, sehingga `localhost` berarti container backend, bukan host Docker. Gunakan `host.docker.internal` pada `DATABASE_URL` dan `DIRECT_URL` (lihat `.env.backend.example`). Compose memetakan nama ini ke `host-gateway` pada Linux Docker Engine; Docker Desktop sudah menyediakan nama tersebut. PostgreSQL host harus menerima koneksi dari jaringan Docker dan firewall harus mengizinkan portnya.
+PostgreSQL telah terkonfigurasi sebagai service `postgres` di `infra/docker-compose.yml` (`postgres:18.6-bookworm`).
+- **Dalam Compose**: Backend terhubung langsung lewat DNS internal jaringan bridge dengan host `postgres:5432` (misal: `postgresql://appuser:<password>@postgres:5432/monitor_ticket?schema=public`).
+- **Port Host**: Port `5432` tetap di-bind ke `127.0.0.1:5432` sehingga aplikasi/tools host (psql, DBeaver, Prisma CLI host) dapat terhubung langsung.
+- **PostgreSQL di Luar/Host**: Jika tetap ingin menggunakan PostgreSQL host luar, gunakan `host.docker.internal:5432` pada `DATABASE_URL` dan `DIRECT_URL` (lihat `.env.backend.example`).
 
 Untuk RabbitMQ bawaan Compose, gunakan hostname service `rabbitmq`, misalnya `amqp://<username>:<password>@rabbitmq:5672`. Kosongkan `RABBITMQ_URL` bila notifikasi tidak diperlukan.
 

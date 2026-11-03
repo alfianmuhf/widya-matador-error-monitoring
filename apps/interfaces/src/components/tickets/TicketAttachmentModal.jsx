@@ -12,8 +12,8 @@ export default function TicketAttachmentModal({ isOpen, onClose, ticket }) {
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={`Lampiran Gambar Tiket ${ticket.id}`}
-      maxWidth="680px"
+      title={`Lampiran Media Tiket ${ticket.id} (Foto & Video)`}
+      maxWidth="760px"
     >
       <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
         {/* TICKET CONTEXT BANNER */}

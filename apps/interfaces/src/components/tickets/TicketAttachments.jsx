@@ -1,17 +1,39 @@
-import { useEffect, useRef, useState } from "react";
-import api from "../../lib/api.js";
+import { useEffect, useRef, useState, useMemo } from "react";
+import api, { API_BASE_URL } from "../../lib/api.js";
 import { useAuth } from "../../context/AuthContext.jsx";
 import Modal from "../common/Modal.jsx";
 import DeleteConfirmModal from "../common/DeleteConfirmModal.jsx";
 
-const MAX_ATTACHMENTS = 5;
-const MAX_FILE_SIZE = 5 * 1024 * 1024;
+const MAX_IMAGES = 5;
+const MAX_VIDEOS = 2;
+const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5 MB
+const MAX_VIDEO_SIZE = 350 * 1024 * 1024; // 350 MB
 const MAX_DIMENSION = 1920;
 const EMPTY_ATTACHMENTS = [];
 
 /**
- * Kompresi di browser hanya optimasi jaringan. Backend selalu encode ulang,
- * jadi kegagalan di sini cukup mengirim file asli.
+ * Format ukuran file ke representasi manusiawi (KB / MB)
+ */
+const formatFileSize = (bytes) => {
+  if (!bytes || bytes <= 0) return "0 B";
+  const k = 1024;
+  const sizes = ["B", "KB", "MB", "GB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${(bytes / Math.pow(k, i)).toFixed(1)} ${sizes[i]}`;
+};
+
+/**
+ * Format durasi detik ke format MM:SS
+ */
+const formatDuration = (seconds) => {
+  if (!seconds && seconds !== 0) return "";
+  const mins = Math.floor(seconds / 60);
+  const secs = Math.floor(seconds % 60);
+  return `${mins}:${secs < 10 ? "0" : ""}${secs}`;
+};
+
+/**
+ * Kompresi gambar client-side ke format WebP (optimasi jaringan).
  */
 const compressToWebp = async (file) => {
   if (typeof createImageBitmap !== "function") return file;
@@ -40,8 +62,7 @@ const compressToWebp = async (file) => {
 };
 
 /**
- * Satu percobaan ulang: sesaat setelah hard refresh token bisa belum terpasang,
- * dan kegagalan sesaat tidak boleh membuat gambar hilang sampai drawer dibuka lagi.
+ * Mengambil blob media dengan retry sederhana
  */
 const fetchBlob = async (url) => {
   try {
@@ -53,64 +74,113 @@ const fetchBlob = async (url) => {
 };
 
 export default function TicketAttachments({ ticket, allowUpload = false, onAttachmentChange }) {
-  const { user } = useAuth();
+  const { user, accessToken } = useAuth();
   const currentUser = user?.user || user;
   const role = (currentUser?.role || "").toLowerCase();
   const canDelete = allowUpload && (role === "admin" || role === "coordinator");
-  // Upload hanya diizinkan jika allowUpload aktif dan user adalah admin/tim tiket
+
+  // Izin upload: Admin atau anggota tim/aftersales penanggung jawab tiket
   const isTeamMember =
     (ticket.assignees || []).some(
       (a) => (a.userId || a.user_id) === currentUser?.id
-    ) || ticket.aftersalesUserId === currentUser?.id;
-  const canUpload = Boolean(currentUser?.id) && allowUpload && role === "coordinator" && isTeamMember;
+    ) || ticket.aftersalesUserId === currentUser?.id || ticket.aftersales_user_id === currentUser?.id;
+  const canUpload = Boolean(currentUser?.id) && allowUpload && (role === "admin" || (role === "coordinator" && isTeamMember));
 
-  // Komponen memegang daftarnya sendiri: drawer bisa dibuka dari baris list yang
-  // tidak membawa lampiran, jadi prop saja tidak cukup dan bisa basi.
+  // Attachment state
   const [attachments, setAttachments] = useState(ticket.attachments ?? null);
   const list = attachments ?? EMPTY_ATTACHMENTS;
   const [blobUrls, setBlobUrls] = useState({});
   const [uploading, setUploading] = useState(false);
+  const [uploadType, setUploadType] = useState(null); // 'image' | 'video'
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState("");
   const [preview, setPreview] = useState(null);
   const [confirmTarget, setConfirmTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
+  const [activeTab, setActiveTab] = useState("all"); // 'all' | 'image' | 'video'
 
-  // Cache blob per id: upload/hapus tidak perlu mengunduh ulang gambar lama.
   const urlCache = useRef(new Map());
+  const photoInputRef = useRef(null);
+  const videoInputRef = useRef(null);
 
-  // Sumber kebenaran daftar: endpoint lampiran, bukan prop dari drawer.
-  useEffect(() => {
-    let cancelled = false;
+  // Pisahkan daftar foto dan video
+  const imageAttachments = useMemo(
+    () => list.filter((a) => (a.fileType || "IMAGE").toUpperCase() === "IMAGE"),
+    [list]
+  );
+  const videoAttachments = useMemo(
+    () => list.filter((a) => (a.fileType || "IMAGE").toUpperCase() === "VIDEO"),
+    [list]
+  );
 
+  const isImagesFull = imageAttachments.length >= MAX_IMAGES;
+  const isVideosFull = videoAttachments.length >= MAX_VIDEOS;
+
+  // Filter daftar sesuai tab
+  const displayedList = useMemo(() => {
+    if (activeTab === "image") return imageAttachments;
+    if (activeTab === "video") return videoAttachments;
+    return list;
+  }, [activeTab, list, imageAttachments, videoAttachments]);
+
+  // Ambil data lampiran terbaru dari server
+  const fetchAttachments = () => {
     api
       .get(`/tickets/${ticket.id}/attachments`)
       .then((res) => {
-        if (!cancelled) setAttachments(res.data?.data?.attachments ?? []);
+        const fresh = res.data?.data?.attachments ?? [];
+        setAttachments(fresh);
+        if (onAttachmentChange) onAttachmentChange(fresh);
       })
       .catch(() => {
-        if (!cancelled) setAttachments((prev) => prev ?? []);
+        setAttachments((prev) => prev ?? []);
       });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [ticket.id]);
+  };
 
   useEffect(() => {
-    // <img> tidak bisa mengirim Bearer, jadi bytes diambil lewat axios sebagai blob
+    fetchAttachments();
+  }, [ticket.id]);
+
+  // Polling otomatis jika ada video yang masih berstatus PENDING atau PROCESSING
+  useEffect(() => {
+    const hasPendingVideo = videoAttachments.some((v) => {
+      const s = (v.status || "").toUpperCase();
+      return s === "PENDING" || s === "PROCESSING";
+    });
+
+    if (!hasPendingVideo) return;
+
+    const interval = setInterval(() => {
+      fetchAttachments();
+    }, 3500);
+
+    return () => clearInterval(interval);
+  }, [videoAttachments, ticket.id]);
+
+  // Muat blob thumbnail gambar & video untuk tampilan grid
+  useEffect(() => {
     let cancelled = false;
 
     const load = async () => {
-      const missing = list.filter((attachment) => !urlCache.current.has(attachment.id));
+      const missing = list.filter((attachment) => {
+        const isVid = (attachment.fileType || "IMAGE").toUpperCase() === "VIDEO";
+        const targetUrl = isVid ? attachment.thumbnailUrl : attachment.url;
+        return targetUrl && !urlCache.current.has(attachment.id);
+      });
+
+      if (missing.length === 0) return;
+
       const fetched = await Promise.all(
         missing.map(async (attachment) => {
+          const isVid = (attachment.fileType || "IMAGE").toUpperCase() === "VIDEO";
+          const targetUrl = isVid ? attachment.thumbnailUrl : attachment.url;
+          if (!targetUrl) return false;
+
           try {
-            const blob = await fetchBlob(attachment.url);
+            const blob = await fetchBlob(targetUrl);
             urlCache.current.set(attachment.id, URL.createObjectURL(blob));
             return true;
           } catch {
-            // biarkan placeholder tampil; detail error tidak perlu memenuhi UI
             return false;
           }
         })
@@ -128,6 +198,7 @@ export default function TicketAttachments({ ticket, allowUpload = false, onAttac
     };
   }, [list]);
 
+  // Bersihkan cache blob saat unmount
   useEffect(() => {
     const cache = urlCache.current;
     return () => {
@@ -136,24 +207,28 @@ export default function TicketAttachments({ ticket, allowUpload = false, onAttac
     };
   }, []);
 
-  const handleUpload = async (event) => {
+  // ----------------------------------------------------
+  // HANDLER: UNGGAH FOTO
+  // ----------------------------------------------------
+  const handleUploadPhoto = async (event) => {
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file) return;
 
     setError("");
 
-    if (list.length >= MAX_ATTACHMENTS) {
-      setError(`Lampiran tiket maksimal ${MAX_ATTACHMENTS} gambar`);
+    if (imageAttachments.length >= MAX_IMAGES) {
+      setError(`Lampiran foto sudah mencapai batas maksimal (${MAX_IMAGES} foto)`);
       return;
     }
 
-    if (file.size > MAX_FILE_SIZE) {
-      setError("Ukuran gambar maksimal 5 MB");
+    if (file.size > MAX_IMAGE_SIZE) {
+      setError(`Ukuran foto melebihi batas maksimal 5 MB (ukuran file: ${formatFileSize(file.size)})`);
       return;
     }
 
     setUploading(true);
+    setUploadType("image");
     setProgress(0);
 
     try {
@@ -169,16 +244,69 @@ export default function TicketAttachments({ ticket, allowUpload = false, onAttac
 
       const created = res.data?.data?.attachment;
       if (created) {
-        setAttachments([...list, created]);
+        setAttachments((prev) => [...(prev || []), created]);
+        if (onAttachmentChange) onAttachmentChange([...(attachments || []), created]);
       }
     } catch (err) {
-      setError(err?.response?.data?.message || "Gagal mengunggah gambar");
+      setError(err?.response?.data?.message || "Gagal mengunggah foto lampiran");
     } finally {
       setUploading(false);
+      setUploadType(null);
       setProgress(0);
     }
   };
 
+  // ----------------------------------------------------
+  // HANDLER: UNGGAH VIDEO
+  // ----------------------------------------------------
+  const handleUploadVideo = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+
+    setError("");
+
+    if (videoAttachments.length >= MAX_VIDEOS) {
+      setError(`Lampiran video sudah mencapai batas maksimal (${MAX_VIDEOS} video)`);
+      return;
+    }
+
+    if (file.size > MAX_VIDEO_SIZE) {
+      setError(`Ukuran video melebihi batas maksimal 350 MB (ukuran file: ${formatFileSize(file.size)})`);
+      return;
+    }
+
+    setUploading(true);
+    setUploadType("video");
+    setProgress(0);
+
+    try {
+      const form = new FormData();
+      form.append("file", file);
+
+      const res = await api.post(`/tickets/${ticket.id}/attachments`, form, {
+        onUploadProgress: (evt) => {
+          if (evt.total) setProgress(Math.round((evt.loaded / evt.total) * 100));
+        },
+      });
+
+      const created = res.data?.data?.attachment;
+      if (created) {
+        setAttachments((prev) => [...(prev || []), created]);
+        if (onAttachmentChange) onAttachmentChange([...(attachments || []), created]);
+      }
+    } catch (err) {
+      setError(err?.response?.data?.message || "Gagal mengunggah video lampiran");
+    } finally {
+      setUploading(false);
+      setUploadType(null);
+      setProgress(0);
+    }
+  };
+
+  // ----------------------------------------------------
+  // HANDLER: HAPUS LAMPIRAN
+  // ----------------------------------------------------
   const handleDelete = async () => {
     if (!confirmTarget) return;
     setDeleting(true);
@@ -190,7 +318,9 @@ export default function TicketAttachments({ ticket, allowUpload = false, onAttac
         URL.revokeObjectURL(removedUrl);
         urlCache.current.delete(confirmTarget.id);
       }
-      setAttachments(list.filter((item) => item.id !== confirmTarget.id));
+      const updated = list.filter((item) => item.id !== confirmTarget.id);
+      setAttachments(updated);
+      if (onAttachmentChange) onAttachmentChange(updated);
       setConfirmTarget(null);
     } catch (err) {
       setError(err?.response?.data?.message || "Gagal menghapus lampiran");
@@ -198,8 +328,6 @@ export default function TicketAttachments({ ticket, allowUpload = false, onAttac
       setDeleting(false);
     }
   };
-
-  const isFull = list.length >= MAX_ATTACHMENTS;
 
   return (
     <div
@@ -211,47 +339,133 @@ export default function TicketAttachments({ ticket, allowUpload = false, onAttac
         boxShadow: "0 1px 3px rgba(0, 0, 0, 0.02)",
       }}
     >
+      {/* HEADER: KONTROL UNGGAH & KUOTA */}
       <div
         style={{
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
+          flexWrap: "wrap",
           gap: "12px",
-          marginBottom: "14px",
+          marginBottom: "16px",
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-          <span style={{ width: "3px", height: "14px", backgroundColor: "#0e8587", borderRadius: "2px" }} />
-          <h3 style={{ fontSize: "14.5px", fontWeight: 750, color: "#0f172a", margin: 0 }}>
-            Lampiran ({list.length}/{MAX_ATTACHMENTS})
-          </h3>
+        <div>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <span style={{ width: "3px", height: "14px", backgroundColor: "#0e8587", borderRadius: "2px" }} />
+            <h3 style={{ fontSize: "14.5px", fontWeight: 750, color: "#0f172a", margin: 0 }}>
+              Lampiran Media
+            </h3>
+            {/* Kuota Foto & Video */}
+            <div style={{ display: "flex", gap: "6px", marginLeft: "4px" }}>
+              <span
+                style={{
+                  fontSize: "11px",
+                  fontWeight: 650,
+                  padding: "2px 7px",
+                  borderRadius: "5px",
+                  backgroundColor: imageAttachments.length >= MAX_IMAGES ? "#fef2f2" : "#f1f5f9",
+                  color: imageAttachments.length >= MAX_IMAGES ? "#dc2626" : "#475569",
+                  border: "1px solid #e2e8f0",
+                }}
+                title="Batas maksimal 5 foto (maks 5 MB / foto)"
+              >
+                📷 {imageAttachments.length}/{MAX_IMAGES} Foto
+              </span>
+              <span
+                style={{
+                  fontSize: "11px",
+                  fontWeight: 650,
+                  padding: "2px 7px",
+                  borderRadius: "5px",
+                  backgroundColor: videoAttachments.length >= MAX_VIDEOS ? "#fef2f2" : "#f1f5f9",
+                  color: videoAttachments.length >= MAX_VIDEOS ? "#dc2626" : "#475569",
+                  border: "1px solid #e2e8f0",
+                }}
+                title="Batas maksimal 2 video (maks 350 MB / video)"
+              >
+                🎥 {videoAttachments.length}/{MAX_VIDEOS} Video
+              </span>
+            </div>
+          </div>
         </div>
 
+        {/* 2 TOMBOL TERPISAH DI HEADER MODAL: FOTO & VIDEO */}
         {canUpload ? (
-          <label
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "6px",
-              padding: "7px 12px",
-              borderRadius: "8px",
-              border: `1px solid ${isFull || uploading ? "#e2e8f0" : "#0e8587"}`,
-              backgroundColor: isFull || uploading ? "#f8fafc" : "#0e8587",
-              color: isFull || uploading ? "#94a3b8" : "#ffffff",
-              fontSize: "12px",
-              fontWeight: 650,
-              cursor: isFull || uploading ? "not-allowed" : "pointer",
-            }}
-          >
-            {uploading ? `Mengunggah ${progress}%` : "Unggah Gambar"}
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            {/* Tombol Unggah Foto */}
+            <button
+              type="button"
+              disabled={isImagesFull || uploading}
+              onClick={() => photoInputRef.current?.click()}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "5px",
+                padding: "6px 12px",
+                borderRadius: "7px",
+                border: isImagesFull ? "1px solid #e2e8f0" : "1px solid #0e8587",
+                backgroundColor: isImagesFull ? "#f8fafc" : "#0e8587",
+                color: isImagesFull ? "#94a3b8" : "#ffffff",
+                fontSize: "12px",
+                fontWeight: 650,
+                cursor: isImagesFull || uploading ? "not-allowed" : "pointer",
+                transition: "all 0.15s ease",
+              }}
+              title={isImagesFull ? "Kuota foto penuh (maksimal 5)" : "Unggah foto bukti kerusakan/perbaikan (maks 5 MB)"}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                <circle cx="8.5" cy="8.5" r="1.5" />
+                <polyline points="21 15 16 10 5 21" />
+              </svg>
+              <span>{uploading && uploadType === "image" ? `Mengunggah ${progress}%` : "+ Foto"}</span>
+            </button>
             <input
+              ref={photoInputRef}
               type="file"
-              accept="image/*"
-              disabled={isFull || uploading}
-              onChange={handleUpload}
+              accept="image/jpeg,image/png,image/webp,image/gif,image/bmp"
+              disabled={isImagesFull || uploading}
+              onChange={handleUploadPhoto}
               style={{ display: "none" }}
             />
-          </label>
+
+            {/* Tombol Unggah Video */}
+            <button
+              type="button"
+              disabled={isVideosFull || uploading}
+              onClick={() => videoInputRef.current?.click()}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "5px",
+                padding: "6px 12px",
+                borderRadius: "7px",
+                border: isVideosFull ? "1px solid #e2e8f0" : "1px solid #0284c7",
+                backgroundColor: isVideosFull ? "#f8fafc" : "#0284c7",
+                color: isVideosFull ? "#94a3b8" : "#ffffff",
+                fontSize: "12px",
+                fontWeight: 650,
+                cursor: isVideosFull || uploading ? "not-allowed" : "pointer",
+                transition: "all 0.15s ease",
+              }}
+              title={isVideosFull ? "Kuota video penuh (maksimal 2)" : "Unggah video rekaman penanganan (maks 350 MB, MP4/MOV)"}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <polygon points="23 7 16 12 23 17 23 7" />
+                <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
+              </svg>
+              <span>{uploading && uploadType === "video" ? `Mengunggah ${progress}%` : "+ Video"}</span>
+            </button>
+            <input
+              ref={videoInputRef}
+              type="file"
+              accept="video/mp4,video/quicktime,video/x-matroska,video/webm"
+              disabled={isVideosFull || uploading}
+              onChange={handleUploadVideo}
+              style={{ display: "none" }}
+            />
+          </div>
         ) : (
           <span style={{ fontSize: "11px", color: "#64748b", backgroundColor: "#f1f5f9", padding: "3px 8px", borderRadius: "4px", border: "1px solid #e2e8f0" }}>
             Read-only (Unggah via Manajemen Tiket)
@@ -259,6 +473,32 @@ export default function TicketAttachments({ ticket, allowUpload = false, onAttac
         )}
       </div>
 
+      {/* PROGRESS BAR KETIKA SEDANG MENGUNGGAH */}
+      {uploading && (
+        <div style={{ marginBottom: "14px", padding: "10px 14px", backgroundColor: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "8px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12px", fontWeight: 650, color: "#166534", marginBottom: "6px" }}>
+            <span>Sedang mengunggah {uploadType === "video" ? "video" : "foto"}...</span>
+            <span>{progress}%</span>
+          </div>
+          <div style={{ width: "100%", height: "6px", backgroundColor: "#dcfce7", borderRadius: "9999px", overflow: "hidden" }}>
+            <div
+              style={{
+                width: `${progress}%`,
+                height: "100%",
+                backgroundColor: uploadType === "video" ? "#0284c7" : "#0e8587",
+                transition: "width 0.2s ease",
+              }}
+            />
+          </div>
+          {uploadType === "video" && (
+            <div style={{ fontSize: "11px", color: "#15803d", marginTop: "5px" }}>
+              ℹ️ Video akan otomatis dioptimasi dan dibuatkan thumbnail di server setelah proses unggah selesai.
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ERROR ALERT */}
       {error && (
         <div
           style={{
@@ -269,141 +509,379 @@ export default function TicketAttachments({ ticket, allowUpload = false, onAttac
             border: "1px solid #fee2e2",
             color: "#dc2626",
             fontSize: "12px",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
           }}
         >
-          {error}
+          <span>⚠️ {error}</span>
+          <button
+            type="button"
+            onClick={() => setError("")}
+            style={{ background: "transparent", border: "none", color: "#dc2626", cursor: "pointer", fontWeight: 700 }}
+          >
+            ×
+          </button>
         </div>
       )}
 
-      {list.length === 0 ? (
-        <div style={{ textAlign: "center", padding: "18px 0", color: "#64748b", fontSize: "12.5px" }}>
-          Belum ada gambar untuk tiket ini.
+      {/* TAB FILTER MEDIA: SEMUA / FOTO / VIDEO */}
+      {list.length > 0 && (
+        <div style={{ display: "flex", gap: "6px", marginBottom: "14px", borderBottom: "1px solid #edf2f7", paddingBottom: "8px" }}>
+          <button
+            type="button"
+            onClick={() => setActiveTab("all")}
+            style={{
+              padding: "4px 10px",
+              borderRadius: "5px",
+              fontSize: "11.5px",
+              fontWeight: 650,
+              border: activeTab === "all" ? "1px solid #0e8587" : "1px solid transparent",
+              backgroundColor: activeTab === "all" ? "#e8f7f6" : "transparent",
+              color: activeTab === "all" ? "#0e8587" : "#64748b",
+              cursor: "pointer",
+            }}
+          >
+            Semua ({list.length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("image")}
+            style={{
+              padding: "4px 10px",
+              borderRadius: "5px",
+              fontSize: "11.5px",
+              fontWeight: 650,
+              border: activeTab === "image" ? "1px solid #0e8587" : "1px solid transparent",
+              backgroundColor: activeTab === "image" ? "#e8f7f6" : "transparent",
+              color: activeTab === "image" ? "#0e8587" : "#64748b",
+              cursor: "pointer",
+            }}
+          >
+            📷 Foto ({imageAttachments.length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("video")}
+            style={{
+              padding: "4px 10px",
+              borderRadius: "5px",
+              fontSize: "11.5px",
+              fontWeight: 650,
+              border: activeTab === "video" ? "1px solid #0284c7" : "1px solid transparent",
+              backgroundColor: activeTab === "video" ? "#e0f2fe" : "transparent",
+              color: activeTab === "video" ? "#0284c7" : "#64748b",
+              cursor: "pointer",
+            }}
+          >
+            🎥 Video ({videoAttachments.length})
+          </button>
+        </div>
+      )}
+
+      {/* DAFTAR GRID LAMPIRAN */}
+      {displayedList.length === 0 ? (
+        <div style={{ textAlign: "center", padding: "24px 0", color: "#64748b", fontSize: "12.5px" }}>
+          {list.length === 0 ? "Belum ada lampiran media (foto/video) untuk tiket ini." : "Tidak ada file pada kategori ini."}
         </div>
       ) : (
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))",
-            gap: "10px",
+            gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))",
+            gap: "12px",
           }}
         >
-          {list.map((attachment) => (
-            <div
-              key={attachment.id}
-              style={{
-                position: "relative",
-                aspectRatio: "1 / 1",
-                borderRadius: "8px",
-                overflow: "hidden",
-                border: "1px solid #e2e8f0",
-                backgroundColor: "#f8fafc",
-              }}
-            >
-              <button
-                type="button"
-                onClick={() => setPreview(attachment)}
-                style={{
-                  width: "100%",
-                  height: "100%",
-                  padding: 0,
-                  border: "none",
-                  background: "transparent",
-                  cursor: "zoom-in",
-                }}
-                aria-label={`Perbesar ${attachment.fileName}`}
-              >
-                {blobUrls[attachment.id] ? (
-                  <img
-                    src={blobUrls[attachment.id]}
-                    alt={attachment.fileName}
-                    style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
-                  />
-                ) : (
-                  <span style={{ fontSize: "11px", color: "#94a3b8" }}>Memuat…</span>
-                )}
-              </button>
+          {displayedList.map((attachment) => {
+            const isVideo = (attachment.fileType || "IMAGE").toUpperCase() === "VIDEO";
+            const videoStatus = (attachment.status || "READY").toUpperCase();
+            const isProcessing = isVideo && (videoStatus === "PENDING" || videoStatus === "PROCESSING");
+            const isFailed = isVideo && videoStatus === "FAILED";
 
-              {canDelete && (
+            return (
+              <div
+                key={attachment.id}
+                style={{
+                  position: "relative",
+                  aspectRatio: "1 / 1",
+                  borderRadius: "8px",
+                  overflow: "hidden",
+                  border: "1px solid #e2e8f0",
+                  backgroundColor: "#0f172a",
+                }}
+              >
                 <button
                   type="button"
-                  onClick={() => setConfirmTarget(attachment)}
-                  aria-label={`Hapus ${attachment.fileName}`}
+                  onClick={() => setPreview(attachment)}
                   style={{
-                    position: "absolute",
-                    top: "6px",
-                    right: "6px",
-                    width: "22px",
-                    height: "22px",
-                    borderRadius: "50%",
+                    width: "100%",
+                    height: "100%",
+                    padding: 0,
                     border: "none",
-                    backgroundColor: "rgba(15, 23, 42, 0.65)",
-                    color: "#ffffff",
-                    fontSize: "13px",
-                    lineHeight: 1,
-                    cursor: "pointer",
+                    background: "transparent",
+                    cursor: isProcessing ? "wait" : "zoom-in",
+                    position: "relative",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
                   }}
+                  aria-label={`Buka ${attachment.fileName}`}
                 >
-                  ×
+                  {/* TAMPILAN THUMBNAIL / PREVIEW */}
+                  {blobUrls[attachment.id] ? (
+                    <img
+                      src={blobUrls[attachment.id]}
+                      alt={attachment.fileName}
+                      style={{
+                        width: "100%",
+                        height: "100%",
+                        objectFit: "cover",
+                        display: "block",
+                        opacity: isProcessing ? 0.4 : 1,
+                      }}
+                    />
+                  ) : (
+                    <div style={{ color: "#94a3b8", fontSize: "11px", textAlign: "center", padding: "8px" }}>
+                      {isVideo ? (isProcessing ? "Memproses…" : "🎥 Video") : "Memuat…"}
+                    </div>
+                  )}
+
+                  {/* OVERLAY ICON KHUSUS VIDEO */}
+                  {isVideo && (
+                    <div
+                      style={{
+                        position: "absolute",
+                        inset: 0,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        backgroundColor: isProcessing ? "rgba(15, 23, 42, 0.4)" : "rgba(0, 0, 0, 0.2)",
+                      }}
+                    >
+                      {isProcessing ? (
+                        <div
+                          style={{
+                            padding: "4px 8px",
+                            backgroundColor: "rgba(15, 23, 42, 0.8)",
+                            color: "#38bdf8",
+                            borderRadius: "5px",
+                            fontSize: "10.5px",
+                            fontWeight: 700,
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "4px",
+                          }}
+                        >
+                          <span style={{ display: "inline-block", animation: "spin 1s linear infinite" }}>⏳</span>
+                          Proses...
+                        </div>
+                      ) : isFailed ? (
+                        <div
+                          style={{
+                            padding: "4px 8px",
+                            backgroundColor: "rgba(220, 38, 38, 0.85)",
+                            color: "#ffffff",
+                            borderRadius: "5px",
+                            fontSize: "10.5px",
+                            fontWeight: 700,
+                          }}
+                        >
+                          ⚠️ Gagal
+                        </div>
+                      ) : (
+                        <div
+                          style={{
+                            width: "34px",
+                            height: "34px",
+                            borderRadius: "50%",
+                            backgroundColor: "rgba(14, 133, 135, 0.85)",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            color: "#ffffff",
+                            boxShadow: "0 2px 6px rgba(0,0,0,0.3)",
+                          }}
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                            <polygon points="5 3 19 12 5 21 5 3" />
+                          </svg>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* BADGE TIPE FILE DI POJOK KIRI BAWAH */}
+                  <div
+                    style={{
+                      position: "absolute",
+                      bottom: "5px",
+                      left: "5px",
+                      padding: "2px 5px",
+                      borderRadius: "3px",
+                      backgroundColor: "rgba(15, 23, 42, 0.75)",
+                      color: isVideo ? "#38bdf8" : "#ffffff",
+                      fontSize: "9.5px",
+                      fontWeight: 700,
+                      letterSpacing: "0.03em",
+                      backdropFilter: "blur(2px)",
+                    }}
+                  >
+                    {isVideo ? (attachment.duration ? `🎥 ${formatDuration(attachment.duration)}` : "🎥 VIDEO") : "📷 FOTO"}
+                  </div>
                 </button>
-              )}
-            </div>
-          ))}
+
+                {/* TOMBOL HAPUS */}
+                {canDelete && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setConfirmTarget(attachment);
+                    }}
+                    aria-label={`Hapus ${attachment.fileName}`}
+                    title="Hapus lampiran ini"
+                    style={{
+                      position: "absolute",
+                      top: "6px",
+                      right: "6px",
+                      width: "22px",
+                      height: "22px",
+                      borderRadius: "50%",
+                      border: "none",
+                      backgroundColor: "rgba(15, 23, 42, 0.75)",
+                      color: "#ffffff",
+                      fontSize: "13px",
+                      lineHeight: 1,
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      transition: "background-color 0.15s ease",
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#dc2626")}
+                    onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "rgba(15, 23, 42, 0.75)")}
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
 
-      <Modal isOpen={Boolean(preview)} onClose={() => setPreview(null)} title={preview?.fileName} maxWidth="720px">
-        {preview && blobUrls[preview.id] ? (
+      {/* MODAL PREVIEW MEDIA (FOTO ATAU VIDEO PLAYER) */}
+      <Modal
+        isOpen={Boolean(preview)}
+        onClose={() => setPreview(null)}
+        title={preview ? `${(preview.fileType || "IMAGE").toUpperCase() === "VIDEO" ? "🎥 Video" : "📷 Foto"}: ${preview.fileName}` : "Preview"}
+        maxWidth="740px"
+      >
+        {preview && (
           <div>
-            <img
-              src={blobUrls[preview.id]}
-              alt={preview.fileName}
-              style={{ width: "100%", height: "auto", borderRadius: "8px", display: "block" }}
-            />
-            {preview.uploadedBy && (
-              <div
-                style={{
-                  marginTop: "12px",
-                  padding: "10px 14px",
-                  backgroundColor: "#f8fafc",
-                  border: "1px solid #e2e8f0",
-                  borderRadius: "8px",
-                  fontSize: "12px",
-                  color: "#475569",
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                }}
-              >
-                <div>
-                  Pengunggah:{" "}
-                  <strong style={{ color: "#0f172a" }}>
-                    {preview.uploadedBy.name || preview.uploadedBy.email || "Petugas"}
-                  </strong>{" "}
-                  <span style={{ fontSize: "11px", color: "#64748b" }}>
-                    ({preview.uploadedBy.division?.toUpperCase() || preview.uploadedBy.role?.toUpperCase() || "RnD"})
-                  </span>
-                </div>
-                {preview.createdAt && (
-                  <span style={{ fontSize: "11.5px", color: "#94a3b8" }}>
-                    {new Date(preview.createdAt).toLocaleString("id-ID")}
-                  </span>
+            {/* AREA TAMPILAN FOTO / VIDEO */}
+            {(preview.fileType || "IMAGE").toUpperCase() === "VIDEO" ? (
+              <div>
+                {(preview.status || "READY").toUpperCase() === "PENDING" || (preview.status || "READY").toUpperCase() === "PROCESSING" ? (
+                  <div style={{ textAlign: "center", padding: "40px 20px", backgroundColor: "#f8fafc", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
+                    <div style={{ fontSize: "28px", marginBottom: "10px" }}>⏳</div>
+                    <div style={{ fontSize: "14px", fontWeight: 700, color: "#0f172a" }}>
+                      Video Sedang Diproses Transcoding
+                    </div>
+                    <p style={{ fontSize: "12.5px", color: "#64748b", marginTop: "4px" }}>
+                      Server sedang mengompresi dan menyiapkan video untuk streaming. Halaman akan otomatis memperbarui tampilan saat proses selesai.
+                    </p>
+                  </div>
+                ) : (preview.status || "READY").toUpperCase() === "FAILED" ? (
+                  <div style={{ textAlign: "center", padding: "40px 20px", backgroundColor: "#fef2f2", borderRadius: "8px", border: "1px solid #fee2e2" }}>
+                    <div style={{ fontSize: "28px", marginBottom: "10px" }}>⚠️</div>
+                    <div style={{ fontSize: "14px", fontWeight: 700, color: "#dc2626" }}>
+                      Gagal Memproses Video
+                    </div>
+                    <p style={{ fontSize: "12.5px", color: "#991b1b", marginTop: "4px" }}>
+                      {preview.errorMessage || "Format video tidak dapat diproses oleh worker transcode server."}
+                    </p>
+                  </div>
+                ) : (
+                  <div style={{ backgroundColor: "#000000", borderRadius: "8px", overflow: "hidden", display: "flex", justifyContent: "center" }}>
+                    <video
+                      controls
+                      autoPlay
+                      src={accessToken ? `${API_BASE_URL}${preview.url}?token=${encodeURIComponent(accessToken)}` : `${API_BASE_URL}${preview.url}`}
+                      style={{ width: "100%", maxHeight: "65vh", display: "block" }}
+                    >
+                      Browser Anda tidak mendukung pemutaran tag video.
+                    </video>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div>
+                {blobUrls[preview.id] ? (
+                  <img
+                    src={blobUrls[preview.id]}
+                    alt={preview.fileName}
+                    style={{ width: "100%", height: "auto", maxHeight: "68vh", objectFit: "contain", borderRadius: "8px", display: "block", backgroundColor: "#000" }}
+                  />
+                ) : (
+                  <div style={{ textAlign: "center", padding: "20px", color: "#64748b" }}>Memuat gambar...</div>
                 )}
               </div>
             )}
+
+            {/* DETAIL METADATA PENGUNGGAH & FILE */}
+            <div
+              style={{
+                marginTop: "14px",
+                padding: "12px 16px",
+                backgroundColor: "#f8fafc",
+                border: "1px solid #e2e8f0",
+                borderRadius: "8px",
+                fontSize: "12px",
+                color: "#475569",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                flexWrap: "wrap",
+                gap: "8px",
+              }}
+            >
+              <div>
+                <div>
+                  Pengunggah:{" "}
+                  <strong style={{ color: "#0f172a" }}>
+                    {preview.uploadedBy?.name || preview.uploadedBy?.username || "Petugas"}
+                  </strong>{" "}
+                  <span style={{ fontSize: "11px", color: "#64748b" }}>
+                    ({preview.uploadedBy?.division?.toUpperCase() || preview.uploadedBy?.type || "RnD"})
+                  </span>
+                </div>
+                <div style={{ fontSize: "11.5px", color: "#64748b", marginTop: "2px" }}>
+                  Ukuran: <b>{formatFileSize(preview.size)}</b>
+                  {preview.duration ? ` • Durasi: ${formatDuration(preview.duration)}` : ""}
+                  {preview.mimeType ? ` • Format: ${preview.mimeType}` : ""}
+                </div>
+              </div>
+
+              {preview.uploadedAt && (
+                <div style={{ fontSize: "11.5px", color: "#94a3b8" }}>
+                  {new Date(preview.uploadedAt).toLocaleString("id-ID")}
+                </div>
+              )}
+            </div>
           </div>
-        ) : (
-          <div style={{ textAlign: "center", color: "#64748b", fontSize: "12.5px" }}>Gambar tidak tersedia.</div>
         )}
       </Modal>
 
+      {/* MODAL KONFIRMASI HAPUS */}
       <DeleteConfirmModal
         isOpen={Boolean(confirmTarget)}
         onClose={() => setConfirmTarget(null)}
         onConfirm={handleDelete}
         loading={deleting}
-        title="Hapus Lampiran"
+        title="Hapus Lampiran Media"
         itemName={confirmTarget?.fileName}
-        description="Gambar akan dihapus permanen dari tiket dan object storage."
+        description="Media akan dihapus permanen dari tiket dan penyimpanan object storage."
       />
     </div>
   );

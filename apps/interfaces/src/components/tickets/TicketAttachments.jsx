@@ -32,6 +32,41 @@ const formatDuration = (seconds) => {
   return `${mins}:${secs < 10 ? "0" : ""}${secs}`;
 };
 
+const ImageIcon = ({ size = 13, style }) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    style={style}
+  >
+    <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+    <circle cx="8.5" cy="8.5" r="1.5" />
+    <polyline points="21 15 16 10 5 21" />
+  </svg>
+);
+
+const VideoIcon = ({ size = 13, style }) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    style={style}
+  >
+    <polygon points="23 7 16 12 23 17 23 7" />
+    <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
+  </svg>
+);
+
 /**
  * Kompresi gambar client-side ke format WebP (optimasi jaringan).
  */
@@ -367,10 +402,14 @@ export default function TicketAttachments({ ticket, allowUpload = false, onAttac
                   backgroundColor: imageAttachments.length >= MAX_IMAGES ? "#fef2f2" : "#f1f5f9",
                   color: imageAttachments.length >= MAX_IMAGES ? "#dc2626" : "#475569",
                   border: "1px solid #e2e8f0",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "4px",
                 }}
                 title="Batas maksimal 5 foto (maks 5 MB / foto)"
               >
-                📷 {imageAttachments.length}/{MAX_IMAGES} Foto
+                <ImageIcon size={12} />
+                <span>{imageAttachments.length}/{MAX_IMAGES} Foto</span>
               </span>
               <span
                 style={{
@@ -381,10 +420,14 @@ export default function TicketAttachments({ ticket, allowUpload = false, onAttac
                   backgroundColor: videoAttachments.length >= MAX_VIDEOS ? "#fef2f2" : "#f1f5f9",
                   color: videoAttachments.length >= MAX_VIDEOS ? "#dc2626" : "#475569",
                   border: "1px solid #e2e8f0",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "4px",
                 }}
-                title="Batas maksimal 2 video (maks 350 MB / video)"
+                title="Batas maksimal 5 video (maks 350 MB / video)"
               >
-                🎥 {videoAttachments.length}/{MAX_VIDEOS} Video
+                <VideoIcon size={12} />
+                <span>{videoAttachments.length}/{MAX_VIDEOS} Video</span>
               </span>
             </div>
           </div>
@@ -414,11 +457,7 @@ export default function TicketAttachments({ ticket, allowUpload = false, onAttac
               }}
               title={isImagesFull ? "Kuota foto penuh (maksimal 5)" : "Unggah foto bukti kerusakan/perbaikan (maks 5 MB)"}
             >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-                <circle cx="8.5" cy="8.5" r="1.5" />
-                <polyline points="21 15 16 10 5 21" />
-              </svg>
+              <ImageIcon size={13} />
               <span>{uploading && uploadType === "image" ? `Mengunggah ${progress}%` : "+ Foto"}</span>
             </button>
             <input
@@ -449,12 +488,9 @@ export default function TicketAttachments({ ticket, allowUpload = false, onAttac
                 cursor: isVideosFull || uploading ? "not-allowed" : "pointer",
                 transition: "all 0.15s ease",
               }}
-              title={isVideosFull ? "Kuota video penuh (maksimal 2)" : "Unggah video rekaman penanganan (maks 350 MB, MP4/MOV)"}
+              title={isVideosFull ? "Kuota video penuh (maksimal 5)" : "Unggah video rekaman penanganan (maks 350 MB, MP4/MOV)"}
             >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <polygon points="23 7 16 12 23 17 23 7" />
-                <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
-              </svg>
+              <VideoIcon size={13} />
               <span>{uploading && uploadType === "video" ? `Mengunggah ${progress}%` : "+ Video"}</span>
             </button>
             <input
@@ -556,9 +592,13 @@ export default function TicketAttachments({ ticket, allowUpload = false, onAttac
               backgroundColor: activeTab === "image" ? "#e8f7f6" : "transparent",
               color: activeTab === "image" ? "#0e8587" : "#64748b",
               cursor: "pointer",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "5px",
             }}
           >
-            📷 Foto ({imageAttachments.length})
+            <ImageIcon size={12} />
+            <span>Foto ({imageAttachments.length})</span>
           </button>
           <button
             type="button"
@@ -572,9 +612,13 @@ export default function TicketAttachments({ ticket, allowUpload = false, onAttac
               backgroundColor: activeTab === "video" ? "#e0f2fe" : "transparent",
               color: activeTab === "video" ? "#0284c7" : "#64748b",
               cursor: "pointer",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "5px",
             }}
           >
-            🎥 Video ({videoAttachments.length})
+            <VideoIcon size={12} />
+            <span>Video ({videoAttachments.length})</span>
           </button>
         </div>
       )}
@@ -641,8 +685,22 @@ export default function TicketAttachments({ ticket, allowUpload = false, onAttac
                       }}
                     />
                   ) : (
-                    <div style={{ color: "#94a3b8", fontSize: "11px", textAlign: "center", padding: "8px" }}>
-                      {isVideo ? (isProcessing ? "Memproses…" : "🎥 Video") : "Memuat…"}
+                    <div style={{ color: "#94a3b8", fontSize: "11px", textAlign: "center", padding: "8px", display: "flex", flexDirection: "column", alignItems: "center", gap: "4px" }}>
+                      {isVideo ? (
+                        isProcessing ? (
+                          "Memproses…"
+                        ) : (
+                          <>
+                            <VideoIcon size={16} />
+                            <span>Video</span>
+                          </>
+                        )
+                      ) : (
+                        <>
+                          <ImageIcon size={16} />
+                          <span>Foto</span>
+                        </>
+                      )}
                     </div>
                   )}
 
@@ -724,9 +782,22 @@ export default function TicketAttachments({ ticket, allowUpload = false, onAttac
                       fontWeight: 700,
                       letterSpacing: "0.03em",
                       backdropFilter: "blur(2px)",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "3px",
                     }}
                   >
-                    {isVideo ? (attachment.duration ? `🎥 ${formatDuration(attachment.duration)}` : "🎥 VIDEO") : "📷 FOTO"}
+                    {isVideo ? (
+                      <>
+                        <VideoIcon size={10} />
+                        <span>{attachment.duration ? formatDuration(attachment.duration) : "VIDEO"}</span>
+                      </>
+                    ) : (
+                      <>
+                        <ImageIcon size={10} />
+                        <span>FOTO</span>
+                      </>
+                    )}
                   </div>
                 </button>
 
@@ -774,7 +845,16 @@ export default function TicketAttachments({ ticket, allowUpload = false, onAttac
       <Modal
         isOpen={Boolean(preview)}
         onClose={() => setPreview(null)}
-        title={preview ? `${(preview.fileType || "IMAGE").toUpperCase() === "VIDEO" ? "🎥 Video" : "📷 Foto"}: ${preview.fileName}` : "Preview"}
+        title={
+          preview ? (
+            <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+              {(preview.fileType || "IMAGE").toUpperCase() === "VIDEO" ? <VideoIcon size={16} /> : <ImageIcon size={16} />}
+              <span>{`${(preview.fileType || "IMAGE").toUpperCase() === "VIDEO" ? "Video" : "Foto"}: ${preview.fileName}`}</span>
+            </span>
+          ) : (
+            "Preview"
+          )
+        }
         maxWidth="740px"
       >
         {preview && (

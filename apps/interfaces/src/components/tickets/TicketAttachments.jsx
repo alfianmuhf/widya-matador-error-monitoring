@@ -67,6 +67,58 @@ const VideoIcon = ({ size = 13, style }) => (
   </svg>
 );
 
+const SpinnerIcon = ({ size = 13, style }) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    style={{ animation: "spin 0.8s linear infinite", ...style }}
+  >
+    <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+  </svg>
+);
+
+const AlertIcon = ({ size = 13, style }) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    style={style}
+  >
+    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+    <line x1="12" y1="9" x2="12" y2="13" />
+    <line x1="12" y1="17" x2="12.01" y2="17" />
+  </svg>
+);
+
+const InfoIcon = ({ size = 13, style }) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    style={style}
+  >
+    <circle cx="12" cy="12" r="10" />
+    <line x1="12" y1="16" x2="12" y2="12" />
+    <line x1="12" y1="8" x2="12.01" y2="8" />
+  </svg>
+);
+
 /**
  * Kompresi gambar client-side ke format WebP (optimasi jaringan).
  */
@@ -457,7 +509,7 @@ export default function TicketAttachments({ ticket, allowUpload = false, onAttac
               }}
               title={isImagesFull ? "Kuota foto penuh (maksimal 5)" : "Unggah foto bukti kerusakan/perbaikan (maks 5 MB)"}
             >
-              <ImageIcon size={13} />
+              {uploading && uploadType === "image" ? <SpinnerIcon size={13} /> : <ImageIcon size={13} />}
               <span>{uploading && uploadType === "image" ? `Mengunggah ${progress}%` : "+ Foto"}</span>
             </button>
             <input
@@ -490,7 +542,7 @@ export default function TicketAttachments({ ticket, allowUpload = false, onAttac
               }}
               title={isVideosFull ? "Kuota video penuh (maksimal 5)" : "Unggah video rekaman penanganan (maks 350 MB, MP4/MOV)"}
             >
-              <VideoIcon size={13} />
+              {uploading && uploadType === "video" ? <SpinnerIcon size={13} /> : <VideoIcon size={13} />}
               <span>{uploading && uploadType === "video" ? `Mengunggah ${progress}%` : "+ Video"}</span>
             </button>
             <input
@@ -513,7 +565,10 @@ export default function TicketAttachments({ ticket, allowUpload = false, onAttac
       {uploading && (
         <div style={{ marginBottom: "14px", padding: "10px 14px", backgroundColor: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "8px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12px", fontWeight: 650, color: "#166534", marginBottom: "6px" }}>
-            <span>Sedang mengunggah {uploadType === "video" ? "video" : "foto"}...</span>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+              <SpinnerIcon size={13} />
+              <span>Sedang mengunggah {uploadType === "video" ? "video" : "foto"}...</span>
+            </span>
             <span>{progress}%</span>
           </div>
           <div style={{ width: "100%", height: "6px", backgroundColor: "#dcfce7", borderRadius: "9999px", overflow: "hidden" }}>
@@ -527,8 +582,9 @@ export default function TicketAttachments({ ticket, allowUpload = false, onAttac
             />
           </div>
           {uploadType === "video" && (
-            <div style={{ fontSize: "11px", color: "#15803d", marginTop: "5px" }}>
-              ℹ️ Video akan otomatis dioptimasi dan dibuatkan thumbnail di server setelah proses unggah selesai.
+            <div style={{ fontSize: "11px", color: "#15803d", marginTop: "6px", display: "inline-flex", alignItems: "center", gap: "5px" }}>
+              <InfoIcon size={13} />
+              <span>Video akan otomatis dioptimasi dan dibuatkan thumbnail di server setelah proses unggah selesai.</span>
             </div>
           )}
         </div>
@@ -550,7 +606,10 @@ export default function TicketAttachments({ ticket, allowUpload = false, onAttac
             alignItems: "center",
           }}
         >
-          <span>⚠️ {error}</span>
+          <div style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+            <AlertIcon size={14} />
+            <span>{error}</span>
+          </div>
           <button
             type="button"
             onClick={() => setError("")}
@@ -688,7 +747,10 @@ export default function TicketAttachments({ ticket, allowUpload = false, onAttac
                     <div style={{ color: "#94a3b8", fontSize: "11px", textAlign: "center", padding: "8px", display: "flex", flexDirection: "column", alignItems: "center", gap: "4px" }}>
                       {isVideo ? (
                         isProcessing ? (
-                          "Memproses…"
+                          <>
+                            <SpinnerIcon size={16} />
+                            <span>Memproses…</span>
+                          </>
                         ) : (
                           <>
                             <VideoIcon size={16} />
@@ -727,11 +789,11 @@ export default function TicketAttachments({ ticket, allowUpload = false, onAttac
                             fontWeight: 700,
                             display: "flex",
                             alignItems: "center",
-                            gap: "4px",
+                            gap: "5px",
                           }}
                         >
-                          <span style={{ display: "inline-block", animation: "spin 1s linear infinite" }}>⏳</span>
-                          Proses...
+                          <SpinnerIcon size={12} />
+                          <span>Proses...</span>
                         </div>
                       ) : isFailed ? (
                         <div
@@ -742,9 +804,13 @@ export default function TicketAttachments({ ticket, allowUpload = false, onAttac
                             borderRadius: "5px",
                             fontSize: "10.5px",
                             fontWeight: 700,
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "4px",
                           }}
                         >
-                          ⚠️ Gagal
+                          <AlertIcon size={12} />
+                          <span>Gagal</span>
                         </div>
                       ) : (
                         <div
@@ -864,7 +930,21 @@ export default function TicketAttachments({ ticket, allowUpload = false, onAttac
               <div>
                 {(preview.status || "READY").toUpperCase() === "PENDING" || (preview.status || "READY").toUpperCase() === "PROCESSING" ? (
                   <div style={{ textAlign: "center", padding: "40px 20px", backgroundColor: "#f8fafc", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
-                    <div style={{ fontSize: "28px", marginBottom: "10px" }}>⏳</div>
+                    <div
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        width: "48px",
+                        height: "48px",
+                        borderRadius: "50%",
+                        backgroundColor: "#e0f2fe",
+                        color: "#0284c7",
+                        marginBottom: "12px",
+                      }}
+                    >
+                      <SpinnerIcon size={24} />
+                    </div>
                     <div style={{ fontSize: "14px", fontWeight: 700, color: "#0f172a" }}>
                       Video Sedang Diproses Transcoding
                     </div>
@@ -874,7 +954,21 @@ export default function TicketAttachments({ ticket, allowUpload = false, onAttac
                   </div>
                 ) : (preview.status || "READY").toUpperCase() === "FAILED" ? (
                   <div style={{ textAlign: "center", padding: "40px 20px", backgroundColor: "#fef2f2", borderRadius: "8px", border: "1px solid #fee2e2" }}>
-                    <div style={{ fontSize: "28px", marginBottom: "10px" }}>⚠️</div>
+                    <div
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        width: "48px",
+                        height: "48px",
+                        borderRadius: "50%",
+                        backgroundColor: "#fee2e2",
+                        color: "#dc2626",
+                        marginBottom: "12px",
+                      }}
+                    >
+                      <AlertIcon size={24} />
+                    </div>
                     <div style={{ fontSize: "14px", fontWeight: 700, color: "#dc2626" }}>
                       Gagal Memproses Video
                     </div>

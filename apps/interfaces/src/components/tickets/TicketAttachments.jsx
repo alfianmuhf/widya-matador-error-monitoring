@@ -5,7 +5,7 @@ import Modal from "../common/Modal.jsx";
 import DeleteConfirmModal from "../common/DeleteConfirmModal.jsx";
 
 const MAX_IMAGES = 5;
-const MAX_VIDEOS = 2;
+const MAX_VIDEOS = 5;
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5 MB
 const MAX_VIDEO_SIZE = 350 * 1024 * 1024; // 350 MB
 const MAX_DIMENSION = 1920;

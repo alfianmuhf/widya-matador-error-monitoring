@@ -423,6 +423,7 @@ model ticket_attachments {
   error_message               String?
   uploaded_by_user_id         String?               @db.Uuid
   uploaded_by_telegram_user_id String?              @db.Uuid
+  idempotency_key             String?               @db.VarChar(64)
   uploaded_at                 DateTime              @default(now()) @db.Timestamptz
 
   ticket               tickets         @relation(fields: [ticket_id], references: [id], onDelete: Cascade)
@@ -433,4 +434,5 @@ model ticket_attachments {
   @@index([ticket_id, file_type])
   @@index([uploaded_by_user_id])
   @@index([uploaded_by_telegram_user_id])
+  @@unique([ticket_id, idempotency_key])
 }

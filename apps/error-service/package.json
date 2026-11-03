@@ -15,7 +15,7 @@
     "seed:ticket": "node prisma/seed_ticket.js",
     "stress": "node prisma/stress_test.js",
     "truncate": "node prisma/truncate.js",
-    "test": "node --test src/modules/attachment/*.test.js"
+    "test": "node --test --test-force-exit src/modules/attachment/*.test.js src/modules/telegram-ingest/*.test.js"
   },
   "prisma": {
     "seed": "node prisma/seed.js"

@@ -187,7 +187,7 @@ export const uploadAttachment = async (ticketId, file, actor, options = {}) => {
   if (isVideo) {
     if (file.size > MAX_VIDEO_SIZE) {
       if (file.path) await safeUnlink(file.path);
-      throw createError(413, "Ukuran video maksimal 350 MB");
+      throw createError(413, `Ukuran video maksimal ${Math.round(MAX_VIDEO_SIZE / (1024 * 1024))} MB`);
     }
 
     const existingVideos = await prisma.ticket_attachments.count({

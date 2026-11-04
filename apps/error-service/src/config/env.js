@@ -23,6 +23,8 @@ const envSchema = z.object({
   REDIS_PASSWORD: z.string().optional(),
   VIDEO_CRF: z.coerce.number().min(0).max(51).default(28),
   VIDEO_MAX_RESOLUTION: z.string().default("1080p"),
+  VIDEO_MAX_SIZE_MB: z.coerce.number().int().min(1).max(500).default(350),
+  VIDEO_MAX_DURATION_SECONDS: z.coerce.number().int().min(5).max(600).default(120),
   // Jalur ingest unggahan dari workflow n8n (Telegram). Opsional: tanpa key, endpoint balik 503.
   TELEGRAM_API_KEY: z
     .preprocess((val) => (val === "" ? undefined : val), z.string().min(32).optional()),

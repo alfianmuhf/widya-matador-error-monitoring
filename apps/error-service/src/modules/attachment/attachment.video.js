@@ -5,8 +5,8 @@ import path from "node:path";
 import os from "node:os";
 import { env } from "../../config/env.js";
 
-export const MAX_VIDEO_SIZE = 350 * 1024 * 1024; // 350 MB
-export const MAX_VIDEO_DURATION = 120; // 120 detik (2 menit)
+export const MAX_VIDEO_SIZE = (env.VIDEO_MAX_SIZE_MB || 350) * 1024 * 1024;
+export const MAX_VIDEO_DURATION = env.VIDEO_MAX_DURATION_SECONDS || 120;
 export const MAX_VIDEOS_PER_TICKET = 5;
 export const MAX_IMAGES_PER_TICKET = 5;
 
@@ -111,7 +111,7 @@ export const inspectVideoWithFfprobe = (inputPath) => {
         if (duration > MAX_VIDEO_DURATION) {
           return reject(
             new Error(
-              `Durasi video (${Math.round(duration)} detik) melebihi batas maksimal ${MAX_VIDEO_DURATION} detik (2 menit)`
+              `Durasi video (${Math.round(duration)} detik) melebihi batas maksimal ${MAX_VIDEO_DURATION} detik`
             )
           );
         }

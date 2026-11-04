@@ -429,6 +429,14 @@ export const deleteAttachment = async (ticketId, attachmentId, actor) => {
     }
   }
 
+  // Hapus key prediksi jika video dihapus saat masih pending/processing
+  if (row.file_type === "video" && !row.file_url) {
+    const videoKey = `tickets/${ticketId}/${attachmentId}.mp4`;
+    const thumbKey = `tickets/${ticketId}/${attachmentId}-thumb.webp`;
+    await storage.deleteObject(videoKey).catch(() => {});
+    await storage.deleteObject(thumbKey).catch(() => {});
+  }
+
   await prisma.ticket_attachments.delete({ where: { id: row.id } });
 
   await recordLog({

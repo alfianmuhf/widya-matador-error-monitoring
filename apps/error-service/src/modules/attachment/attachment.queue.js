@@ -52,6 +52,8 @@ export const createVideoWorker = () => {
 
       const outputVideoPath = path.join(VIDEO_STAGING_DIR, `${attachmentId}.mp4`);
       const outputThumbPath = path.join(VIDEO_STAGING_DIR, `${attachmentId}-thumb.webp`);
+      const videoKey = `tickets/${ticketId}/${attachmentId}.mp4`;
+      const thumbKey = `tickets/${ticketId}/${attachmentId}-thumb.webp`;
 
       try {
         // 1. Update status di DB menjadi processing
@@ -72,9 +74,6 @@ export const createVideoWorker = () => {
           fs.readFile(outputVideoPath),
           fs.readFile(outputThumbPath),
         ]);
-
-        const videoKey = `tickets/${ticketId}/${attachmentId}.mp4`;
-        const thumbKey = `tickets/${ticketId}/${attachmentId}-thumb.webp`;
 
         // 5. Unggah ke Object Storage (RustFS S3)
         await storage.putObject(videoKey, videoBuffer, "video/mp4");
@@ -108,10 +107,16 @@ export const createVideoWorker = () => {
         if (actor) {
           await recordLog({
             actor: actor.username || actor.name || actor.email || "Sistem",
+            actorUserId: actor.id || null,
             action: "UPDATE",
-            entity: "TICKET",
-            entity_id: ticketId,
-            description: `Video lampiran '${originalFileName}' berhasil dikonversi dan siap diputar`,
+            entityType: "TicketAttachment",
+            entityId: attachmentId,
+            details: {
+              identifier: originalFileName,
+              ticketId,
+              fileName: originalFileName,
+              changeSummary: `video '${originalFileName}' selesai dikonversi dan siap diputar pada tiket ${ticketId}`,
+            },
           }).catch((err) => console.warn("[Queue Worker] Gagal mencatat audit log:", err.message));
         }
 
@@ -119,6 +124,10 @@ export const createVideoWorker = () => {
         return { success: true, attachmentId, key: videoKey };
       } catch (error) {
         console.error(`[Queue Worker] Gagal memproses video #${attachmentId}:`, error.message);
+
+        // Bersihkan objek di S3 jika sempat terunggah tapi update DB gagal / row terhapus
+        await storage.deleteObject(videoKey).catch(() => {});
+        await storage.deleteObject(thumbKey).catch(() => {});
 
         // Update database status FAILED
         await prisma.ticket_attachments.update({

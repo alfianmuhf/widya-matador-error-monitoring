@@ -47,6 +47,11 @@ services:
   rabbitmq:
     image: rabbitmq:4-management
     container_name: after-sales-rabbitmq
+    secrets:
+      - rabbitmq_password
+    environment:
+      RABBITMQ_DEFAULT_USER: appuser
+      RABBITMQ_DEFAULT_PASS_FILE: /run/secrets/rabbitmq_password
     restart: unless-stopped
     ports:
       - "127.0.0.1:5672:5672"   # AMQP Message Broker
@@ -173,3 +178,5 @@ secrets:
     file: ../../config/rustfs_pw.txt
   db_password:
     file: ../../config/db_password.txt
+  rabbitmq_password:
+    file: ../../config/rabbitmq_pw.txt

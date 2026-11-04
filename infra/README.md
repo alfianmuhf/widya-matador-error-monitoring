@@ -8,7 +8,7 @@ Layanan di `infra/docker-compose.yml` dan konfigurasi terkait.
 |---|---|
 | **backend** | Multi-stage build dari `infra/backend/Dockerfile`. Port `127.0.0.1:3000`. Healthcheck `GET /health`. |
 | **frontend** | `vite build` → nginx alpine (`infra/frontend/nginx.conf`). Port `127.0.0.1:5173` → container `:80`. |
-| **rabbitmq** | `rabbitmq:4-management`. Port: 5672 (AMQP) + 15672 (Management UI). Volume `rabbitmq_data` bersifat persisten. Ganti kredensial default `guest`/`guest` sebelum produksi. |
+| **rabbitmq** | `rabbitmq:4-management`. Port: 5672 (AMQP) + 15672 (Management UI). User: `appuser`, password dari secret `config/rabbitmq_pw.txt`. Volume persisten `rabbitmq_data`. |
 | **rustfs** | `rustfs/rustfs:1.0.3`. S3 API `9000`, Console `9001`. Volume: `rustfs_data`, `rustfs_logs`. |
 | **rustfs-permissions** | One-shot `busybox` untuk `chown` volume ke UID 10001 sebelum RustFS start. |
 | **postgres** | `postgres:18.6-bookworm`. Port `127.0.0.1:5432`. User: `appuser`, DB: `monitor_ticket`. Password dibaca dari secret `infra/db_password.txt`. Volume persisten `pgdata`. |
@@ -48,7 +48,7 @@ PostgreSQL telah terkonfigurasi sebagai service `postgres` di `infra/docker-comp
 - **Port Host**: Port `5432` tetap di-bind ke `127.0.0.1:5432` sehingga aplikasi/tools host (psql, DBeaver, Prisma CLI host) dapat terhubung langsung.
 - **PostgreSQL di Luar/Host**: Jika tetap ingin menggunakan PostgreSQL host luar, gunakan `host.docker.internal:5432` pada `DATABASE_URL` dan `DIRECT_URL` (lihat `.env.backend.example`).
 
-Untuk RabbitMQ bawaan Compose, gunakan hostname service `rabbitmq`, misalnya `amqp://<username>:<password>@rabbitmq:5672`. Kosongkan `RABBITMQ_URL` bila notifikasi tidak diperlukan.
+Untuk RabbitMQ bawaan Compose, gunakan hostname service `rabbitmq`, misalnya `amqp://appuser:<password>@rabbitmq:5672`. Kosongkan `RABBITMQ_URL` bila notifikasi tidak diperlukan.
 
 ## Keamanan Produksi
 

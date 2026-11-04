@@ -195,4 +195,4 @@ secrets:
   rustfs_password:
     file: ../../config/rustfs_pw.txt
   db_password:
-    file: ./db_password.txt
+    file: ../../config/db_password.txt

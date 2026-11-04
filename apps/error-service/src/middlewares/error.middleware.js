@@ -1,5 +1,6 @@
 import createError from "http-errors";
 import { env } from "../config/env.js";
+import { logger } from "../config/logger.js";
 
 /**
  * 404 Not Found handler for undefined routes
@@ -32,9 +33,19 @@ export const errorHandler = (err, req, res, next) => {
     message = err.meta?.cause || "Data yang dicari tidak ditemukan";
   }
 
-  // Log 500 or unexpected server errors
+  // Log 500 or unexpected server errors menggunakan pino
   if (statusCode >= 500) {
-    console.error(`[SERVER ERROR] ${req.method} ${req.originalUrl}:`, err);
+    const logInstance = req.log || logger;
+    logInstance.error(
+      {
+        err,
+        statusCode,
+        method: req.method,
+        url: req.originalUrl,
+        ip: req.ip,
+      },
+      `[SERVER ERROR] ${req.method} ${req.originalUrl}: ${err.message}`
+    );
   }
 
   res.status(statusCode).json({

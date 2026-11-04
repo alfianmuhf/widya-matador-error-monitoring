@@ -5,6 +5,7 @@ import { randomUUID } from "node:crypto";
 import createError from "http-errors";
 import * as attachmentController from "./attachment.controller.js";
 import { authenticate } from "../../middlewares/auth.middleware.js";
+import { uploadLimiter } from "../../middlewares/rate-limiter.middleware.js";
 import { MAX_VIDEO_SIZE, VIDEO_STAGING_DIR } from "./attachment.video.js";
 
 /**
@@ -64,7 +65,8 @@ const router = Router({ mergeParams: true });
 router.use(authenticate);
 
 router.get("/", attachmentController.listAttachments);
-router.post("/", handleUpload, attachmentController.uploadAttachment);
+// Proteksi uploadLimiter dipasang sebelum handleUpload agar file 350MB tidak ditulis ke disk jika melampaui limit
+router.post("/", uploadLimiter, handleUpload, attachmentController.uploadAttachment);
 router.get("/:attachmentId/content", attachmentController.getAttachmentContent);
 router.get("/:attachmentId/thumbnail", attachmentController.getAttachmentThumbnail);
 router.delete("/:attachmentId", attachmentController.deleteAttachment);

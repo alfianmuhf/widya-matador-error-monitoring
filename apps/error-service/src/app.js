@@ -4,6 +4,8 @@ import cookieParser from "cookie-parser";
 import { env } from "./config/env.js";
 import routes from "./routes/index.js";
 import { notFoundHandler, errorHandler } from "./middlewares/error.middleware.js";
+import { httpLogger } from "./middlewares/logging.middleware.js";
+import { globalLimiter } from "./middlewares/rate-limiter.middleware.js";
 
 const app = express();
 
@@ -13,12 +15,15 @@ app.disable("x-powered-by");
 // Di belakang reverse proxy, req.ip harus dibaca dari X-Forwarded-For
 app.set("trust proxy", env.NODE_ENV === "production" ? 1 : false);
 
-// Allowed origins for CORS
-const allowedOrigins = [
-  env.FRONTEND_URL,
-  "http://localhost:5173",
-  "http://127.0.0.1:5173",
-].filter(Boolean);
+// 1. HTTP Request Logger (Pino HTTP) - disematkan paling awal untuk menyematkan req.id
+app.use(httpLogger);
+
+// Allowed origins for CORS (dikonfigurasi dari env CORS_ORIGINS atau FRONTEND_URL, pisahkan dengan koma)
+const rawCors = env.CORS_ORIGINS || env.FRONTEND_URL || "http://localhost:5173,http://localhost";
+const allowedOrigins = rawCors
+  .split(",")
+  .map((origin) => origin.trim().replace(/\/+$/, ""))
+  .filter(Boolean);
 
 // Enable Cross-Origin Resource Sharing (CORS) with credentials support
 app.use(
@@ -27,7 +32,12 @@ app.use(
       // Allow requests with no origin (like mobile apps, curl, postman)
       if (!origin) return callback(null, true);
 
-      if (env.NODE_ENV === "development" || allowedOrigins.includes(origin)) {
+      const normalizedOrigin = origin.replace(/\/+$/, "");
+      if (
+        env.NODE_ENV === "development" ||
+        allowedOrigins.includes("*") ||
+        allowedOrigins.includes(normalizedOrigin)
+      ) {
         return callback(null, true);
       }
 
@@ -35,9 +45,13 @@ app.use(
     },
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-Request-Id"],
+    exposedHeaders: ["X-Request-Id"],
   })
 );
+
+// 2. Global Rate Limiter (Proteksi DoS dasar untuk seluruh API)
+app.use(globalLimiter);
 
 // Standard parsers with body size limits to prevent DoS
 app.use(cookieParser());

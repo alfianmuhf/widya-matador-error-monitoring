@@ -53,7 +53,7 @@ const handleUpload = (req, res, next) => {
     if (!error) return next();
 
     if (error.code === "LIMIT_FILE_SIZE") {
-      return next(createError(413, "Ukuran file maksimal 350 MB untuk video (dan 5 MB untuk foto)"));
+      return next(createError(413, `Ukuran file maksimal ${Math.round(MAX_VIDEO_SIZE / (1024 * 1024))} MB untuk video (dan 5 MB untuk foto)`));
     }
 
     return next(error.statusCode ? error : createError(400, "Gagal membaca file yang diunggah"));

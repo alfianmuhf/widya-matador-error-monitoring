@@ -2,6 +2,7 @@ import { Router } from "express";
 import * as authController from "./auth.controller.js";
 import { validate } from "../../middlewares/validate.middleware.js";
 import { authenticate } from "../../middlewares/auth.middleware.js";
+import { authLimiter } from "../../middlewares/rate-limiter.middleware.js";
 import {
   loginSchema,
   registerSchema,
@@ -12,18 +13,20 @@ import {
 
 const router = Router();
 
-// Public routes
-router.post("/register", validate(registerSchema), authController.register);
-router.post("/login", validate(loginSchema), authController.login);
-router.post("/refresh", authController.refreshToken);
+// Public routes (Diproteksi authLimiter untuk mencegah brute-force)
+router.post("/register", authLimiter, validate(registerSchema), authController.register);
+router.post("/login", authLimiter, validate(loginSchema), authController.login);
+router.post("/refresh", authLimiter, authController.refreshToken);
 router.post("/logout", authController.logout);
 router.post(
   "/forgot-password",
+  authLimiter,
   validate(forgotPasswordSchema),
   authController.forgotPassword
 );
 router.post(
   "/reset-password",
+  authLimiter,
   validate(resetPasswordSchema),
   authController.resetPassword
 );

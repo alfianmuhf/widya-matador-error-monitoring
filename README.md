@@ -57,6 +57,16 @@ Layanan backend dibangun dengan Node.js dan Express untuk menangani pencatatan e
 | **[http-errors](https://github.com/jshttp/http-errors)** | `^2.0.1` | Utilitas pembuatan objek error HTTP standar dengan kode status yang sesuai. |
 | **[dotenv](https://github.com/motdotla/dotenv)** | `^17.4.2` | Memuat variabel konfigurasi lingkungan dari file `.env` ke `process.env`. |
 | **[amqplib](https://www.npmjs.com/package/amqplib)** | `^2.2.0` | Klien RabbitMQ untuk publish/subscribe event ke exchange `erad.events` dan queue `erad.telegram.notify`. |
+| **[pino](https://getpino.io/)** | `^10.4.0` | Logger berkinerja tinggi berbasis JSON terstruktur dengan konsumsi CPU & memori sangat rendah. |
+| **[pino-http](https://github.com/pinojs/pino-http)** | `^11.0.0` | Middleware pencatatan HTTP request otomatis lengkap dengan generasi `req.id` (`X-Request-Id`) dan durasi respons. |
+| **[express-rate-limit](https://express-rate-limit.mintlify.app/)** | `^8.7.3` | Middleware pembatasan laju permintaan (*rate limiting*) bertingkat untuk proteksi DoS dan brute-force. |
+| **[rate-limit-redis](https://github.com/express-rate-limit/rate-limit-redis)** | `^6.0.2` | Store adapter rate limit berbasis Redis untuk pembagian kuota terdistribusi dengan failover memori lokal. |
+| **[bullmq](https://bullmq.io/)** | `^6.5.3` | Antrean background worker berbasis Redis untuk transcoding video secara asinkron. |
+| **[fluent-ffmpeg](https://github.com/fluent-ffmpeg/node-fluent-ffmpeg)** | `^2.1.3` | Abstraksi FFmpeg & FFprobe untuk kompresi dan standardisasi resolusi video tiket. |
+| **[ioredis](https://ioredis.readthedocs.io/)** | `^6.0.0` | Klien Redis berfitur lengkap untuk caching dashboard, BullMQ, dan rate limiting store. |
+| **[@aws-sdk/client-s3](https://aws.amazon.com/sdk-for-javascript/)** | `^3.1155.0` | SDK S3 resmi untuk integrasi penyimpanan berkas lampiran ke RustFS S3 storage. |
+| **[sharp](https://sharp.pixelplumbing.com/)** | `^0.35.5` | Pengolah dan pengompres gambar performa tinggi untuk thumbnail dan rotasi EXIF. |
+| **[pino-pretty](https://github.com/pinojs/pino-pretty)** *(Dev)* | `^13.1.3` | Formatter log dengan pewarnaan terminal untuk kenyamanan debugging masa pengembangan. |
 | **[nodemon](https://nodemon.io/)** *(Dev)* | `^3.1.14` | Tool otomatis yang merestart server Node.js setiap kali ada perubahan file pada masa pengembangan. |
 
 ---
@@ -111,6 +121,17 @@ Layanan backend dibangun dengan Node.js dan Express untuk menangani pencatatan e
 
 10. **Ingest unggahan dari Telegram (jalur n8n)**:
     - Endpoint `POST /api/telegram/attachments` digardi API key (`X-API-Key`, timing-safe, rotasi dua slot env). Identitas pengunggah diverifikasi lewat whitelist `telegram_users` + tautan akun platform, lalu otorisasi relasi tiket yang sama dengan jalur JWT. Idempotency via header `Idempotency-Key` (kolom `ticket_attachments.idempotency_key`). Hasil transkoding video dipublish balik ke bus sebagai `attachment.video_ready` / `attachment.video_failed` agar n8n membalas chat.
+
+11. **Keamanan & Observabilitas (Rate Limiter & Structured Logging)**:
+    - **Rate Limiting Bertingkat (`express-rate-limit` + `rate-limit-redis`)**:
+      - *Global API Limiter*: Batas kuota dasar 300 request / 15 menit per IP (mencegah DoS umum; mengecualikan `/health` dan SSE).
+      - *Auth Limiter*: Batas ketat 10 request / 15 menit per IP pada `/auth/login`, `/auth/refresh`, dan `/auth/reset-password` (proteksi *credential stuffing* & brute-force).
+      - *Upload Limiter*: Batas 20 upload / 15 menit per IP pada lampiran media tiket (mencegah kelebihan beban CPU transkoding).
+      - *Distributed Store with Memory Fallback*: Kuota tersinkronisasi via Redis dengan transisi otomatis ke in-memory store saat Redis tidak aktif.
+    - **Structured Logging & Tracing (`pino` + `pino-http`)**:
+      - Format log JSON terstruktur berkinerja tinggi, otomatis diselaraskan dengan rotasi Docker `json-file`.
+      - Pelacakan korelasi request end-to-end melalui generasi otomatis `req.id` dan response header `X-Request-Id`.
+      - Sensor otomatis (*redaction*) pada data kredensial sensitif (`password`, `token`, `authorization`, `x-api-key`).
 
 ---
 

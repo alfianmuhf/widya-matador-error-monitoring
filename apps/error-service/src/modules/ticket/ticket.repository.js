@@ -301,9 +301,13 @@ export const findFilteredTicketIdsAndCount = async ({
   status,
   severity,
   componentId,
+  component,
   unitCode,
   clientId,
+  client,
   locationId,
+  location,
+  assignee,
   startDate,
   endDate,
   search,
@@ -323,14 +327,47 @@ export const findFilteredTicketIdsAndCount = async ({
   if (componentId) {
     conditions.push(Prisma.sql`fc.component_id = ${componentId}::uuid`);
   }
+  if (component) {
+    conditions.push(Prisma.sql`fc.component_id IN (SELECT id FROM components WHERE LOWER(name) = ${component.trim().toLowerCase()})`);
+  }
   if (unitCode) {
     conditions.push(Prisma.sql`LOWER(a.unit_code) LIKE ${`%${unitCode.toLowerCase()}%`}`);
   }
   if (clientId) {
     conditions.push(Prisma.sql`a.client_id = ${clientId}::uuid`);
   }
+  if (client) {
+    conditions.push(Prisma.sql`a.client_id IN (SELECT id FROM clients WHERE LOWER(name) = ${client.trim().toLowerCase()})`);
+  }
   if (locationId) {
     conditions.push(Prisma.sql`a.location_id = ${locationId}::uuid`);
+  }
+  if (location) {
+    conditions.push(Prisma.sql`a.location_id IN (SELECT id FROM locations WHERE LOWER(name) = ${location.trim().toLowerCase()})`);
+  }
+  if (assignee) {
+    if (assignee.toLowerCase() === "unassigned") {
+      conditions.push(Prisma.sql`t.current_team_id IS NULL AND NOT EXISTS (SELECT 1 FROM ticket_teams WHERE ticket_id = t.id)`);
+    } else {
+      const q = `%${assignee.trim().toLowerCase()}%`;
+      conditions.push(Prisma.sql`(
+        EXISTS (
+          SELECT 1 FROM ticket_teams tt
+          JOIN team_members tm ON tm.team_id = tt.team_id
+          JOIN users u ON u.id = tm.user_id
+          WHERE tt.ticket_id = t.id AND LOWER(u.name) LIKE ${q}
+        )
+        OR EXISTS (
+          SELECT 1 FROM teams tlead
+          JOIN users ulead ON ulead.id = tlead.leader_user_id
+          WHERE (tlead.id = t.current_team_id OR EXISTS (SELECT 1 FROM ticket_teams tt2 WHERE tt2.team_id = tlead.id AND tt2.ticket_id = t.id))
+            AND LOWER(ulead.name) LIKE ${q}
+        )
+        OR EXISTS (
+          SELECT 1 FROM users uas WHERE uas.id = t.aftersales_user_id AND LOWER(uas.name) LIKE ${q}
+        )
+      )`);
+    }
   }
   if (startDate) {
     conditions.push(Prisma.sql`t.open_at >= ${new Date(startDate)}`);

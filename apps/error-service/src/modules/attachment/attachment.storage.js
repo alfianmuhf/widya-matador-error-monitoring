@@ -1,5 +1,6 @@
 import {
   S3Client,
+  CreateBucketCommand,
   PutObjectCommand,
   GetObjectCommand,
   DeleteObjectCommand,
@@ -43,14 +44,31 @@ const getClient = () => {
 };
 
 export const putObject = async (key, body, contentType) => {
-  await getClient().send(
-    new PutObjectCommand({
-      Bucket: env.S3_BUCKET,
-      Key: key,
-      Body: body,
-      ContentType: contentType,
-    })
-  );
+  const s3 = getClient();
+  try {
+    await s3.send(
+      new PutObjectCommand({
+        Bucket: env.S3_BUCKET,
+        Key: key,
+        Body: body,
+        ContentType: contentType,
+      })
+    );
+  } catch (error) {
+    if (error.name === "NoSuchBucket" || error.code === "NoSuchBucket" || error.$metadata?.httpStatusCode === 404) {
+      await s3.send(new CreateBucketCommand({ Bucket: env.S3_BUCKET })).catch(() => {});
+      await s3.send(
+        new PutObjectCommand({
+          Bucket: env.S3_BUCKET,
+          Key: key,
+          Body: body,
+          ContentType: contentType,
+        })
+      );
+      return;
+    }
+    throw error;
+  }
 };
 
 export const getObject = async (key, range) => {

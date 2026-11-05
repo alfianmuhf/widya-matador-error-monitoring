@@ -64,6 +64,30 @@ export const getTickets = async (query = {}) => {
   const sortOrder = (query.sortOrder || "desc").toLowerCase();
   const orderBy = { [sortBy]: sortOrder };
 
+  // Helper timeRange filter
+  if (query.timeRange && query.timeRange !== "all" && !query.startDate) {
+    const now = new Date();
+    let start = null;
+    if (query.timeRange === "today") {
+      start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    } else if (query.timeRange === "yesterday") {
+      start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+    } else if (query.timeRange === "week" || query.timeRange === "7d") {
+      start = new Date(now.getTime() - 7 * 86400000);
+    } else if (query.timeRange === "30d" || query.timeRange === "month") {
+      start = new Date(now.getTime() - 30 * 86400000);
+    } else if (query.timeRange === "90d") {
+      start = new Date(now.getTime() - 90 * 86400000);
+    } else if (query.timeRange === "6m") {
+      start = new Date(now.getTime() - 180 * 86400000);
+    } else if (query.timeRange === "year" || query.timeRange === "1y") {
+      start = new Date(now.getTime() - 365 * 86400000);
+    }
+    if (start) {
+      query.startDate = start.toISOString();
+    }
+  }
+
   // When filtering by status or severity (which reside in versioned ticket_history),
   // use findFilteredTicketIdsAndCount to prevent query parameter limit overflow when tens of thousands of tickets match.
   if (statusFilter || severityFilter) {
@@ -71,9 +95,13 @@ export const getTickets = async (query = {}) => {
       status: statusFilter,
       severity: severityFilter,
       componentId: query.componentId,
+      component: query.component,
       unitCode: query.unitCode,
       clientId: query.clientId,
+      client: query.client,
       locationId: query.locationId,
+      location: query.location,
+      assignee: query.assignee,
       startDate: query.startDate,
       endDate: query.endDate,
       search: query.search,
@@ -118,6 +146,12 @@ export const getTickets = async (query = {}) => {
       component_id: query.componentId,
     };
   }
+  if (query.component) {
+    where.failure_code = {
+      ...where.failure_code,
+      component: { name: { equals: query.component, mode: "insensitive" } },
+    };
+  }
 
   // Unit filter
   if (query.unitCode) {
@@ -128,12 +162,35 @@ export const getTickets = async (query = {}) => {
   }
 
   // Client & Location filter (via Asset)
-  if (query.clientId || query.locationId) {
+  if (query.clientId || query.locationId || query.client || query.location) {
     where.asset = {
       ...where.asset,
       ...(query.clientId ? { client_id: query.clientId } : {}),
       ...(query.locationId ? { location_id: query.locationId } : {}),
+      ...(query.client ? { client: { name: { equals: query.client, mode: "insensitive" } } } : {}),
+      ...(query.location ? { location: { name: { equals: query.location, mode: "insensitive" } } } : {}),
     };
+  }
+
+  // Assignee filter
+  if (query.assignee) {
+    if (query.assignee.toLowerCase() === "unassigned") {
+      where.AND = [
+        ...(where.AND || []),
+        { current_team_id: null },
+        { ticket_teams: { none: {} } },
+      ];
+    } else {
+      const a = query.assignee.trim();
+      where.OR = [
+        ...(where.OR || []),
+        { current_team: { leader: { name: { contains: a, mode: "insensitive" } } } },
+        { current_team: { members: { some: { user: { name: { contains: a, mode: "insensitive" } } } } } },
+        { ticket_teams: { some: { team: { leader: { name: { contains: a, mode: "insensitive" } } } } } },
+        { ticket_teams: { some: { team: { members: { some: { user: { name: { contains: a, mode: "insensitive" } } } } } } } },
+        { aftersales_user: { name: { contains: a, mode: "insensitive" } } },
+      ];
+    }
   }
 
   // Date range filter

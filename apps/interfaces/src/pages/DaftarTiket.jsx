@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import TicketFilterBar from "../components/tickets/TicketFilterBar.jsx";
 import TicketTable from "../components/tickets/TicketTable.jsx";
 import TicketDetailDrawer from "../components/tickets/TicketDetailDrawer.jsx";
@@ -15,6 +15,7 @@ export default function DaftarTiket() {
   const [loading, setLoading] = useState(true);
   const [selectedTicket, setSelectedTicket] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [timeRange, setTimeRange] = useState("6m");
   const [selectedComponent, setSelectedComponent] = useState("");
   const [selectedClient, setSelectedClient] = useState("");
@@ -22,9 +23,15 @@ export default function DaftarTiket() {
   const [selectedStatus, setSelectedStatus] = useState("");
   const [selectedAssignee, setSelectedAssignee] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState(null);
   const [serverTotal, setServerTotal] = useState(0);
+
+  // Master filter options from backend
+  const [masterComponents, setMasterComponents] = useState([]);
+  const [masterClients, setMasterClients] = useState([]);
+  const [masterLocations, setMasterLocations] = useState([]);
 
   // Available users for assignment directly from database API
   const [availableUsers, setAvailableUsers] = useState([]);
@@ -99,19 +106,79 @@ export default function DaftarTiket() {
       });
   }, [accessToken]);
 
-  // Fetch tickets from Backend API
+  // Fetch master data for filter dropdowns (Components, Clients, Locations)
+  useEffect(() => {
+    if (!accessToken) return;
+    Promise.all([
+      api.get("/components?limit=100").catch(() => ({ data: { data: [] } })),
+      api.get("/clients?limit=100").catch(() => ({ data: { data: [] } })),
+      api.get("/locations?limit=100").catch(() => ({ data: { data: [] } })),
+    ])
+      .then(([compRes, clientRes, locRes]) => {
+        const compList = (compRes.data?.data?.components || compRes.data?.data || [])
+          .map((c) => ({ id: c.id, name: c.name }))
+          .filter((c) => Boolean(c.name));
+        const clientList = (clientRes.data?.data?.clients || clientRes.data?.data || [])
+          .map((c) => ({ id: c.id, name: c.name }))
+          .filter((c) => Boolean(c.name));
+        const locList = (locRes.data?.data?.locations || locRes.data?.data || [])
+          .map((l) => ({ id: l.id, name: l.name }))
+          .filter((l) => Boolean(l.name));
+
+        setMasterComponents(compList);
+        setMasterClients(clientList);
+        setMasterLocations(locList);
+      })
+      .catch((err) => {
+        console.error("Failed to load master filters:", err);
+      });
+  }, [accessToken]);
+
+  // Debounce search input to avoid spamming the backend
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchTerm);
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  // Reset to page 1 whenever filters change
+  const isFirstFilterRun = useRef(true);
+  useEffect(() => {
+    if (isFirstFilterRun.current) {
+      isFirstFilterRun.current = false;
+      return;
+    }
+    setCurrentPage(1);
+  }, [debouncedSearch, timeRange, selectedComponent, selectedClient, selectedLocation, selectedStatus, selectedAssignee]);
+
+  // Fetch tickets from Backend API with true server-side pagination & filtering
   const fetchTickets = useCallback(async () => {
     try {
       setLoading(true);
       const res = await api.get("/tickets", {
         params: {
-          limit: 1000,
+          page: currentPage,
+          limit: itemsPerPage,
+          search: debouncedSearch.trim() || undefined,
+          status: selectedStatus ? selectedStatus.toLowerCase() : undefined,
+          component: selectedComponent || undefined,
+          client: selectedClient || undefined,
+          location: selectedLocation || undefined,
+          assignee: selectedAssignee || undefined,
+          timeRange: timeRange || undefined,
         },
       });
       const data = res.data?.data || [];
       const metaTotal = res.data?.meta?.total;
+      const metaPages = res.data?.meta?.totalPages;
       if (typeof metaTotal === "number") {
         setServerTotal(metaTotal);
+      }
+      if (typeof metaPages === "number") {
+        setTotalPages(metaPages);
+      } else if (typeof metaTotal === "number") {
+        setTotalPages(Math.max(1, Math.ceil(metaTotal / itemsPerPage)));
       }
       setRawTickets(data);
     } catch (err) {
@@ -120,7 +187,17 @@ export default function DaftarTiket() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [
+    currentPage,
+    itemsPerPage,
+    debouncedSearch,
+    selectedStatus,
+    selectedComponent,
+    selectedClient,
+    selectedLocation,
+    selectedAssignee,
+    timeRange,
+  ]);
 
   useEffect(() => {
     if (!accessToken) return;
@@ -217,114 +294,33 @@ export default function DaftarTiket() {
     return () => window.removeEventListener("export-laporan-modal", handleHeaderExport);
   }, []);
 
-  // Distinct filter options extracted from tickets
+  // Distinct filter options from master data or tickets
   const { components, clients, locations, teamMembersList } = useMemo(() => {
-    const comps = [...new Set(tickets.map((t) => t.component).filter(Boolean))].sort();
-    const cls = [...new Set(tickets.map((t) => t.client).filter(Boolean))].sort();
-    const locs = [...new Set(tickets.map((t) => t.location).filter(Boolean))].sort();
+    const comps =
+      masterComponents.length > 0
+        ? masterComponents.map((c) => c.name).sort()
+        : [...new Set(tickets.map((t) => t.component).filter(Boolean))].sort();
 
-    // Extract all assigned team members across tickets plus available users
-    const memberMap = new Map();
-    availableUsers.forEach((u) => {
-      memberMap.set(u.name, { id: u.id, name: u.name, role: u.role });
-    });
-    tickets.forEach((t) => {
-      (t.assignedMembers || []).forEach((m) => {
-        if (!memberMap.has(m.name)) {
-          memberMap.set(m.name, { id: m.id, name: m.name, role: m.role });
-        }
-      });
-    });
+    const cls =
+      masterClients.length > 0
+        ? masterClients.map((c) => c.name).sort()
+        : [...new Set(tickets.map((t) => t.client).filter(Boolean))].sort();
+
+    const locs =
+      masterLocations.length > 0
+        ? masterLocations.map((l) => l.name).sort()
+        : [...new Set(tickets.map((t) => t.location).filter(Boolean))].sort();
 
     return {
       components: comps,
       clients: cls,
       locations: locs,
-      teamMembersList: Array.from(memberMap.values()),
+      teamMembersList: availableUsers,
     };
-  }, [tickets, availableUsers]);
+  }, [masterComponents, masterClients, masterLocations, tickets, availableUsers]);
 
-  // Filtered tickets
-  const filteredTickets = useMemo(() => {
-    return tickets.filter((t) => {
-      // Search match
-      if (searchTerm) {
-        const query = searchTerm.toLowerCase();
-        const matchId = t.id?.toLowerCase().includes(query);
-        const matchUnit = t.unit?.toLowerCase().includes(query);
-        const matchComponent = t.component?.toLowerCase().includes(query);
-        const matchClient = t.client?.toLowerCase().includes(query);
-        const matchFailure = t.failureCode?.toLowerCase().includes(query);
-        const matchAssignee = (t.assignedMembers || []).some((m) =>
-          m.name.toLowerCase().includes(query)
-        );
-
-        if (!matchId && !matchUnit && !matchComponent && !matchClient && !matchFailure && !matchAssignee) {
-          return false;
-        }
-      }
-
-      // Time range filter
-      if (timeRange && timeRange !== "all") {
-        const ticketDate = new Date(t.createdAt || t.created_at);
-        if (!isNaN(ticketDate.getTime())) {
-          const now = new Date();
-          let days = 180;
-          if (timeRange === "30d" || timeRange === "30hari") days = 30;
-          else if (timeRange === "90d" || timeRange === "90hari") days = 90;
-          else if (timeRange === "6m" || timeRange === "6bulan") days = 180;
-          const cutoff = new Date(now.getTime() - days * 24 * 3600000);
-          if (ticketDate < cutoff) return false;
-        }
-      }
-
-      // Dropdowns
-      if (selectedComponent && t.component !== selectedComponent) return false;
-      if (selectedClient && t.client !== selectedClient) return false;
-      if (selectedLocation && t.location !== selectedLocation) return false;
-      if (selectedStatus) {
-        const queryStatus = selectedStatus.toLowerCase();
-        const itemStatus = (t.status || "").toLowerCase();
-        if (itemStatus !== queryStatus) return false;
-      }
-
-      // Assignee Filter
-      if (selectedAssignee) {
-        if (selectedAssignee === "unassigned") {
-          if (t.assignedMembers && t.assignedMembers.length > 0) return false;
-        } else {
-          const hasMember = (t.assignedMembers || []).some(
-            (m) => m.name.toLowerCase() === selectedAssignee.toLowerCase()
-          );
-          if (!hasMember) return false;
-        }
-      }
-
-      return true;
-    });
-  }, [tickets, searchTerm, timeRange, selectedComponent, selectedClient, selectedLocation, selectedStatus, selectedAssignee]);
-
-  // Pagination calculation
-  // Cek apakah filter sedang aktif
-  const isFilterActive =
-    Boolean(searchTerm) ||
-    Boolean(timeRange && timeRange !== "all") ||
-    Boolean(selectedComponent) ||
-    Boolean(selectedClient) ||
-    Boolean(selectedLocation) ||
-    Boolean(selectedStatus) ||
-    Boolean(selectedAssignee);
-
-  // Jika tidak ada filter aktif, gunakan total tiket riil dari server
-  // Selalu tampilkan total tiket riil dari database server jika tersedia
-  const displayTotalTickets = serverTotal > 0 ? serverTotal : filteredTickets.length;
-
-
-  const totalPages = Math.ceil(filteredTickets.length / itemsPerPage) || 1;
-  const paginatedTickets = useMemo(() => {
-    const start = (currentPage - 1) * itemsPerPage;
-    return filteredTickets.slice(start, start + itemsPerPage);
-  }, [filteredTickets, currentPage]);
+  // Total tickets count directly from database server
+  const displayTotalTickets = serverTotal;
 
   // Handle select ticket: fetch fresh detail with history & assignees from API
   const handleSelectTicket = async (t) => {
@@ -491,18 +487,24 @@ export default function DaftarTiket() {
   const handleExportDownload = async (format, customDateRange = null) => {
     let compId = undefined;
     if (selectedComponent) {
-      const comp = tickets.find((t) => t.component === selectedComponent);
-      if (comp?.componentId) compId = comp.componentId;
+      const comp =
+        masterComponents.find((c) => c.name === selectedComponent) ||
+        tickets.find((t) => t.component === selectedComponent);
+      if (comp?.id || comp?.componentId) compId = comp.id || comp.componentId;
     }
     let clId = undefined;
     if (selectedClient) {
-      const cl = tickets.find((t) => t.client === selectedClient);
-      if (cl?.clientId) clId = cl.clientId;
+      const cl =
+        masterClients.find((c) => c.name === selectedClient) ||
+        tickets.find((t) => t.client === selectedClient);
+      if (cl?.id || cl?.clientId) clId = cl.id || cl.clientId;
     }
     let locId = undefined;
     if (selectedLocation) {
-      const loc = tickets.find((t) => t.location === selectedLocation);
-      if (loc?.locationId) locId = loc.locationId;
+      const loc =
+        masterLocations.find((l) => l.name === selectedLocation) ||
+        tickets.find((t) => t.location === selectedLocation);
+      if (loc?.id || loc?.locationId) locId = loc.id || loc.locationId;
     }
 
     await downloadTicketReport(
@@ -572,7 +574,7 @@ export default function DaftarTiket() {
 
       {/* Main Ticket Table Card */}
       <TicketTable
-        tickets={paginatedTickets}
+        tickets={tickets}
         totalTickets={displayTotalTickets}
         searchTerm={searchTerm}
         setSearchTerm={setSearchTerm}

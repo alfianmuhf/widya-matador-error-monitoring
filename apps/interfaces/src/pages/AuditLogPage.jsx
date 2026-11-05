@@ -6,38 +6,41 @@ export default function AuditLogPage() {
   const { accessToken } = useAuth();
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [loadingMore, setLoadingMore] = useState(false);
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
   const [meta, setMeta] = useState({ total: 0, page: 1, limit: 15, totalPages: 1 });
   const [isSearchFocused, setIsSearchFocused] = useState(false);
-  const [newlyAddedIds, setNewlyAddedIds] = useState(new Set());
 
-  const debounceTimeout = useRef(null);
-  const pageRef = useRef(1);
-  const loadingRef = useRef(false);
-  const loadingMoreRef = useRef(false);
-  const hasMoreRef = useRef(false);
+  const itemsPerPage = 15;
 
-  const hasMore = logs.length < (meta.total || 0);
-  hasMoreRef.current = hasMore;
-  loadingRef.current = loading;
-  loadingMoreRef.current = loadingMore;
+  // Debounce search input (350ms)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [search]);
 
-  // -------------------------------------------------------------------------
-  // Fetch initial page (strictly 15 records) or reset on search
-  // -------------------------------------------------------------------------
-  const fetchAuditLogs = useCallback(async (searchQuery = "") => {
-    loadingRef.current = true;
+  // Reset page to 1 when search query changes
+  const isFirstSearchRun = useRef(true);
+  useEffect(() => {
+    if (isFirstSearchRun.current) {
+      isFirstSearchRun.current = false;
+      return;
+    }
+    setCurrentPage(1);
+  }, [debouncedSearch]);
+
+  // Fetch audit logs with true server-side pagination
+  const fetchAuditLogs = useCallback(async () => {
     setLoading(true);
-    pageRef.current = 1;
-    setNewlyAddedIds(new Set());
-
     try {
       const params = new URLSearchParams();
-      params.append("page", "1");
-      params.append("limit", "15");
-      if (searchQuery.trim()) {
-        params.append("search", searchQuery.trim());
+      params.append("page", String(currentPage));
+      params.append("limit", String(itemsPerPage));
+      if (debouncedSearch.trim()) {
+        params.append("search", debouncedSearch.trim());
       }
 
       const res = await api.get(`/audit-logs?${params.toString()}`);
@@ -50,162 +53,25 @@ export default function AuditLogPage() {
         const newMeta = res.data.meta ||
           res.data.data?.meta || {
             total: dataLogs.length,
-            page: 1,
-            limit: 15,
-            totalPages: Math.ceil(dataLogs.length / 15) || 1,
+            page: currentPage,
+            limit: itemsPerPage,
+            totalPages: Math.ceil(dataLogs.length / itemsPerPage) || 1,
           };
         setMeta(newMeta);
-        hasMoreRef.current = dataLogs.length < (newMeta.total || 0);
       }
     } catch (e) {
       console.error("Gagal mengambil data audit log:", e);
     } finally {
-      loadingRef.current = false;
       setLoading(false);
     }
-  }, []);
+  }, [currentPage, debouncedSearch, itemsPerPage]);
 
-  // -------------------------------------------------------------------------
-  // Load next batch on scroll with 1-second visible delay & smooth entrance
-  // -------------------------------------------------------------------------
-  const loadMoreLogs = useCallback(async () => {
-    if (loadingRef.current || loadingMoreRef.current || !hasMoreRef.current) return;
-
-    loadingMoreRef.current = true;
-    setLoadingMore(true);
-
-    const nextPage = pageRef.current + 1;
-
-    try {
-      // Tahan 1 detik agar proses loading di bagian bawah terlihat jelas
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-
-      const params = new URLSearchParams();
-      params.append("page", String(nextPage));
-      params.append("limit", "15");
-      if (search.trim()) {
-        params.append("search", search.trim());
-      }
-
-      const res = await api.get(`/audit-logs?${params.toString()}`);
-      if (res.data) {
-        const newLogs = Array.isArray(res.data.data)
-          ? res.data.data
-          : res.data.data?.logs || [];
-
-        const newIds = new Set(newLogs.map((item) => item.id));
-        setNewlyAddedIds(newIds);
-
-        setLogs((prev) => {
-          const existingIds = new Set(prev.map((item) => item.id));
-          const filteredNew = newLogs.filter((item) => !existingIds.has(item.id));
-          return [...prev, ...filteredNew];
-        });
-
-        pageRef.current = nextPage;
-        if (res.data.meta || res.data.data?.meta) {
-          const updatedMeta = res.data.meta || res.data.data?.meta;
-          setMeta(updatedMeta);
-          hasMoreRef.current = (logs.length + newLogs.length) < (updatedMeta.total || 0);
-        }
-
-        // Hapus flag penanda baris baru setelah 2 detik
-        setTimeout(() => {
-          setNewlyAddedIds(new Set());
-        }, 2000);
-      }
-    } catch (e) {
-      console.error("Gagal memuat data audit log selanjutnya:", e);
-    } finally {
-      // Jeda 500ms agar user bisa melihat baris baru dan scroll ke bawah lagi dengan nyaman
-      setTimeout(() => {
-        loadingMoreRef.current = false;
-        setLoadingMore(false);
-      }, 500);
-    }
-  }, [search, logs.length]);
-
-  // -------------------------------------------------------------------------
-  // Initial load
-  // -------------------------------------------------------------------------
   useEffect(() => {
-    fetchAuditLogs("");
-  }, [fetchAuditLogs]);
+    if (!accessToken) return;
+    fetchAuditLogs();
+  }, [accessToken, fetchAuditLogs]);
 
-  // -------------------------------------------------------------------------
-  // Robust Scroll Detection: Checks both <main> element and window
-  // Only triggers when the user ACTUALLY scrolls to the bottom
-  // -------------------------------------------------------------------------
-  useEffect(() => {
-    const mainEl = document.querySelector("main");
-
-    const checkScrollPosition = () => {
-      if (loadingRef.current || loadingMoreRef.current || !hasMoreRef.current) return;
-
-      let atBottom = false;
-
-      // 1. Cek scrolling pada kontainer <main> (jika <main> yang overflow)
-      if (mainEl && mainEl.scrollHeight > mainEl.clientHeight + 20) {
-        const remaining = mainEl.scrollHeight - (mainEl.scrollTop + mainEl.clientHeight);
-        if (mainEl.scrollTop > 40 && remaining <= 80) {
-          atBottom = true;
-        }
-      }
-
-      // 2. Cek scrolling pada window / document (jika window yang overflow)
-      const doc = document.documentElement;
-      const body = document.body;
-      const scrollTop = window.scrollY || doc.scrollTop || body.scrollTop || 0;
-      const clientHeight = window.innerHeight || doc.clientHeight || 0;
-      const scrollHeight = Math.max(
-        doc.scrollHeight,
-        body.scrollHeight,
-        doc.offsetHeight,
-        body.offsetHeight
-      );
-      const remainingWindow = scrollHeight - (scrollTop + clientHeight);
-
-      if (scrollTop > 40 && remainingWindow <= 80) {
-        atBottom = true;
-      }
-
-      if (atBottom) {
-        loadMoreLogs();
-      }
-    };
-
-    if (mainEl) {
-      mainEl.addEventListener("scroll", checkScrollPosition, { passive: true });
-    }
-    window.addEventListener("scroll", checkScrollPosition, { passive: true });
-
-    return () => {
-      if (mainEl) {
-        mainEl.removeEventListener("scroll", checkScrollPosition);
-      }
-      window.removeEventListener("scroll", checkScrollPosition);
-    };
-  }, [loadMoreLogs]);
-
-  // -------------------------------------------------------------------------
-  // Search input (debounced)
-  // -------------------------------------------------------------------------
-  const handleSearchChange = (e) => {
-    const value = e.target.value;
-    setSearch(value);
-
-    if (debounceTimeout.current) {
-      clearTimeout(debounceTimeout.current);
-    }
-
-    debounceTimeout.current = setTimeout(() => {
-      fetchAuditLogs(value);
-    }, 350);
-  };
-
-  // -------------------------------------------------------------------------
   // Real-time updates via Server-Sent Events (SSE)
-  // -------------------------------------------------------------------------
   useEffect(() => {
     if (!accessToken) return;
 
@@ -216,10 +82,17 @@ export default function AuditLogPage() {
       try {
         const newLog = JSON.parse(ev.data);
         if (newLog?.id) {
-          setLogs((prev) =>
-            prev.some((l) => l.id === newLog.id) ? prev : [newLog, ...prev]
-          );
-          setMeta((p) => ({ ...p, total: (p.total || 0) + 1 }));
+          if (currentPage === 1 && !debouncedSearch.trim()) {
+            setLogs((prev) => [newLog, ...prev.filter((l) => l.id !== newLog.id)].slice(0, itemsPerPage));
+          }
+          setMeta((p) => {
+            const nextTotal = (p.total || 0) + 1;
+            return {
+              ...p,
+              total: nextTotal,
+              totalPages: Math.ceil(nextTotal / itemsPerPage) || 1,
+            };
+          });
         }
       } catch (err) {
         console.error("Gagal memproses SSE audit log:", err);
@@ -232,11 +105,12 @@ export default function AuditLogPage() {
 
     return () => {
       es.close();
-      if (debounceTimeout.current) {
-        clearTimeout(debounceTimeout.current);
-      }
     };
-  }, [accessToken]);
+  }, [accessToken, currentPage, debouncedSearch, itemsPerPage]);
+
+  const handleSearchChange = (e) => {
+    setSearch(e.target.value);
+  };
 
   // -------------------------------------------------------------------------
   // Action colour mapping – matches STANDAR_AUDIT_LOG.md
@@ -553,41 +427,10 @@ export default function AuditLogPage() {
           </table>
         </div>
 
-        {/* Bottom Loading Indicator when 1s delay is running */}
-        {loadingMore && (
-          <div
-            style={{
-              padding: "18px 24px",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: "10px",
-              borderTop: "1px solid #e2e8f0",
-              backgroundColor: "#f0fdfa",
-              color: "#0f766e",
-              fontSize: "13px",
-              fontWeight: 600,
-              animation: "fadeIn 0.2s ease",
-            }}
-          >
-            <div
-              style={{
-                width: "18px",
-                height: "18px",
-                border: "2.5px solid #99f6e4",
-                borderTop: "2.5px solid #0f766e",
-                borderRadius: "50%",
-                animation: "spin 0.8s linear infinite",
-              }}
-            />
-            <span>Memuat 15 data log berikutnya...</span>
-          </div>
-        )}
-
-        {/* Footer info and manual trigger button */}
+        {/* Footer with True Server-Side Pagination */}
         <div
           style={{
-            padding: "14px 24px",
+            padding: "16px 24px",
             borderTop: "1px solid #f1f5f9",
             backgroundColor: "#fafbfc",
             display: "flex",
@@ -595,53 +438,78 @@ export default function AuditLogPage() {
             justifyContent: "space-between",
             flexWrap: "wrap",
             gap: "12px",
-            fontSize: "12.5px",
+            fontSize: "13px",
             color: "#64748b",
           }}
         >
           <div>
-            Menampilkan <strong style={{ color: "#0f172a" }}>{logs.length}</strong> dari{" "}
-            <strong style={{ color: "#0f172a" }}>{meta.total || logs.length}</strong> rekaman audit log
+            Menampilkan{" "}
+            <strong style={{ color: "#0f172a" }}>
+              {meta.total === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1}
+            </strong>{" "}
+            -{" "}
+            <strong style={{ color: "#0f172a" }}>
+              {Math.min(meta.total || 0, currentPage * itemsPerPage)}
+            </strong>{" "}
+            dari <strong style={{ color: "#0f172a" }}>{meta.total || 0}</strong> rekaman audit log
           </div>
 
-          <div>
-            {!hasMore && logs.length > 0 ? (
-              <span style={{ color: "#0f766e", fontWeight: 600 }}>
-                Semua {meta.total} rekaman audit log telah selesai ditampilkan ✓
-              </span>
-            ) : hasMore ? (
+          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+            <span style={{ fontSize: "13px", color: "#64748b" }}>
+              Halaman {currentPage} dari {meta.totalPages || 1}
+            </span>
+
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
               <button
                 type="button"
-                onClick={loadMoreLogs}
-                disabled={loadingMore}
+                disabled={currentPage <= 1 || loading}
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                 style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "6px",
                   padding: "6px 14px",
                   borderRadius: "8px",
                   border: "1px solid #cbd5e1",
-                  backgroundColor: "#ffffff",
-                  fontSize: "12px",
-                  fontWeight: 600,
-                  color: "#0e8587",
-                  cursor: loadingMore ? "not-allowed" : "pointer",
-                  boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
-                  transition: "background-color 0.15s ease, border-color 0.15s ease",
-                  outline: "none",
-                  transform: "none",
-                }}
-                onMouseEnter={(e) => {
-                  if (!loadingMore) {
-                    e.currentTarget.style.backgroundColor = "#f0fdfa";
-                    e.currentTarget.style.borderColor = "#0e8587";
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = "#ffffff";
-                  e.currentTarget.style.borderColor = "#cbd5e1";
+                  backgroundColor: currentPage <= 1 || loading ? "#f8fafc" : "#ffffff",
+                  color: currentPage <= 1 || loading ? "#94a3b8" : "#334155",
+                  fontSize: "13px",
+                  fontWeight: 500,
+                  cursor: currentPage <= 1 || loading ? "not-allowed" : "pointer",
+                  transition: "background-color 0.15s ease",
                 }}
               >
-                Scroll ke bawah atau klik untuk muat 15 data lagi ↓
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <polyline points="15 18 9 12 15 6" />
+                </svg>
+                Sebelumnya
               </button>
-            ) : null}
+
+              <button
+                type="button"
+                disabled={currentPage >= (meta.totalPages || 1) || loading}
+                onClick={() => setCurrentPage((p) => Math.min(meta.totalPages || 1, p + 1))}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  padding: "6px 14px",
+                  borderRadius: "8px",
+                  border: "1px solid #cbd5e1",
+                  backgroundColor: currentPage >= (meta.totalPages || 1) || loading ? "#f8fafc" : "#ffffff",
+                  color: currentPage >= (meta.totalPages || 1) || loading ? "#94a3b8" : "#334155",
+                  fontSize: "13px",
+                  fontWeight: 500,
+                  cursor: currentPage >= (meta.totalPages || 1) || loading ? "not-allowed" : "pointer",
+                  transition: "background-color 0.15s ease",
+                }}
+              >
+                Berikutnya
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <polyline points="9 18 15 12 9 6" />
+                </svg>
+              </button>
+            </div>
           </div>
         </div>
       </div>

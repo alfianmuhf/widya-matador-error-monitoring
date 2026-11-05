@@ -17,8 +17,13 @@ export const globalLimiter = rateLimit({
   skip: (req) => {
     if (!env.RATE_LIMIT_ENABLED || env.NODE_ENV === "test") return true;
     const path = req.path || req.url;
-    // Bypass healthcheck, root ping, dan SSE stream
-    return path === "/health" || path === "/" || path.includes("/events");
+    // Bypass healthcheck, root ping, dan SSE stream (/events, /stream)
+    return (
+      path === "/health" ||
+      path === "/" ||
+      path.includes("/events") ||
+      path.includes("/stream")
+    );
   },
   handler: (req, res) => {
     res.status(429).json({

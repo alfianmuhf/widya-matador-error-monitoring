@@ -19,7 +19,7 @@ export const generateAccessToken = (payload) => {
  * @returns {object} decoded payload
  */
 export const verifyAccessToken = (token) => {
-  return jwt.verify(token, env.JWT_SECRET);
+  return jwt.verify(token, env.JWT_SECRET, { algorithms: ["HS256"] });
 };
 
 /**
@@ -45,7 +45,7 @@ export const generateRefreshToken = (payload) => {
  * @returns {object} decoded payload
  */
 export const verifyRefreshToken = (token) => {
-  return jwt.verify(token, env.JWT_REFRESH_SECRET);
+  return jwt.verify(token, env.JWT_REFRESH_SECRET, { algorithms: ["HS256"] });
 };
 
 /**

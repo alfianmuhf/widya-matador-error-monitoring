@@ -7,6 +7,8 @@
  * Konsekuensinya: cukup request OTP baru; link terisi lagi saat re-invite.
  */
 
+import crypto from "crypto";
+
 const telegramLinks = new Map();
 const otps = new Map();
 
@@ -27,9 +29,9 @@ export const linkTelegram = (email, telegram) => {
 /** Ambil link telegram untuk email (null bila tidak ada / server baru restart). */
 export const getTelegramLink = (email) => telegramLinks.get(norm(email)) || null;
 
-/** Buat OTP 6 digit untuk email (menimpa OTP lama yang belum dipakai). */
+/** Buat OTP 6 digit untuk email secara kriptografis aman (menimpa OTP lama yang belum dipakai). */
 export const createOtp = (email) => {
-  const code = String(Math.floor(100000 + Math.random() * 900000));
+  const code = String(crypto.randomInt(100000, 1000000));
   otps.set(norm(email), { code, expiresAt: Date.now() + OTP_TTL_MS, attempts: 0 });
   return code;
 };

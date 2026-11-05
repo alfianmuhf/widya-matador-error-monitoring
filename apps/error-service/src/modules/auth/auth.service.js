@@ -30,7 +30,7 @@ export const register = async ({ username, email, password, name, role, division
     username: targetUsername,
     password_hash: hashedPassword,
     name,
-    role: role ? role.toLowerCase() : "viewer",
+    role: "viewer", // Registrasi publik hanya diizinkan untuk viewer. Role administratif hanya dapat dibuat oleh ADMIN di modul user.
     division: division || null,
     status: "active",
     must_change_password: false,

@@ -11,7 +11,7 @@ export const authenticate = (req, res, next) => {
 
     if (authHeader && authHeader.startsWith("Bearer ")) {
       token = authHeader.split(" ")[1];
-    } else if (req.query?.token) {
+    } else if (req.query?.token && req.method === "GET") {
       token = req.query.token;
     }
 

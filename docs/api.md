@@ -241,6 +241,8 @@ Mengembalikan identitas service dan status operasional dasar API.
 
 Mendaftarkan pengguna baru secara mandiri.
 
+> **Catatan Keamanan (Role Enforcement):** Pendaftaran mandiri publik (`/auth/register`) **selalu menetapkan role `viewer`** demi mencegah eskalasi hak akses (*privilege escalation*). Akun dengan wewenang administratif (`coordinator` dan `admin`) hanya dapat dibuat oleh Super Admin melalui endpoint `POST /users`. Parameter `role` opsional dan hanya menerima nilai `"viewer"`.
+
 #### Request Body Valid
 ```json
 {
@@ -1567,17 +1569,22 @@ Mengelola siklus hidup tiket gangguan operasional Load Scanner (pelaporan, eskal
 | **Protokol** | **REST API** |
 | **HTTP Method** | `GET` |
 | **Endpoint Path** | `/tickets` |
-| **Query Params** | `?page=1&limit=10&search=&status=&severity=&componentId=&clientId=&locationId=&unitCode=&startDate=&endDate=&sortBy=openAt&sortOrder=desc` |
+| **Query Params** | `?page=1&limit=10&search=&status=&severity=&componentId=&clientId=&locationId=&unitCode=&component=&client=&location=&assignee=&timeRange=&startDate=&endDate=&sortBy=openAt&sortOrder=desc` |
 | **Autentikasi** | `Authorization: Bearer <access_token>` |
 | **Role Izin** | **Semua Role** (`admin`, `coordinator`, `viewer`) |
 
-Mengambil daftar tiket dengan filter multi-kriteria dan pagination.
+Mengambil daftar tiket dengan filter multi-kriteria dan server-side pagination.
 
 * **`page`** *(Integer, opsional, default `1`)*: Halaman data.
 * **`limit`** *(Integer, opsional, default `10`)*: Batas data per halaman (maks. 1000).
 * **`search`** *(String, opsional)*: Pencarian teks bebas pada ID tiket, unit code, deskripsi, atau failure code.
 * **`status`** *(String enum, opsional)*: `"open"`, `"escalated"`, atau `"solved"`.
 * **`severity`** *(String enum, opsional)*: `"rendah"`, `"sedang"`, atau `"tinggi"`.
+* **`component`** *(String, opsional)*: Filter berdasarkan nama komponen (contoh: `"Sensor LiDAR"`).
+* **`client`** *(String, opsional)*: Filter berdasarkan nama client/perusahaan (contoh: `"PT Vale Indonesia"`).
+* **`location`** *(String, opsional)*: Filter berdasarkan nama lokasi/site (contoh: `"Sorowako Site"`).
+* **`assignee`** *(String, opsional)*: Filter berdasarkan nama PIC / anggota tim penanganan tiket.
+* **`timeRange`** *(String enum, opsional)*: Preset filter waktu tanggal dibuat: `"all"`, `"7d"`, `"30d"`, `"1m"`, `"3m"`, `"6m"`, atau `"1y"`.
 * **`componentId`** *(UUID, opsional)*: Filter berdasarkan ID modul komponen.
 * **`clientId`** *(UUID, opsional)*: Filter berdasarkan ID client.
 * **`locationId`** *(UUID, opsional)*: Filter berdasarkan ID lokasi.
@@ -1585,6 +1592,7 @@ Mengambil daftar tiket dengan filter multi-kriteria dan pagination.
 * **`startDate`** & **`endDate`** *(Tanggal `YYYY-MM-DD` atau ISO 8601, opsional)*: Filter rentang tanggal dibuat (`open_at`).
 * **`sortBy`** *(Enum string, opsional, default `"openAt"`)*: `"openAt"`, `"escalatedAt"`, `"solvedAt"`, `"createdAt"`, `"id"`, atau `"ticketId"`.
 * **`sortOrder`** *(Enum string, opsional, default `"desc"`)*: `"asc"` atau `"desc"`.
+* **`meta`** *(Object)*: Mengembalikan `{ total, page, limit, totalPages }` untuk mendukung true server-side pagination di UI.
 
 #### ✅ Contoh Respons Sukses: `200 OK`
 ```json
@@ -2613,6 +2621,9 @@ Mengambil daftar tiket yang dikelola beserta ringkasan KPI dan metadata:
   ],
   "meta": {
     "total": 1,
+    "page": 1,
+    "limit": 50,
+    "totalPages": 1,
     "division": "rnd",
     "role": "coordinator",
     "coordinatorName": "Siti Software Leader",
@@ -2635,6 +2646,9 @@ Mengambil daftar tiket yang dikelola beserta ringkasan KPI dan metadata:
   "data": [ ... ],
   "meta": {
     "total": 12,
+    "page": 1,
+    "limit": 10,
+    "totalPages": 2,
     "division": "admin",
     "role": "admin",
     "coordinatorName": "Super Administrator",

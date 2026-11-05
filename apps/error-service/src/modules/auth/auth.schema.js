@@ -59,8 +59,8 @@ export const registerSchema = z.object({
     .trim()
     .min(2, "Nama minimal 2 karakter"),
   role: z
-    .enum(["VIEWER", "COORDINATOR", "ADMIN", "viewer", "coordinator", "admin"], {
-      errorMap: () => ({ message: "Role harus berupa VIEWER, COORDINATOR, atau ADMIN" }),
+    .enum(["VIEWER", "viewer"], {
+      errorMap: () => ({ message: "Pendaftaran publik hanya diizinkan untuk role viewer" }),
     })
     .optional()
     .default("viewer"),

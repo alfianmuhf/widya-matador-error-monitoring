@@ -53,6 +53,15 @@ app.use(
 // 2. Global Rate Limiter (Proteksi DoS dasar untuk seluruh API)
 app.use(globalLimiter);
 
+// Security Headers (Defense in depth)
+app.use((req, res, next) => {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "SAMEORIGIN");
+  res.setHeader("X-XSS-Protection", "0");
+  res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+  next();
+});
+
 // Standard parsers with body size limits to prevent DoS
 app.use(cookieParser());
 app.use(express.json({ limit: "2mb" }));

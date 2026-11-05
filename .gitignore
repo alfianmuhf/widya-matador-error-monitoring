@@ -62,3 +62,8 @@ perubahan_db.dbml
 *.dbml
 
 
+
+# Archive files
+*.tar.gz
+*.tgz
+*.zip

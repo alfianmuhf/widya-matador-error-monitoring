@@ -10,7 +10,7 @@ import { seedData } from "./seed_data.js";
  */
 
 // Konfigurasi
-const TOTAL_TICKETS = parseInt(process.env.STRESS_TICKETS || process.argv[2] || "20000", 10);
+const TOTAL_TICKETS = parseInt(process.env.STRESS_TICKETS || process.argv[2] || "70000", 10);
 const CHUNK_SIZE = 2500; // 2,500 tiket per batch (~5,500 baris riwayat per batch)
 
 // Pool template deskripsi masalah

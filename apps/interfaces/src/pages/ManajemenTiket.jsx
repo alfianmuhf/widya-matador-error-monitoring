@@ -44,8 +44,10 @@ export default function ManajemenTiket() {
   const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Pagination
+  // Pagination (Server-side)
   const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalTickets, setTotalTickets] = useState(0);
   const itemsPerPage = 10;
 
   // Modals State
@@ -81,12 +83,18 @@ export default function ManajemenTiket() {
     };
   }, []);
 
-  // Fetch managed tickets from /ticket-management
+  // Fetch managed tickets from /ticket-management with server-side pagination
   const fetchManagedTickets = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await api.get("/ticket-management");
+      const res = await api.get("/ticket-management", {
+        params: {
+          page: currentPage,
+          limit: itemsPerPage,
+        },
+      });
       const list = res.data?.data || [];
+      const meta = res.data?.meta || {};
 
       const formatted = list.map((t) => {
         const backendAssignees = (t.assignees || []).map(normalizeAssignee).filter(Boolean);
@@ -98,6 +106,10 @@ export default function ManajemenTiket() {
       });
 
       setTickets(formatted);
+      const srvTotal = typeof meta.total === "number" ? meta.total : formatted.length;
+      const srvPages = typeof meta.totalPages === "number" ? meta.totalPages : Math.max(1, Math.ceil(srvTotal / itemsPerPage));
+      setTotalTickets(srvTotal);
+      setTotalPages(srvPages);
     } catch (err) {
       console.error("Gagal memuat tiket yang dikelola:", err);
       const msg = err.response?.data?.message || "Gagal memuat data tiket dari server.";
@@ -105,7 +117,7 @@ export default function ManajemenTiket() {
     } finally {
       setLoading(false);
     }
-  }, [normalizeAssignee]);
+  }, [currentPage, itemsPerPage, normalizeAssignee]);
 
   useEffect(() => {
     if (!accessToken) return;
@@ -130,13 +142,6 @@ export default function ManajemenTiket() {
       eventSource.close();
     };
   }, [accessToken, fetchManagedTickets]);
-
-  // Pagination calculation
-  const totalPages = Math.max(1, Math.ceil(tickets.length / itemsPerPage));
-  const paginatedTickets = useMemo(() => {
-    const start = (currentPage - 1) * itemsPerPage;
-    return tickets.slice(start, start + itemsPerPage);
-  }, [tickets, currentPage]);
 
   // Helper badge status (clean text, no dot icon)
   const getStatusBadge = (statusStr) => {
@@ -260,7 +265,7 @@ export default function ManajemenTiket() {
           }}
         >
           <div>
-            Menampilkan <b>{tickets.length}</b> tiket
+            Menampilkan <b>{totalTickets}</b> tiket yang dikelola
           </div>
           {totalPages > 1 && (
             <div style={{ fontSize: "12px", color: "var(--text-muted)" }}>
@@ -295,7 +300,7 @@ export default function ManajemenTiket() {
                 </tr>
               </thead>
               <tbody>
-                {paginatedTickets.map((t) => {
+                {tickets.map((t) => {
                   const statusStr = (t.rawStatus || t.status || "").toLowerCase();
                   const statusBadge = getStatusBadge(statusStr);
 
@@ -635,8 +640,8 @@ export default function ManajemenTiket() {
             }}
           >
             <div style={{ fontSize: "12px", color: "var(--text-muted)" }}>
-              Menampilkan {Math.min(tickets.length, (currentPage - 1) * itemsPerPage + 1)}-
-              {Math.min(tickets.length, currentPage * itemsPerPage)} dari {tickets.length} tiket
+              Menampilkan {totalTickets === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1}-
+              {Math.min(totalTickets, currentPage * itemsPerPage)} dari {totalTickets} tiket
             </div>
             <div style={{ display: "flex", gap: "6px" }}>
               <button

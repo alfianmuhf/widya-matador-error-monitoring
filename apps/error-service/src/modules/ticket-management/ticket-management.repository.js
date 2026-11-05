@@ -14,8 +14,8 @@ export const getManagedTicketsKPI = async ({ userId, division, role }) => {
   if (userRole === "admin") {
     const rows = await prisma.$queryRaw(Prisma.sql`
       SELECT 
-        COUNT(DISTINCT t.id)::int as total,
-        COUNT(DISTINCT CASE WHEN th_current.severity = 'tinggi' THEN t.id END)::int as high_severity_count
+        COUNT(*)::int as total,
+        COUNT(CASE WHEN th_current.severity = 'tinggi' THEN 1 END)::int as high_severity_count
       FROM tickets t
       JOIN ticket_history th_current ON th_current.ticket_id = t.id AND th_current.version = t.current_version
       WHERE th_current.status IN ('open'::ticket_status, 'escalated'::ticket_status)
@@ -35,8 +35,8 @@ export const getManagedTicketsKPI = async ({ userId, division, role }) => {
   if (div === "after_sales") {
     const rows = await prisma.$queryRaw(Prisma.sql`
       SELECT 
-        COUNT(DISTINCT t.id)::int as total,
-        COUNT(DISTINCT CASE WHEN th_current.severity = 'tinggi' THEN t.id END)::int as high_severity_count
+        COUNT(*)::int as total,
+        COUNT(CASE WHEN th_current.severity = 'tinggi' THEN 1 END)::int as high_severity_count
       FROM tickets t
       JOIN ticket_history th_current ON th_current.ticket_id = t.id AND th_current.version = t.current_version
       WHERE th_current.status = 'open'::ticket_status
@@ -71,15 +71,15 @@ export const getManagedTicketsKPI = async ({ userId, division, role }) => {
 };
 
 /**
- * Mengambil ID tiket yang harus dikelola oleh coordinator/admin (dengan pagination dan filter opsional)
+ * Mengambil ID tiket yang harus dikelola oleh coordinator/admin beserta total count untuk paginasi
  */
-export const findManagedTicketIds = async ({
+export const findManagedTicketIdsAndCount = async ({
   userId,
   division,
   role,
   severity,
   search,
-  limit = 50,
+  limit = 10,
   skip = 0,
 }) => {
   const userRole = (role || "").toLowerCase();
@@ -96,7 +96,7 @@ export const findManagedTicketIds = async ({
     conditions.push(Prisma.sql`th_current.status = 'escalated'::ticket_status`);
     conditions.push(Prisma.sql`(team.leader_user_id = ${userId}::uuid OR tm.user_id = ${userId}::uuid)`);
   } else {
-    return [];
+    return { ids: [], total: 0 };
   }
 
   if (severity && severity !== "all") {
@@ -131,19 +131,39 @@ export const findManagedTicketIds = async ({
       `
     : Prisma.empty;
 
-  const query = Prisma.sql`
-    SELECT DISTINCT t.id, t.open_at
-    FROM tickets t
-    JOIN ticket_history th_current ON th_current.ticket_id = t.id AND th_current.version = t.current_version
-    ${joinAssignees}
-    ${joinExtras}
-    WHERE ${whereClause}
-    ORDER BY t.open_at DESC
-    LIMIT ${limit} OFFSET ${skip}
-  `;
+  const [countRows, idRows] = await Promise.all([
+    prisma.$queryRaw(Prisma.sql`
+      SELECT COUNT(DISTINCT t.id)::int as total
+      FROM tickets t
+      JOIN ticket_history th_current ON th_current.ticket_id = t.id AND th_current.version = t.current_version
+      ${joinAssignees}
+      ${joinExtras}
+      WHERE ${whereClause}
+    `),
+    prisma.$queryRaw(Prisma.sql`
+      SELECT DISTINCT t.id, t.open_at
+      FROM tickets t
+      JOIN ticket_history th_current ON th_current.ticket_id = t.id AND th_current.version = t.current_version
+      ${joinAssignees}
+      ${joinExtras}
+      WHERE ${whereClause}
+      ORDER BY t.open_at DESC
+      LIMIT ${limit} OFFSET ${skip}
+    `),
+  ]);
 
-  const rows = await prisma.$queryRaw(query);
-  return rows.map((r) => r.id);
+  const total = Number(countRows[0]?.total || 0);
+  const ids = idRows.map((r) => r.id);
+
+  return { ids, total };
+};
+
+/**
+ * Mengambil ID tiket yang harus dikelola oleh coordinator/admin (kompatibilitas mundur)
+ */
+export const findManagedTicketIds = async (params) => {
+  const { ids } = await findManagedTicketIdsAndCount(params);
+  return ids;
 };
 
 /**

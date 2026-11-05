@@ -92,12 +92,12 @@ export const getManagedTickets = async (actorUser, query = {}) => {
     };
   }
 
-  const limitNum = Math.min(Math.max(1, parseInt(limit, 10) || 50), 100);
+  const limitNum = Math.min(Math.max(1, parseInt(limit, 10) || 10), 100);
   const pageNum = Math.max(1, parseInt(page, 10) || 1);
   const skip = (pageNum - 1) * limitNum;
 
-  // 1. Ambil ID tiket yang memenuhi kriteria spesifik divisi/role dengan batas paginasi
-  const managedTicketIds = await managementRepo.findManagedTicketIds({
+  // 1. Ambil ID tiket yang memenuhi kriteria spesifik divisi/role dengan batas paginasi & hitung total
+  const { ids: managedTicketIds, total: filteredTotal } = await managementRepo.findManagedTicketIdsAndCount({
     userId: dbUser.id,
     division,
     role,
@@ -113,12 +113,15 @@ export const getManagedTickets = async (actorUser, query = {}) => {
   // 3. Format tiket menggunakan standar ticket-format.service
   const formattedTickets = rawTickets.map(formatTicket);
 
+  const totalPages = Math.ceil(filteredTotal / limitNum) || 1;
+
   return {
     tickets: formattedTickets,
     meta: {
-      total: kpiStats.total,
+      total: filteredTotal,
       page: pageNum,
       limit: limitNum,
+      totalPages,
       division,
       role,
       coordinatorName: dbUser.name,

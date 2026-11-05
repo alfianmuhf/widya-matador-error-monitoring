@@ -26,8 +26,13 @@ export const queryTicketsSchema = z.object({
     .optional()
     .transform((val) => (val ? val.toLowerCase() : undefined)),
   componentId: z.string().uuid("Format Component ID tidak valid").optional(),
+  component: z.string().trim().optional(),
   clientId: z.string().uuid("Format Client ID tidak valid").optional(),
+  client: z.string().trim().optional(),
   locationId: z.string().uuid("Format Location ID tidak valid").optional(),
+  location: z.string().trim().optional(),
+  assignee: z.string().trim().optional(),
+  timeRange: z.string().trim().optional(),
   unitCode: z.string().trim().optional(),
   startDate: z.string().datetime({ offset: true }).or(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).optional(),
   endDate: z.string().datetime({ offset: true }).or(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).optional(),

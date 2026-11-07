@@ -116,6 +116,35 @@ export const createTeam = async (data, actor) => {
     throw createError(400, "User yang berstatus suspended tidak dapat dijadikan leader tim");
   }
 
+  // Aturan Bisnis: 1 orang hanya boleh terdaftar dalam 1 tim aktif
+  const existingMembership = await prisma.team_members.findFirst({
+    where: {
+      user_id: data.leaderUserId,
+      team: { is_active: true },
+    },
+    include: { team: { select: { id: true, name: true } } },
+  });
+  if (existingMembership) {
+    throw createError(
+      409,
+      `User '${leaderUser.name}' sudah terdaftar di tim '${existingMembership.team?.name}'. 1 orang hanya boleh terdaftar dalam 1 tim.`
+    );
+  }
+
+  const existingLeader = await prisma.teams.findFirst({
+    where: {
+      leader_user_id: data.leaderUserId,
+      is_active: true,
+    },
+    select: { id: true, name: true },
+  });
+  if (existingLeader) {
+    throw createError(
+      409,
+      `User '${leaderUser.name}' sudah menjadi Leader di tim '${existingLeader.name}'. 1 orang hanya boleh terdaftar dalam 1 tim.`
+    );
+  }
+
   // Create team and automatically add leader as first member
   const newTeam = await prisma.$transaction(async (tx) => {
     const team = await tx.teams.create({
@@ -192,6 +221,37 @@ export const updateTeam = async (id, data, actor) => {
     }
     if (newLeaderUser.status === "suspended") {
       throw createError(400, "User leader baru tidak boleh berstatus suspended");
+    }
+
+    // Aturan Bisnis: 1 orang hanya boleh terdaftar dalam 1 tim aktif
+    const existingOtherMembership = await prisma.team_members.findFirst({
+      where: {
+        user_id: data.leaderUserId,
+        team_id: { not: id },
+        team: { is_active: true },
+      },
+      include: { team: { select: { id: true, name: true } } },
+    });
+    if (existingOtherMembership) {
+      throw createError(
+        409,
+        `User '${newLeaderUser.name}' sudah terdaftar di tim '${existingOtherMembership.team?.name}'. 1 orang hanya boleh terdaftar dalam 1 tim.`
+      );
+    }
+
+    const existingOtherLeader = await prisma.teams.findFirst({
+      where: {
+        leader_user_id: data.leaderUserId,
+        id: { not: id },
+        is_active: true,
+      },
+      select: { id: true, name: true },
+    });
+    if (existingOtherLeader) {
+      throw createError(
+        409,
+        `User '${newLeaderUser.name}' sudah menjadi Leader di tim '${existingOtherLeader.name}'. 1 orang hanya boleh terdaftar dalam 1 tim.`
+      );
     }
   }
 
@@ -330,9 +390,41 @@ export const addTeamMember = async (teamId, userId, actor) => {
     throw createError(400, "User yang berstatus suspended tidak dapat dimasukkan ke dalam tim");
   }
 
-  const existingMember = await teamRepo.findTeamMember(teamId, userId);
-  if (existingMember) {
-    throw createError(409, `User '${userToAdd.name}' sudah terdaftar dalam tim ini`);
+  // Aturan Bisnis: 1 orang hanya boleh terdaftar dalam 1 tim aktif
+  // 1. Cek apakah user sudah terdaftar di tim aktif manapun (termasuk tim ini)
+  const existingMembership = await prisma.team_members.findFirst({
+    where: {
+      user_id: userId,
+      team: { is_active: true },
+    },
+    include: { team: { select: { id: true, name: true } } },
+  });
+
+  if (existingMembership) {
+    if (existingMembership.team_id === teamId) {
+      throw createError(409, `User '${userToAdd.name}' sudah terdaftar dalam tim ini`);
+    } else {
+      throw createError(
+        409,
+        `User '${userToAdd.name}' sudah menjadi anggota di tim '${existingMembership.team?.name}'. 1 orang hanya boleh terdaftar dalam 1 tim. Silakan keluarkan terlebih dahulu dari tim sebelumnya.`
+      );
+    }
+  }
+
+  // 2. Cek apakah user saat ini menjabat sebagai Leader di tim aktif manapun
+  const existingLeadingTeam = await prisma.teams.findFirst({
+    where: {
+      leader_user_id: userId,
+      is_active: true,
+    },
+    select: { id: true, name: true },
+  });
+
+  if (existingLeadingTeam) {
+    throw createError(
+      409,
+      `User '${userToAdd.name}' saat ini menjabat sebagai Leader di tim '${existingLeadingTeam.name}'. Leader tim tidak dapat dimasukkan sebagai anggota di tim lain.`
+    );
   }
 
   const newMember = await teamRepo.addTeamMember(teamId, userId);

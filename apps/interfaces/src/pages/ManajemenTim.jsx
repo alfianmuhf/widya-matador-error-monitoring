@@ -44,7 +44,6 @@ export default function ManajemenTim() {
 
   // Form Fields for Add Member
   const [selectedUserIdToAdd, setSelectedUserIdToAdd] = useState("");
-  const [onlyUnassigned, setOnlyUnassigned] = useState(true);
 
   // Fetch teams from backend
   const fetchTeams = useCallback(async () => {
@@ -122,7 +121,7 @@ export default function ManajemenTim() {
     return map;
   }, [teams]);
 
-  // Candidate users for adding as members: role=coordinator, division=rnd, not in this team, not in any team if onlyUnassigned
+  // Candidate users for adding as members: role=coordinator, division=rnd, strictly not in ANY team
   const availableCandidatesToAdd = useMemo(() => {
     if (!addMemberTarget) return [];
     return usersList.filter((u) => {
@@ -137,21 +136,14 @@ export default function ManajemenTim() {
       const division = (u.division || "").toLowerCase();
       if (division !== "rnd") return false;
 
-      // 4. Belum terdaftar di tim ini (baik sebagai anggota maupun leader)
-      const isAlreadyInThisTeam =
-        (addMemberTarget.members || []).some((m) => (m.userId || m.id) === u.id) ||
-        addMemberTarget.leaderUserId === u.id ||
-        addMemberTarget.leader?.id === u.id;
-      if (isAlreadyInThisTeam) return false;
-
-      // 5. Belum masuk tim manapun (jika toggle hanya belum masuk tim aktif)
-      if (onlyUnassigned && userTeamMembershipMap.has(u.id)) {
+      // 4. Aturan Ketat: 1 orang hanya boleh terdaftar pada 1 tim (belum menjadi leader/anggota tim manapun)
+      if (userTeamMembershipMap.has(u.id)) {
         return false;
       }
 
       return true;
     });
-  }, [addMemberTarget, usersList, onlyUnassigned, userTeamMembershipMap]);
+  }, [addMemberTarget, usersList, userTeamMembershipMap]);
 
   // --------------------------------------------------------------------------
   // CREATE TEAM HANDLER (Admin Only)
@@ -262,7 +254,6 @@ export default function ManajemenTim() {
   const openAddMemberModal = (team) => {
     setAddMemberTarget(team);
     setSelectedUserIdToAdd("");
-    setOnlyUnassigned(true);
     setFormError(null);
   };
 
@@ -803,8 +794,9 @@ export default function ManajemenTim() {
                   .map((u) => {
                     const membership = userTeamMembershipMap.get(u.id);
                     return (
-                      <option key={u.id} value={u.id}>
-                        {u.name} (@{u.username || u.email}){membership ? ` — [Leader di ${membership.teamName}]` : " — [Tersedia]"}
+                      <option key={u.id} value={u.id} disabled={Boolean(membership)}>
+                        {u.name} (@{u.username || u.email})
+                        {membership ? ` — [Sudah di ${membership.teamName}] (Tidak Tersedia)` : " — [Tersedia]"}
                       </option>
                     );
                   })}
@@ -890,9 +882,15 @@ export default function ManajemenTim() {
                   })
                   .map((u) => {
                     const membership = userTeamMembershipMap.get(u.id);
+                    const isInOtherTeam = membership && membership.teamId !== editTeamTarget?.id;
                     return (
-                      <option key={u.id} value={u.id}>
-                        {u.name} (@{u.username || u.email}){membership ? ` — [Leader di ${membership.teamName}]` : " — [Tersedia]"}
+                      <option key={u.id} value={u.id} disabled={isInOtherTeam}>
+                        {u.name} (@{u.username || u.email})
+                        {isInOtherTeam
+                          ? ` — [Sudah di ${membership.teamName}] (Tidak Tersedia)`
+                          : membership
+                          ? " — [Anggota Tim Ini]"
+                          : " — [Tersedia]"}
                       </option>
                     );
                   })}
@@ -950,6 +948,15 @@ export default function ManajemenTim() {
               </div>
             )}
 
+            <div style={{ padding: "10px 12px", borderRadius: "6px", backgroundColor: "#f0fdfa", border: "1px solid #99f6e4", color: "#0f766e", fontSize: "12px", display: "flex", alignItems: "center", gap: "8px" }}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ flexShrink: 0 }}>
+                <circle cx="12" cy="12" r="10" />
+                <line x1="12" y1="16" x2="12" y2="12" />
+                <line x1="12" y1="8" x2="12.01" y2="8" />
+              </svg>
+              <span><strong>Aturan Sistem:</strong> 1 personel Coordinator RnD hanya dapat terdaftar pada 1 tim.</span>
+            </div>
+
             <div>
               <label style={{ display: "block", fontSize: "12.5px", fontWeight: 700, color: "#334155", marginBottom: "4px" }}>
                 Pilih Personel Coordinator RnD <span style={{ color: "#dc2626" }}>*</span>
@@ -957,60 +964,44 @@ export default function ManajemenTim() {
               <select
                 value={selectedUserIdToAdd}
                 onChange={(e) => setSelectedUserIdToAdd(e.target.value)}
-                style={{ width: "100%", padding: "8px 12px", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "13px" }}
+                disabled={availableCandidatesToAdd.length === 0}
+                style={{
+                  width: "100%",
+                  padding: "8px 12px",
+                  borderRadius: "6px",
+                  border: "1px solid #cbd5e1",
+                  fontSize: "13px",
+                  backgroundColor: availableCandidatesToAdd.length === 0 ? "#f8fafc" : "#ffffff",
+                  cursor: availableCandidatesToAdd.length === 0 ? "not-allowed" : "default",
+                }}
               >
                 <option value="">
                   {availableCandidatesToAdd.length === 0
-                    ? onlyUnassigned
-                      ? "-- Tidak ada Coordinator RnD yang belum memiliki tim --"
-                      : "-- Tidak ada personel Coordinator RnD yang tersedia --"
+                    ? "-- Semua personel Coordinator RnD sudah memiliki tim --"
                     : "-- Pilih Personel Coordinator RnD --"}
                 </option>
-                {availableCandidatesToAdd.map((u) => {
-                  const existing = userTeamMembershipMap.get(u.id);
-                  return (
-                    <option key={u.id} value={u.id}>
-                      {u.name} (@{u.username || u.email}){existing ? ` — [Sudah di ${existing.teamName}]` : " — [Belum Memiliki Tim]"}
-                    </option>
-                  );
-                })}
+                {availableCandidatesToAdd.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.name} (@{u.username || u.email}) — [Tersedia]
+                  </option>
+                ))}
               </select>
-
-              {/* TOGGLE ONLY UNASSIGNED FILTER */}
-              <div style={{ marginTop: "8px", display: "flex", alignItems: "center", gap: "7px" }}>
-                <input
-                  type="checkbox"
-                  id="onlyUnassignedFilter"
-                  checked={onlyUnassigned}
-                  onChange={(e) => {
-                    setOnlyUnassigned(e.target.checked);
-                    setSelectedUserIdToAdd("");
-                  }}
-                  style={{ width: "15px", height: "15px", cursor: "pointer", accentColor: "#0e8587" }}
-                />
-                <label
-                  htmlFor="onlyUnassignedFilter"
-                  style={{ fontSize: "12px", color: "#475569", cursor: "pointer", userSelect: "none" }}
-                >
-                  Hanya tampilkan yang belum masuk tim manapun
-                </label>
-              </div>
 
               {availableCandidatesToAdd.length === 0 && (
                 <div
                   style={{
                     marginTop: "8px",
-                    padding: "8px 12px",
+                    padding: "10px 12px",
                     borderRadius: "6px",
                     backgroundColor: "#fffbeb",
                     border: "1px solid #fde68a",
                     fontSize: "12px",
                     color: "#b45309",
+                    lineHeight: 1.5,
                   }}
                 >
-                  {onlyUnassigned
-                    ? "Seluruh personel Coordinator divisi RnD saat ini sudah terdaftar ke dalam tim. Hilangkan centang di atas jika ingin menugaskan personel lintas tim."
-                    : "Tidak ada personel Coordinator RnD yang tersedia untuk ditambahkan."}
+                  ⚠️ <strong>Tidak ada personel Coordinator RnD yang tersedia.</strong><br />
+                  Seluruh personel saat ini sudah terdaftar ke dalam tim. Untuk memindahkan personel ke tim ini, Anda perlu mengeluarkannya terlebih dahulu dari tim sebelumnya, atau mendaftarkan akun baru melalui menu Pengguna.
                 </div>
               )}
 
@@ -1030,8 +1021,17 @@ export default function ManajemenTim() {
               </button>
               <button
                 type="submit"
-                disabled={submitting}
-                style={{ padding: "8px 18px", borderRadius: "6px", border: "none", backgroundColor: "#0e8587", color: "#ffffff", fontSize: "13px", fontWeight: 700, cursor: submitting ? "not-allowed" : "pointer" }}
+                disabled={submitting || !selectedUserIdToAdd || availableCandidatesToAdd.length === 0}
+                style={{
+                  padding: "8px 18px",
+                  borderRadius: "6px",
+                  border: "none",
+                  backgroundColor: submitting || !selectedUserIdToAdd || availableCandidatesToAdd.length === 0 ? "#94a3b8" : "#0e8587",
+                  color: "#ffffff",
+                  fontSize: "13px",
+                  fontWeight: 700,
+                  cursor: submitting || !selectedUserIdToAdd || availableCandidatesToAdd.length === 0 ? "not-allowed" : "pointer",
+                }}
               >
                 {submitting ? "Menambahkan..." : "Tambah ke Tim"}
               </button>
@@ -1068,7 +1068,7 @@ export default function ManajemenTim() {
           loading={submitting}
           title="Keluarkan Anggota dari Tim"
           itemName={`${removeMemberTarget.member?.name} (${removeMemberTarget.team?.name})`}
-          description={`Apakah Anda yakin ingin mengeluarkan '${removeMemberTarget.member?.name}' dari tim ${removeMemberTarget.team?.name}?`}
+          description={`Apakah Anda yakin ingin mengeluarkan '${removeMemberTarget.member?.name}' dari tim ${removeMemberTarget.team?.name}? Seluruh riwayat aktivitas penanganan tiket dan jejak audit log oleh personel ini tetap tersimpan aman di sistem.`}
         />
       )}
     </div>

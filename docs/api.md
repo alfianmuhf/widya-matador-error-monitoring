@@ -1503,7 +1503,9 @@ Menghapus tim RnD. Jika tim sudah memiliki keterkaitan dengan tiket gangguan akt
 | **Autentikasi** | `Authorization: Bearer <access_token>` |
 | **Role Izin** | **Leader Tim bersangkutan** atau **Admin** |
 
-Menambahkan anggota baru ke dalam tim divisi. Anggota yang ditambahkan harus berupa akun aktif / terundang yang terdaftar di sistem.
+Menambahkan anggota baru ke dalam tim divisi. Anggota yang ditambahkan harus berupa akun aktif yang terdaftar di sistem.
+
+> **Aturan Keanggotaan (1 Orang = 1 Tim):** Sistem menerapkan aturan validasi ketat bahwa 1 pengguna hanya boleh terdaftar pada 1 tim aktif (baik sebagai anggota maupun leader). Jika pengguna sudah terdaftar di tim lain, request ditolak dengan kode `409 Conflict`. Untuk memindahkannya ke tim baru, pengguna harus dikeluarkan terlebih dahulu dari tim lamanya via `DELETE /teams/:id/members/:userId`. Riwayat penanganan tiket oleh pengguna tersebut tetap aman dan tidak akan hilang.
 
 ##### Request Body
 ```json

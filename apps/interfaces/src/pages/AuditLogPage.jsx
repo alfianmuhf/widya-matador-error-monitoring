@@ -11,6 +11,7 @@ export default function AuditLogPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [meta, setMeta] = useState({ total: 0, page: 1, limit: 15, totalPages: 1 });
   const [isSearchFocused, setIsSearchFocused] = useState(false);
+  const [newlyAddedIds, setNewlyAddedIds] = useState(new Set());
 
   const itemsPerPage = 15;
 
@@ -30,6 +31,7 @@ export default function AuditLogPage() {
       return;
     }
     setCurrentPage(1);
+    setNewlyAddedIds(new Set());
   }, [debouncedSearch]);
 
   // Fetch audit logs with true server-side pagination
@@ -83,7 +85,15 @@ export default function AuditLogPage() {
         const newLog = JSON.parse(ev.data);
         if (newLog?.id) {
           if (currentPage === 1 && !debouncedSearch.trim()) {
+            setNewlyAddedIds((prev) => new Set([...prev, newLog.id]));
             setLogs((prev) => [newLog, ...prev.filter((l) => l.id !== newLog.id)].slice(0, itemsPerPage));
+            setTimeout(() => {
+              setNewlyAddedIds((prev) => {
+                const next = new Set(prev);
+                next.delete(newLog.id);
+                return next;
+              });
+            }, 3000);
           }
           setMeta((p) => {
             const nextTotal = (p.total || 0) + 1;
@@ -463,7 +473,10 @@ export default function AuditLogPage() {
               <button
                 type="button"
                 disabled={currentPage <= 1 || loading}
-                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                onClick={() => {
+                  setCurrentPage((p) => Math.max(1, p - 1));
+                  setNewlyAddedIds(new Set());
+                }}
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
@@ -488,7 +501,10 @@ export default function AuditLogPage() {
               <button
                 type="button"
                 disabled={currentPage >= (meta.totalPages || 1) || loading}
-                onClick={() => setCurrentPage((p) => Math.min(meta.totalPages || 1, p + 1))}
+                onClick={() => {
+                  setCurrentPage((p) => Math.min(meta.totalPages || 1, p + 1));
+                  setNewlyAddedIds(new Set());
+                }}
                 style={{
                   display: "inline-flex",
                   alignItems: "center",

@@ -147,6 +147,263 @@ export default function TicketTable({
     );
   };
 
+  // Helper to determine PIC / Tim based on ticket status & lifecycle:
+  // 1. OPEN: Nama penanggung jawab aftersales
+  // 2. ESCALATED: Nama tim RnD saja
+  // 3. SOLVED: Penanggung jawab terakhir (Tim RnD atau personil Aftersales)
+  const renderPicOrTeam = (t) => {
+    const status = String(t.rawStatus || t.status || "open").toLowerCase();
+
+    // 1. STATUS OPEN: Nama penanggung jawab Aftersales
+    if (status === "open") {
+      const aftersalesName =
+        t.aftersalesUser?.name ||
+        t.aftersalesUser?.username ||
+        t.aftersales_user?.name ||
+        t.aftersales_user?.username ||
+        t.reporter ||
+        "-";
+
+      const initials = (aftersalesName || "A")
+        .replace(/^@/, "")
+        .slice(0, 2)
+        .toUpperCase();
+
+      return (
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }} title={`Penanggung Jawab Aftersales: ${aftersalesName}`}>
+          <div
+            style={{
+              width: "28px",
+              height: "28px",
+              borderRadius: "50%",
+              backgroundColor: "#0284c7",
+              color: "#ffffff",
+              fontSize: "11px",
+              fontWeight: 700,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+            }}
+          >
+            {initials}
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
+            <span
+              style={{
+                fontSize: "12.5px",
+                fontWeight: 650,
+                color: "var(--text-dark)",
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                maxWidth: "140px",
+              }}
+            >
+              {aftersalesName}
+            </span>
+          </div>
+        </div>
+      );
+    }
+
+    // 2. STATUS ESCALATED: Nama tim RnD saja
+    if (status === "escalated" || status === "monitor") {
+      const teamName =
+        t.currentTeam?.name ||
+        t.current_team?.name ||
+        t.teams?.[0]?.team?.name ||
+        t.teams?.[0]?.name ||
+        t.ticket_teams?.[0]?.team?.name ||
+        (t.history || []).find((h) => h.team?.name)?.team?.name;
+
+      if (!teamName) {
+        return (
+          <span
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              padding: "2px 8px",
+              borderRadius: "4px",
+              backgroundColor: "#f1f5f9",
+              color: "#94a3b8",
+              fontSize: "11px",
+              fontWeight: 500,
+              fontStyle: "italic",
+            }}
+          >
+            Belum Ditugaskan
+          </span>
+        );
+      }
+
+      const cleanTeam = teamName.replace(/^RnD\s*[-–]\s*/i, "").trim() || teamName;
+      const teamInitials = cleanTeam.slice(0, 2).toUpperCase();
+
+      return (
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }} title={`Tim RnD: ${teamName}`}>
+          <div
+            style={{
+              width: "28px",
+              height: "28px",
+              borderRadius: "7px",
+              backgroundColor: "#0e8587",
+              color: "#ffffff",
+              fontSize: "10.5px",
+              fontWeight: 700,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+            }}
+          >
+            {teamInitials}
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
+            <span
+              style={{
+                fontSize: "12.5px",
+                fontWeight: 650,
+                color: "var(--text-dark)",
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                maxWidth: "140px",
+              }}
+            >
+              {teamName}
+            </span>
+          </div>
+        </div>
+      );
+    }
+
+    // 3. STATUS SOLVED (dan closed): Cek penanggung jawab terakhir siapa
+    const historyList = t.history || [];
+    const solvedHistory =
+      historyList.find((h) => String(h.rawStatus || h.status).toLowerCase() === "solved") ||
+      historyList[0];
+
+    const teamName =
+      solvedHistory?.team?.name ||
+      t.currentTeam?.name ||
+      t.current_team?.name ||
+      t.teams?.[0]?.team?.name ||
+      t.teams?.[0]?.name;
+
+    const authorDivision = (
+      solvedHistory?.authorDivision ||
+      solvedHistory?.changed_by_user?.division ||
+      ""
+    ).toLowerCase();
+
+    // Helper render badge personil Aftersales yang menyelesaikan
+    const renderSolvedAftersales = () => {
+      const aftersalesName =
+        solvedHistory?.author ||
+        solvedHistory?.changed_by_user?.name ||
+        t.aftersalesUser?.name ||
+        t.aftersalesUser?.username ||
+        t.aftersales_user?.name ||
+        "Aftersales";
+
+      const initials = (aftersalesName || "A")
+        .replace(/^@/, "")
+        .slice(0, 2)
+        .toUpperCase();
+
+      return (
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }} title={`Diselesaikan oleh Aftersales: ${aftersalesName}`}>
+          <div
+            style={{
+              width: "28px",
+              height: "28px",
+              borderRadius: "50%",
+              backgroundColor: "#16a34a",
+              color: "#ffffff",
+              fontSize: "11px",
+              fontWeight: 700,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+            }}
+          >
+            {initials}
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
+            <span
+              style={{
+                fontSize: "12.5px",
+                fontWeight: 650,
+                color: "var(--text-dark)",
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                maxWidth: "140px",
+              }}
+            >
+              {aftersalesName}
+            </span>
+          </div>
+        </div>
+      );
+    };
+
+    // Jika diselesaikan oleh Aftersales -> Tampilkan nama personil Aftersales
+    if (authorDivision === "after_sales") {
+      return renderSolvedAftersales();
+    }
+
+    const isRndTeam = Boolean(teamName && authorDivision !== "after_sales");
+
+    if (isRndTeam) {
+      // Penanggung jawab terakhir adalah Tim RnD -> Tampilkan nama tim
+      const cleanTeam = teamName.replace(/^RnD\s*[-–]\s*/i, "").trim() || teamName;
+      const teamInitials = cleanTeam.slice(0, 2).toUpperCase();
+
+      return (
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }} title={`Diselesaikan oleh Tim: ${teamName}`}>
+          <div
+            style={{
+              width: "28px",
+              height: "28px",
+              borderRadius: "7px",
+              backgroundColor: "#16a34a",
+              color: "#ffffff",
+              fontSize: "10.5px",
+              fontWeight: 700,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+            }}
+          >
+            {teamInitials}
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
+            <span
+              style={{
+                fontSize: "12.5px",
+                fontWeight: 650,
+                color: "var(--text-dark)",
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                maxWidth: "140px",
+              }}
+            >
+              {teamName}
+            </span>
+          </div>
+        </div>
+      );
+    }
+
+    // Default fallback jika tidak ada tim RnD: Aftersales
+    return renderSolvedAftersales();
+  };
+
   return (
     <div
       style={{
@@ -296,7 +553,6 @@ export default function TicketTable({
             ) : (
               tickets.map((t) => {
                 const isSelected = selectedTicketId === t.id;
-                const members = t.assignedMembers || [];
                 return (
                   <tr
                     key={t.id}
@@ -361,65 +617,7 @@ export default function TicketTable({
 
                     {/* PIC / Tim Penanganan */}
                     <td style={{ padding: "16px 18px" }}>
-                      {members.length > 0 ? (
-                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                          <div
-                            style={{
-                              width: "28px",
-                              height: "28px",
-                              borderRadius: "50%",
-                              backgroundColor: "#0e8587",
-                              color: "#ffffff",
-                              fontSize: "11px",
-                              fontWeight: 700,
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              flexShrink: 0,
-                              textTransform: "uppercase",
-                            }}
-                          >
-                            {(members[0].name || "U").slice(0, 2)}
-                          </div>
-                          <div style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
-                            <span
-                              style={{
-                                fontSize: "12.5px",
-                                fontWeight: 650,
-                                color: "var(--text-dark)",
-                                whiteSpace: "nowrap",
-                                overflow: "hidden",
-                                textOverflow: "ellipsis",
-                                maxWidth: "105px",
-                              }}
-                              title={members[0].name}
-                            >
-                              {members[0].name}
-                            </span>
-                            {members.length > 1 && (
-                              <span style={{ fontSize: "10.5px", color: "#0e8587", fontWeight: 600 }}>
-                                +{members.length - 1} lainnya
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      ) : (
-                        <span
-                          style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            padding: "2px 8px",
-                            borderRadius: "4px",
-                            backgroundColor: "#f1f5f9",
-                            color: "#94a3b8",
-                            fontSize: "11px",
-                            fontWeight: 500,
-                            fontStyle: "italic",
-                          }}
-                        >
-                          Unassigned
-                        </span>
-                      )}
+                      {renderPicOrTeam(t)}
                     </td>
 
                     {/* Dibuat */}

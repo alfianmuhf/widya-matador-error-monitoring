@@ -69,12 +69,27 @@ export default function DaftarTiket() {
     Promise.all([
       api.get("/users?limit=100").catch(() => ({ data: { data: { users: [] } } })),
       api.get("/telegram-users?limit=100").catch(() => ({ data: { data: [] } })),
+      api.get("/teams?limit=100").catch(() => ({ data: { data: [] } })),
     ])
-      .then(([usersRes, teleRes]) => {
+      .then(([usersRes, teleRes, teamsRes]) => {
         const dbUsers = usersRes.data?.data?.users || (Array.isArray(usersRes.data?.data) ? usersRes.data?.data : []);
         const teleUsers = teleRes.data?.data?.telegramUsers || (Array.isArray(teleRes.data?.data) ? teleRes.data?.data : []);
+        const teamsData = teamsRes.data?.data?.teams || (Array.isArray(teamsRes.data?.data) ? teamsRes.data?.data : []);
 
         const combined = [];
+
+        // Tim RnD
+        teamsData.forEach((tm) => {
+          if (tm.name) {
+            combined.push({
+              id: tm.id,
+              name: tm.name,
+              role: "TIM RND",
+              source: "team",
+            });
+          }
+        });
+
         dbUsers.forEach((u) => {
           combined.push({
             id: u.id,

@@ -1585,7 +1585,7 @@ Mengambil daftar tiket dengan filter multi-kriteria dan server-side pagination.
 * **`component`** *(String, opsional)*: Filter berdasarkan nama komponen (contoh: `"Sensor LiDAR"`).
 * **`client`** *(String, opsional)*: Filter berdasarkan nama client/perusahaan (contoh: `"PT Vale Indonesia"`).
 * **`location`** *(String, opsional)*: Filter berdasarkan nama lokasi/site (contoh: `"Sorowako Site"`).
-* **`assignee`** *(String, opsional)*: Filter berdasarkan nama PIC / anggota tim penanganan tiket.
+* **`assignee`** *(String, opsional)*: Filter berdasarkan PIC atau Tim penanganan tiket. Mendukung pencarian teks pada nama Tim RnD (`teams.name`), nama Leader tim, nama anggota tim RnD (`users.name`), maupun nama PIC penanggung jawab Aftersales (`aftersales_user.name`).
 * **`timeRange`** *(String enum, opsional)*: Preset filter waktu tanggal dibuat: `"all"`, `"7d"`, `"30d"`, `"1m"`, `"3m"`, `"6m"`, atau `"1y"`.
 * **`componentId`** *(UUID, opsional)*: Filter berdasarkan ID modul komponen.
 * **`clientId`** *(UUID, opsional)*: Filter berdasarkan ID client.
@@ -1595,6 +1595,12 @@ Mengambil daftar tiket dengan filter multi-kriteria dan server-side pagination.
 * **`sortBy`** *(Enum string, opsional, default `"openAt"`)*: `"openAt"`, `"escalatedAt"`, `"solvedAt"`, `"createdAt"`, `"id"`, atau `"ticketId"`.
 * **`sortOrder`** *(Enum string, opsional, default `"desc"`)*: `"asc"` atau `"desc"`.
 * **`meta`** *(Object)*: Mengembalikan `{ total, page, limit, totalPages }` untuk mendukung true server-side pagination di UI.
+
+> **💡 Konvensi Tampilan UI untuk Kolom PIC / Tim:**
+> * **Status Open**: Menampilkan nama Penanggung Jawab Aftersales (beserta icon user & username).
+> * **Status Escalated**: Menampilkan nama **Tim RnD saja** yang ditugaskan (contoh: *Software Team*).
+> * **Status Solved / Closed**: Menampilkan penanggung jawab terakhir yang menyelesaikan tiket (nama Tim RnD jika diselesaikan oleh RnD pasca-eskalasi, atau nama PIC Aftersales jika diselesaikan langsung oleh tim Aftersales).
+> * **Detail Drawer ("Tim Penanggung Jawab Saat Ini")**: Khusus menampilkan nama Tim RnD. Jika tiket masih `open` atau dituntaskan Aftersales tanpa eskalasi, field ini ditampilkan sebagai `-` (kosong).
 
 #### ✅ Contoh Respons Sukses: `200 OK`
 ```json
@@ -3047,7 +3053,7 @@ Mencatat seluruh rekam jejak aktivitas penting pengguna dan sistem secara otomat
 
 | Method | Endpoint | Deskripsi | Query Params |
 |:---|:---|:---|:---|
-| `GET` | `/audit-logs` | Daftar log audit terpaginasi | `?page=1&limit=10&search=&action=&entityType=&startDate=&endDate=` |
+| `GET` | `/audit-logs` | Daftar log audit terpaginasi (server-side pagination, default 15 items) | `?page=1&limit=15&search=&action=&entityType=&startDate=&endDate=` |
 | `GET` | `/audit-logs/:id` | Detail satu entri catatan audit log | ID UUID |
 | `GET` | `/audit-logs/stream` | Real-time SSE streaming aktivitas audit | `?token=<access_token>` atau Bearer header |
 
@@ -3057,7 +3063,7 @@ Mencatat seluruh rekam jejak aktivitas penting pengguna dan sistem secara otomat
 ```json
 {
   "success": true,
-  "statusCode": 200,
+  "message": "Daftar audit log berhasil diambil",
   "data": [
     {
       "id": "e84f09d2-995c-4217-a065-27a1197e411b",
@@ -3076,11 +3082,11 @@ Mencatat seluruh rekam jejak aktivitas penting pengguna dan sistem secara otomat
       "createdAt": "2026-10-13T10:15:00.000Z"
     }
   ],
-  "pagination": {
+  "meta": {
     "total": 142,
     "page": 1,
-    "limit": 10,
-    "totalPages": 15
+    "limit": 15,
+    "totalPages": 10
   }
 }
 ```

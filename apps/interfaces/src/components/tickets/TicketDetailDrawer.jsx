@@ -117,78 +117,131 @@ export default function TicketDetailDrawer({ ticket, onClose }) {
   }, [history]);
 
   // Tim penanggung jawab saat ini dengan styling aksen yang elegan & tidak berlebihan
+  // Khusus untuk Tim RnD: jika status masih open (dipegang Aftersales), maka dikosongkan (-)
   const handlerInfo = useMemo(() => {
     const rawStatus = (ticket?.rawStatus || ticket?.status || "").toLowerCase();
 
+    // 1. STATUS OPEN: Khusus untuk Tim RnD, jadi saat masih open (dipegang Aftersales) dikosongkan (-)
     if (rawStatus === "open") {
       return {
-        team: "Tim Aftersales",
-        borderLeft: "4px solid #2563eb",
-        borderColor: "#bfdbfe",
-        cardBg: "linear-gradient(90deg, #f0f7ff 0%, #ffffff 100%)",
-        iconBg: "#dbeafe",
-        iconColor: "#1d4ed8",
-        teamColor: "#1e40af",
-        badgeBg: "#eff6ff",
-        badgeColor: "#1d4ed8",
-        badgeBorder: "#bfdbfe",
-        icon: <IconWrench size={18} color="#1d4ed8" />,
-        description: "Tiket sedang dalam penanganan awal oleh Tim Aftersales di lapangan.",
+        team: "-",
+        borderLeft: "4px solid #cbd5e1",
+        borderColor: "#e2e8f0",
+        cardBg: "#f8fafc",
+        iconBg: "#f1f5f9",
+        iconColor: "#64748b",
+        teamColor: "#64748b",
+        badgeBg: "#f1f5f9",
+        badgeColor: "#64748b",
+        badgeBorder: "#cbd5e1",
+        icon: <IconTerminal size={18} color="#64748b" />,
+        description: "Tiket belum dieskalasi ke Tim RnD.",
       };
     }
 
-    if (rawStatus === "escalated") {
+    // 2. STATUS ESCALATED: Tampilkan nama Tim RnD yang ditugaskan
+    if (rawStatus === "escalated" || rawStatus === "monitor") {
+      const rndTeamName =
+        ticket?.currentTeam?.name ||
+        ticket?.current_team?.name ||
+        ticket?.teams?.[0]?.team?.name ||
+        ticket?.teams?.[0]?.name ||
+        ticket?.ticket_teams?.[0]?.team?.name ||
+        (ticket?.history || []).find((h) => h.team?.name)?.team?.name ||
+        "Tim RnD";
+
       return {
-        team: "Tim RnD",
-        borderLeft: "4px solid #f59e0b",
-        borderColor: "#fed7aa",
-        cardBg: "linear-gradient(90deg, #fffbeb 0%, #ffffff 100%)",
-        iconBg: "#fef3c7",
-        iconColor: "#d97706",
-        teamColor: "#92400e",
-        badgeBg: "#fffbeb",
-        badgeColor: "#b45309",
-        badgeBorder: "#fde68a",
-        icon: <IconTerminal size={18} color="#d97706" />,
-        description: "Tiket telah dieskalasi ke Tim RnD untuk investigasi teknis & perbaikan sistem.",
+        team: rndTeamName,
+        borderLeft: "4px solid #0e8587",
+        borderColor: "#ccfbf1",
+        cardBg: "linear-gradient(90deg, #f0fdfa 0%, #ffffff 100%)",
+        iconBg: "#ccfbf1",
+        iconColor: "#0f766e",
+        teamColor: "#0f766e",
+        badgeBg: "#f0fdfa",
+        badgeColor: "#0f766e",
+        badgeBorder: "#99f6e4",
+        icon: <IconTerminal size={18} color="#0f766e" />,
+        description: `Tiket telah dieskalasi ke ${rndTeamName} untuk investigasi teknis & perbaikan sistem.`,
       };
     }
 
-    if (rawStatus === "solved") {
-      let solvedByTeam = "Tim Aftersales";
-      if (ticket.history && Array.isArray(ticket.history)) {
-        const sortedAsc = [...ticket.history].sort((a, b) => (a.version ?? 0) - (b.version ?? 0));
-        const solvedIndex = sortedAsc.findIndex(
-          (h) => (h.rawStatus || h.status || "").toLowerCase() === "solved"
-        );
-        if (solvedIndex > 0) {
-          const prevStatus = (
-            sortedAsc[solvedIndex - 1].rawStatus || sortedAsc[solvedIndex - 1].status || ""
-          ).toLowerCase();
-          if (prevStatus === "escalated") {
-            solvedByTeam = "Tim RnD";
-          }
-        }
+    // 3. STATUS SOLVED (atau closed): Cek apakah penanganan terakhir oleh Tim RnD
+    if (rawStatus === "solved" || rawStatus === "closed") {
+      const historyList = ticket?.history || [];
+      const solvedHistory =
+        historyList.find((h) => String(h.rawStatus || h.status).toLowerCase() === "solved") ||
+        historyList[0];
+
+      const rndTeamName =
+        solvedHistory?.team?.name ||
+        ticket?.currentTeam?.name ||
+        ticket?.current_team?.name ||
+        ticket?.teams?.[0]?.team?.name ||
+        ticket?.teams?.[0]?.name;
+
+      const authorDivision = (
+        solvedHistory?.authorDivision ||
+        solvedHistory?.changed_by_user?.division ||
+        ""
+      ).toLowerCase();
+
+      // Jika diselesaikan oleh Aftersales -> Tim RnD wajib KOSONG (-)
+      if (authorDivision === "after_sales") {
+        return {
+          team: "-",
+          borderLeft: "4px solid #cbd5e1",
+          borderColor: "#e2e8f0",
+          cardBg: "#f8fafc",
+          iconBg: "#f1f5f9",
+          iconColor: "#64748b",
+          teamColor: "#64748b",
+          badgeBg: "#f1f5f9",
+          badgeColor: "#64748b",
+          badgeBorder: "#cbd5e1",
+          icon: <IconCheckCircle size={18} color="#64748b" />,
+          description: "Diselesaikan oleh Aftersales (tanpa eskalasi ke Tim RnD).",
+        };
       }
 
+      const isRndTeam = Boolean(rndTeamName && authorDivision !== "after_sales");
+
+      if (isRndTeam) {
+        return {
+          team: rndTeamName,
+          borderLeft: "4px solid #10b981",
+          borderColor: "#bbf7d0",
+          cardBg: "linear-gradient(90deg, #f0fdf4 0%, #ffffff 100%)",
+          iconBg: "#dcfce7",
+          iconColor: "#15803d",
+          teamColor: "#14532d",
+          badgeBg: "#f0fdf4",
+          badgeColor: "#15803d",
+          badgeBorder: "#bbf7d0",
+          icon: <IconCheckCircle size={18} color="#15803d" />,
+          description: `Kendala unit berhasil diselesaikan dan operasional kembali normal oleh ${rndTeamName}.`,
+        };
+      }
+
+      // Jika diselesaikan langsung oleh Aftersales tanpa keterlibatan Tim RnD
       return {
-        team: `Diselesaikan oleh ${solvedByTeam}`,
-        borderLeft: "4px solid #10b981",
-        borderColor: "#bbf7d0",
-        cardBg: "linear-gradient(90deg, #f0fdf4 0%, #ffffff 100%)",
-        iconBg: "#dcfce7",
-        iconColor: "#15803d",
-        teamColor: "#14532d",
-        badgeBg: "#f0fdf4",
-        badgeColor: "#15803d",
-        badgeBorder: "#bbf7d0",
-        icon: <IconCheckCircle size={18} color="#15803d" />,
-        description: `Kendala unit berhasil diselesaikan dan operasional kembali normal oleh ${solvedByTeam}.`,
+        team: "-",
+        borderLeft: "4px solid #cbd5e1",
+        borderColor: "#e2e8f0",
+        cardBg: "#f8fafc",
+        iconBg: "#f1f5f9",
+        iconColor: "#64748b",
+        teamColor: "#64748b",
+        badgeBg: "#f1f5f9",
+        badgeColor: "#64748b",
+        badgeBorder: "#cbd5e1",
+        icon: <IconCheckCircle size={18} color="#64748b" />,
+        description: "Diselesaikan langsung oleh Aftersales (tanpa eskalasi ke Tim RnD).",
       };
     }
 
     return {
-      team: "Tim Aftersales",
+      team: "-",
       borderLeft: "4px solid #64748b",
       borderColor: "#cbd5e1",
       cardBg: "#f8fafc",
@@ -733,10 +786,10 @@ export default function TicketDetailDrawer({ ticket, onClose }) {
                 <div style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: handlerInfo.teamColor }}>
                   Tim Penanggung Jawab Saat Ini
                 </div>
-                <div style={{ fontSize: "14.5px", fontWeight: 750, color: "#0f172a", marginTop: "1px" }}>
+                <div style={{ fontSize: "14.5px", fontWeight: 750, color: handlerInfo.team === "-" ? "#64748b" : "#0f172a", marginTop: "1px" }}>
                   {handlerInfo.team}
                 </div>
-                <p style={{ fontSize: "12.5px", color: "#475569", marginTop: "2px", margin: 0 }}>
+                <p style={{ fontSize: "12.5px", color: handlerInfo.team === "-" ? "#94a3b8" : "#475569", marginTop: "2px", margin: 0 }}>
                   {handlerInfo.description}
                 </p>
               </div>

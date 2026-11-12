@@ -91,10 +91,15 @@ Layanan backend dibangun dengan Node.js dan Express untuk menangani pencatatan e
    - **Ekspor Dokumen**: Tombol "Export laporan" terintegrasi dengan modal pilihan rentang tanggal dan format file (Excel / PDF).
    - **Sinkronisasi Real-time**: Terhubung ke Server-Sent Events (SSE) `/tickets/stream` sehingga grafik diperbarui secara otomatis saat ada tiket baru atau perubahan status.
 
-3. **Manajemen Tiket After-Sales (`/daftar-tiket`)**:
-   - **Pencarian & Penyaringan Lengkap**: Pencarian teks bebas, pagination, serta filter waktu dan dropdown yang terpisah rapi.
-   - **Siklus Hidup Tiket**: Pelacakan status dari `Open` -> `Escalated` -> `Solved` -> `Closed`.
-   - **Detail Drawer & Timeline**: Informasi aset, deskripsi kerusakan, foto lampiran, akar masalah (*root cause*), tindakan perbaikan (*action taken*), dan riwayat interaksi teknisi.
+3. **Manajemen Tiket After-Sales (`/daftar-tiket` & `/manajemen-tiket`)**:
+   - **Pencarian & Penyaringan Lengkap**: Pencarian teks bebas, pagination, serta filter waktu dan dropdown yang terpisah rapi. Filter `assignee` mendukung pencarian nama PIC Aftersales, nama Tim RnD, nama Leader tim, maupun anggota tim.
+   - **Aturan Representasi Kolom PIC / Tim**:
+     - *Status Open*: Menampilkan nama Penanggung Jawab Aftersales.
+     - *Status Escalated*: Menampilkan **nama Tim RnD saja** yang menangani tiket.
+     - *Status Solved*: Memeriksa penanggung jawab terakhir—menampilkan nama Tim RnD jika diselesaikan oleh RnD, atau nama PIC Aftersales jika dituntaskan mandiri oleh Aftersales.
+   - **Detail Drawer & Timeline**:
+     - Menampilkan informasi aset, deskripsi kerusakan, foto lampiran, akar masalah (*root cause*), tindakan perbaikan (*action taken*), dan linimasa interaksi teknisi.
+     - Field *"Tim Penanggung Jawab Saat Ini"* dikhususkan untuk Tim RnD: bernilai strip (`-`) saat tiket masih berstatus `Open` atau diselesaikan mandiri oleh Aftersales.
    - **Sidebar Live Badge Notification**: Pill badge merah pada menu sidebar yang menghitung tiket berstatus `Open` secara real-time via SSE dan otomatis menghilang saat semua tiket ditangani.
 
 4. **Ekspor Laporan Multi-Format**:
@@ -111,7 +116,7 @@ Layanan backend dibangun dengan Node.js dan Express untuk menangani pencatatan e
 
 7. **Audit Log & Kepatuhan Keamanan (`/audit-logs`)**:
    - Pencatatan seluruh jejak aktivitas pengguna (login, logout, mutasi tiket, perubahan master data) dengan metadata IP address, user agent, dan timestamp.
-   - Live stream SSE untuk audit log.
+   - Paginasi *server-side* murni (15 entri per halaman) yang terintegrasi langsung dengan Server-Sent Events (SSE) `/audit-logs/stream` untuk penambahan log baru secara *real-time* tanpa membuat blank screen.
 
 8. **Notifikasi Telegram via n8n**:
    - Undangan user (`user.invited`), klaim tiket grup (`ticket.claimed`), dan penambahan anggota tim (`ticket.member_added`) dikirim ke workflow n8n yang terintegrasi dengan Bot API Telegram. Undangan dikirim sebagai DM ke username yang ditentukan.
@@ -303,17 +308,28 @@ Seluruh endpoint backend dapat diakses secara langsung (*unversioned*) pada root
 | `GET` / `POST` | `/assets` | Bearer Token | Read: All, Write: `ADMIN`, `COORDINATOR` | Daftar & tambah unit robot operasional (*asset*) |
 | `GET` / `PATCH` / `DELETE` | `/assets/:id` | Bearer Token | Read: All, Write: `ADMIN`, `COORDINATOR` | Detail, edit, & hapus unit robot |
 
-### 6. Ticket Management Module
+### 6. Team Management Module
+| Method | Endpoint | Auth | Role | Deskripsi |
+| :--- | :--- | :--- | :--- | :--- |
+| `GET` | `/teams` | Bearer Token | All | Mengambil daftar seluruh tim RnD beserta jumlah anggota |
+| `GET` | `/teams/:id` | Bearer Token | All | Mengambil detail tim RnD dan daftar anggota |
+| `POST` | `/teams` | Bearer Token | `ADMIN` | Membuat tim RnD baru |
+| `PATCH` | `/teams/:id` | Bearer Token | `ADMIN` | Memperbarui nama atau ketua tim RnD |
+| `DELETE` | `/teams/:id` | Bearer Token | `ADMIN` | Menghapus tim RnD |
+| `POST` | `/teams/:id/members` | Bearer Token | Leader, `ADMIN` | Menambahkan anggota ke dalam tim |
+| `DELETE` | `/teams/:id/members/:userId` | Bearer Token | Leader, `ADMIN` | Mengeluarkan anggota dari tim |
+
+### 7. Ticket Management Module
 | Method | Endpoint | Auth | Role | Deskripsi |
 | :--- | :--- | :--- | :--- | :--- |
 | `GET` | `/tickets/stream` | Bearer Token / Query `token` | All | Real-time Server-Sent Events (SSE) streaming tiket & open count |
-| `GET` | `/tickets` | Bearer Token | All | Daftar tiket terfilter & terpaginasi |
+| `GET` | `/tickets` | Bearer Token | All | Daftar tiket terfilter & terpaginasi (mendukung filter `assignee` by nama tim/user) |
 | `GET` | `/tickets/:id` | Bearer Token | All | Detail tiket lengkap, riwayat status, & komentar penanganan |
 | `PATCH` | `/tickets/:id` | Bearer Token | All | Update status tiket (Open, Escalated, Solved, Closed) & catatan |
 | `POST` | `/tickets/:id/comments` | Bearer Token | All | Menambahkan catatan perkembangan penanganan ke timeline tiket |
 | `POST` | `/tickets` | Bearer Token | `ADMIN`, `COORDINATOR` | Membuat tiket penanganan error baru secara manual |
 
-### 7. Export Module
+### 8. Export Module
 | Method | Endpoint | Auth | Role | Deskripsi |
 | :--- | :--- | :--- | :--- | :--- |
 | `GET` | `/exports/excel` | Bearer Token / Query `token` | All | Unduh file laporan tiket terfilter dalam format Excel (`.xlsx`) |
@@ -321,14 +337,14 @@ Seluruh endpoint backend dapat diakses secara langsung (*unversioned*) pada root
 | `GET` | `/tickets/export/excel` | Bearer Token / Query `token` | All | Alias unduh laporan Excel |
 | `GET` | `/tickets/export/pdf` | Bearer Token / Query `token` | All | Alias unduh laporan PDF |
 
-### 8. Audit Log Module
+### 9. Audit Log Module
 | Method | Endpoint | Auth | Role | Deskripsi |
 | :--- | :--- | :--- | :--- | :--- |
-| `GET` | `/audit-logs/stream` | Bearer Token / Query `token` | `ADMIN` | Real-time Server-Sent Events (SSE) stream audit log |
-| `GET` | `/audit-logs` | Bearer Token | `ADMIN` | Mengambil riwayat log aktivitas sistem dengan paginasi & filter |
-| `GET` | `/audit-logs/:id` | Bearer Token | `ADMIN` | Detail log audit spesifik beserta perbandingan data sebelum/sesudah |
+| `GET` | `/audit-logs/stream` | Bearer Token / Query `token` | All | Real-time Server-Sent Events (SSE) stream audit log |
+| `GET` | `/audit-logs` | Bearer Token | All | Mengambil riwayat log aktivitas sistem dengan server-side pagination & filter |
+| `GET` | `/audit-logs/:id` | Bearer Token | All | Detail log audit spesifik beserta perbandingan data sebelum/sesudah |
 
-### 9. Summary & Analytics Dashboard Module
+### 10. Summary & Analytics Dashboard Module
 | Method | Endpoint | Auth | Role | Deskripsi |
 | :--- | :--- | :--- | :--- | :--- |
 | `GET` | `/summary` | Bearer Token | All | Mengambil ringkasan agregasi metrik KPI, tren grafik, & ranking kerusakan |

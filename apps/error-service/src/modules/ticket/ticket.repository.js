@@ -364,6 +364,11 @@ export const findFilteredTicketIdsAndCount = async ({
             AND LOWER(ulead.name) LIKE ${q}
         )
         OR EXISTS (
+          SELECT 1 FROM teams tname
+          WHERE (tname.id = t.current_team_id OR EXISTS (SELECT 1 FROM ticket_teams tt3 WHERE tt3.team_id = tname.id AND tt3.ticket_id = t.id))
+            AND LOWER(tname.name) LIKE ${q}
+        )
+        OR EXISTS (
           SELECT 1 FROM users uas WHERE uas.id = t.aftersales_user_id AND LOWER(uas.name) LIKE ${q}
         )
       )`);

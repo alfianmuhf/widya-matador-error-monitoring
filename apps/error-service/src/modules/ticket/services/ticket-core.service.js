@@ -184,8 +184,10 @@ export const getTickets = async (query = {}) => {
       const a = query.assignee.trim();
       where.OR = [
         ...(where.OR || []),
+        { current_team: { name: { contains: a, mode: "insensitive" } } },
         { current_team: { leader: { name: { contains: a, mode: "insensitive" } } } },
         { current_team: { members: { some: { user: { name: { contains: a, mode: "insensitive" } } } } } },
+        { ticket_teams: { some: { team: { name: { contains: a, mode: "insensitive" } } } } },
         { ticket_teams: { some: { team: { leader: { name: { contains: a, mode: "insensitive" } } } } } },
         { ticket_teams: { some: { team: { members: { some: { user: { name: { contains: a, mode: "insensitive" } } } } } } } },
         { aftersales_user: { name: { contains: a, mode: "insensitive" } } },

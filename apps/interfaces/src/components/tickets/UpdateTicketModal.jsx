@@ -359,9 +359,9 @@ export default function UpdateTicketModal({ isOpen, onClose, ticket, onSuccess }
             </label>
             <div style={{ display: "flex", gap: "10px" }}>
               {[
-                { val: "rendah", label: "Rendah", color: "#0284c7", bg: "#e0f2fe", border: "#7dd3fc" },
-                { val: "sedang", label: "Sedang", color: "#d97706", bg: "#fef3c7", border: "#fde68a" },
-                { val: "tinggi", label: "Tinggi", color: "#dc2626", bg: "#fee2e2", border: "#fecaca" },
+                { val: "rendah", label: "Rendah", color: "#1d4ed8", bg: "#eff6ff", border: "#bfdbfe" },
+                { val: "sedang", label: "Sedang", color: "#a16207", bg: "#fefce8", border: "#fef08a" },
+                { val: "tinggi", label: "Tinggi", color: "#b91c1c", bg: "#fef2f2", border: "#fecaca" },
               ].map((s) => {
                 const isSelected = severity === s.val;
                 return (

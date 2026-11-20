@@ -17,7 +17,7 @@ export default function TicketTable({
 }) {
   const [sortAsc, setSortAsc] = useState(false);
 
-  // Status Badge Component (Warna Tegas & Kontras Tinggi)
+  // Status Badge Component (Soft Elegance dengan kontras yang pas)
   const renderStatusBadge = (status) => {
     const s = String(status || "open").toLowerCase();
     switch (s) {
@@ -27,28 +27,20 @@ export default function TicketTable({
             style={{
               display: "inline-flex",
               alignItems: "center",
-              gap: "6px",
-              padding: "4px 10px",
+              gap: "5px",
+              padding: "3px 10px",
               borderRadius: "9999px",
-              backgroundColor: "#fee2e2",
-              border: "1.5px solid #ef4444",
-              color: "#991b1b",
+              backgroundColor: "#fef2f2",
+              border: "1px solid #fecaca",
+              color: "#b91c1c",
               fontSize: "12px",
-              fontWeight: 700,
-              letterSpacing: "0.01em",
-              boxShadow: "0 1px 2px rgba(239, 68, 68, 0.12)",
+              fontWeight: 600,
             }}
           >
-            <span
-              style={{
-                width: "7px",
-                height: "7px",
-                borderRadius: "50%",
-                backgroundColor: "#dc2626",
-                flexShrink: 0,
-              }}
-            />
-            Open
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <circle cx="12" cy="12" r="10" />
+            </svg>
+            open
           </span>
         );
       case "escalated":
@@ -58,23 +50,21 @@ export default function TicketTable({
             style={{
               display: "inline-flex",
               alignItems: "center",
-              gap: "6px",
-              padding: "4px 10px",
+              gap: "5px",
+              padding: "3px 10px",
               borderRadius: "9999px",
-              backgroundColor: "#fef3c7",
-              border: "1.5px solid #f59e0b",
-              color: "#92400e",
+              backgroundColor: "#fefce8",
+              border: "1px solid #fef08a",
+              color: "#a16207",
               fontSize: "12px",
-              fontWeight: 700,
-              letterSpacing: "0.01em",
-              boxShadow: "0 1px 2px rgba(245, 158, 11, 0.12)",
+              fontWeight: 600,
             }}
           >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
               <circle cx="12" cy="12" r="10" />
               <polyline points="12 6 12 12 16 14" />
             </svg>
-            Escalated
+            escalated
           </span>
         );
       case "solved":
@@ -83,22 +73,20 @@ export default function TicketTable({
             style={{
               display: "inline-flex",
               alignItems: "center",
-              gap: "6px",
-              padding: "4px 10px",
+              gap: "5px",
+              padding: "3px 10px",
               borderRadius: "9999px",
-              backgroundColor: "#dcfce7",
-              border: "1.5px solid #22c55e",
-              color: "#14532d",
+              backgroundColor: "#f0fdf4",
+              border: "1px solid #bbf7d0",
+              color: "#16a34a",
               fontSize: "12px",
-              fontWeight: 700,
-              letterSpacing: "0.01em",
-              boxShadow: "0 1px 2px rgba(34, 197, 94, 0.12)",
+              fontWeight: 600,
             }}
           >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
               <polyline points="20 6 9 17 4 12" />
             </svg>
-            Solved
+            solved
           </span>
         );
       case "closed":
@@ -108,62 +96,51 @@ export default function TicketTable({
             style={{
               display: "inline-flex",
               alignItems: "center",
-              gap: "6px",
-              padding: "4px 10px",
+              gap: "5px",
+              padding: "3px 10px",
               borderRadius: "9999px",
-              backgroundColor: "#e2e8f0",
-              border: "1.5px solid #94a3b8",
-              color: "#1e293b",
+              backgroundColor: "#f8fafc",
+              border: "1px solid #e2e8f0",
+              color: "#64748b",
               fontSize: "12px",
-              fontWeight: 700,
-              letterSpacing: "0.01em",
-              boxShadow: "0 1px 2px rgba(148, 163, 184, 0.12)",
+              fontWeight: 600,
             }}
           >
-            <span
-              style={{
-                width: "7px",
-                height: "7px",
-                borderRadius: "50%",
-                backgroundColor: "#64748b",
-                flexShrink: 0,
-              }}
-            />
-            Closed
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <circle cx="12" cy="12" r="10" fill="currentColor" />
+            </svg>
+            closed
           </span>
         );
     }
   };
 
-  // Severity Indicator Component (Badge Tegas & Kontras Tinggi)
+  // Severity Indicator Component (Soft Badge dengan kontras yang pas)
   const renderSeverity = (severity) => {
     const s = String(severity || "rendah").toLowerCase();
     let config = {
-      label: "Rendah",
-      bg: "#e0f2fe",
-      border: "#0284c7",
-      color: "#075985",
-      dot: "#0284c7",
-      shadow: "rgba(2, 132, 199, 0.12)",
+      label: "rendah",
+      bg: "#eff6ff",
+      border: "#bfdbfe",
+      color: "#1d4ed8",
+      dot: "#3b82f6",
     };
 
     if (s === "sedang") {
       config = {
-        label: "Sedang",
-        bg: "#fef3c7",
-        border: "#f59e0b",
-        color: "#92400e",
-        dot: "#d97706",
-        shadow: "rgba(245, 158, 11, 0.12)",
+        label: "sedang",
+        bg: "#fefce8",
+        border: "#fef08a",
+        color: "#a16207",
+        dot: "#ca8a04",
       };
     } else if (s === "tinggi") {
       config = {
-        label: "Tinggi",
-        bg: "#fee2e2",
-        border: "#ef4444",
-        color: "#991b1b",
-        dot: "#dc2626",
-        shadow: "rgba(239, 68, 68, 0.12)",
+        label: "tinggi",
+        bg: "#fef2f2",
+        border: "#fecaca",
+        color: "#b91c1c",
+        dot: "#b91c1c",
       };
     }
 
@@ -174,20 +151,18 @@ export default function TicketTable({
           alignItems: "center",
           gap: "6px",
           padding: "3px 10px",
-          borderRadius: "6px",
+          borderRadius: "9999px",
           backgroundColor: config.bg,
-          border: `1.5px solid ${config.border}`,
+          border: `1px solid ${config.border}`,
           color: config.color,
           fontSize: "12px",
-          fontWeight: 700,
-          letterSpacing: "0.01em",
-          boxShadow: `0 1px 2px ${config.shadow}`,
+          fontWeight: 600,
         }}
       >
         <span
           style={{
-            width: "7px",
-            height: "7px",
+            width: "6px",
+            height: "6px",
             borderRadius: "50%",
             backgroundColor: config.dot,
             flexShrink: 0,

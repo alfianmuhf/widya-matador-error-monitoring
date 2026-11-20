@@ -260,55 +260,55 @@ export default function TicketDetailDrawer({ ticket, onClose }) {
 
   const assignedMembers = ticket.assignees || ticket.assignedMembers || [];
 
-  // Status Badge Helper dengan warna tegas & kontras tinggi
+  // Status Badge Helper dengan palet warna soft & elegan
   const getStatusBadge = (st) => {
     const s = (st || "").toLowerCase();
     if (s === "open") {
       return {
-        bg: "#fee2e2",
-        border: "#ef4444",
-        color: "#991b1b",
-        dot: "#dc2626",
+        bg: "#fef2f2",
+        border: "#fecaca",
+        color: "#b91c1c",
+        dot: "#b91c1c",
         label: "Open",
       };
     }
     if (s === "escalated" || s === "monitor") {
       return {
-        bg: "#fef3c7",
-        border: "#f59e0b",
-        color: "#92400e",
-        dot: "#d97706",
+        bg: "#fefce8",
+        border: "#fef08a",
+        color: "#a16207",
+        dot: "#ca8a04",
         label: "Escalated",
       };
     }
     if (s === "solved") {
       return {
-        bg: "#dcfce7",
-        border: "#22c55e",
-        color: "#14532d",
-        dot: "#16a34a",
+        bg: "#f0fdf4",
+        border: "#bbf7d0",
+        color: "#16a34a",
+        dot: "#22c55e",
         label: "Solved",
       };
     }
     return {
-      bg: "#e2e8f0",
-      border: "#94a3b8",
-      color: "#1e293b",
-      dot: "#64748b",
+      bg: "#f8fafc",
+      border: "#e2e8f0",
+      color: "#64748b",
+      dot: "#94a3b8",
       label: s ? s.charAt(0).toUpperCase() + s.slice(1) : "Closed",
     };
   };
 
-  // Severity Badge Helper dengan warna tegas & kontras tinggi
+  // Severity Badge Helper dengan warna soft & elegan
   const getSeverityBadge = (sev) => {
     const s = (sev || "").toLowerCase();
     if (s === "tinggi") {
-      return { bg: "#fee2e2", border: "#ef4444", color: "#991b1b", dot: "#dc2626", label: "Tinggi" };
+      return { bg: "#fef2f2", border: "#fecaca", color: "#b91c1c", dot: "#b91c1c", label: "Tinggi" };
     }
     if (s === "sedang") {
-      return { bg: "#fef3c7", border: "#f59e0b", color: "#92400e", dot: "#d97706", label: "Sedang" };
+      return { bg: "#fefce8", border: "#fef08a", color: "#a16207", dot: "#ca8a04", label: "Sedang" };
     }
-    return { bg: "#e0f2fe", border: "#0284c7", color: "#075985", dot: "#0284c7", label: "Rendah" };
+    return { bg: "#eff6ff", border: "#bfdbfe", color: "#1d4ed8", dot: "#3b82f6", label: "Rendah" };
   };
 
   const statusBadge = getStatusBadge(ticket.rawStatus || ticket.status);
@@ -428,20 +428,19 @@ export default function TicketDetailDrawer({ ticket, onClose }) {
                   display: "inline-flex",
                   alignItems: "center",
                   gap: "6px",
-                  padding: "4px 11px",
+                  padding: "3px 10px",
                   borderRadius: "9999px",
-                  border: `1.5px solid ${statusBadge.border}`,
+                  border: `1px solid ${statusBadge.border}`,
                   backgroundColor: statusBadge.bg,
                   color: statusBadge.color,
                   fontSize: "12px",
-                  fontWeight: 700,
-                  boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
+                  fontWeight: 650,
                 }}
               >
                 <span
                   style={{
-                    width: "7px",
-                    height: "7px",
+                    width: "6px",
+                    height: "6px",
                     borderRadius: "50%",
                     backgroundColor: statusBadge.dot,
                   }}
@@ -455,20 +454,19 @@ export default function TicketDetailDrawer({ ticket, onClose }) {
                   display: "inline-flex",
                   alignItems: "center",
                   gap: "6px",
-                  padding: "4px 11px",
-                  borderRadius: "6px",
-                  border: `1.5px solid ${severityBadge.border}`,
+                  padding: "3px 10px",
+                  borderRadius: "9999px",
+                  border: `1px solid ${severityBadge.border}`,
                   backgroundColor: severityBadge.bg,
                   color: severityBadge.color,
                   fontSize: "12px",
-                  fontWeight: 700,
-                  boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
+                  fontWeight: 650,
                 }}
               >
                 <span
                   style={{
-                    width: "7px",
-                    height: "7px",
+                    width: "6px",
+                    height: "6px",
                     borderRadius: "50%",
                     backgroundColor: severityBadge.dot,
                   }}

@@ -4,7 +4,7 @@ import { uploadAttachment, formatAttachment } from "../attachment/attachment.ser
 import { parseIngestBody, parseIdempotencyKey } from "./schema.js";
 
 const ATTACHMENT_INCLUDE = {
-  uploaded_by_user: { select: { id: true, name: true, username: true, email: true } },
+  uploaded_by_user: { select: { id: true, name: true, username: true } },
   uploaded_by_telegram: { select: { id: true, username: true, full_name: true } },
 };
 
@@ -30,7 +30,7 @@ const resolveActor = async ({ telegramUserId, telegramUsername }) => {
 
   const platformUser = await prisma.users.findFirst({
     where: { telegram_user_id: whitelisted.id },
-    select: { id: true, name: true, username: true, email: true, role: true, telegram_user_id: true },
+    select: { id: true, name: true, username: true, role: true, telegram_user_id: true },
   });
 
   if (!platformUser) {

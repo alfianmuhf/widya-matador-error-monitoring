@@ -6,9 +6,9 @@ const prismaClientSingleton = () => {
   const connectionString = env.DIRECT_URL || env.DATABASE_URL;
   const adapter = new PrismaPg({
     connectionString,
-    max: 50,
+    max: Number(process.env.DB_POOL_MAX) || 20,
     idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 10000,
+    connectionTimeoutMillis: 5000,
   });
 
   return new PrismaClient({

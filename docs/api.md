@@ -1602,7 +1602,7 @@ Mengambil daftar tiket dengan filter multi-kriteria dan server-side pagination.
 > **💡 Konvensi Tampilan UI untuk Kolom PIC / Tim:**
 > * **Status Open**: Menampilkan nama Penanggung Jawab Aftersales (beserta icon user & username).
 > * **Status Escalated**: Menampilkan nama **Tim RnD saja** yang ditugaskan (contoh: *Software Team*).
-> * **Status Solved / Closed**: Menampilkan penanggung jawab terakhir yang menyelesaikan tiket (nama Tim RnD jika diselesaikan oleh RnD pasca-eskalasi, atau nama PIC Aftersales jika diselesaikan langsung oleh tim Aftersales).
+> * **Status Solved**: Menampilkan penanggung jawab terakhir yang menyelesaikan tiket (nama Tim RnD jika diselesaikan oleh RnD pasca-eskalasi, atau nama PIC Aftersales jika diselesaikan langsung oleh tim Aftersales).
 > * **Detail Drawer ("Tim Penanggung Jawab Saat Ini")**: Khusus menampilkan nama Tim RnD. Jika tiket masih `open` atau dituntaskan Aftersales tanpa eskalasi, field ini ditampilkan sebagai `-` (kosong).
 
 #### ✅ Contoh Respons Sukses: `200 OK`
@@ -3161,7 +3161,7 @@ Jika mengirim query filter `?timeRange=10tahun`:
 | **Protokol** | **REST API** |
 | **HTTP Method** | `POST` |
 | **Endpoint Path** | `/telegram/attachments` (eksternal via nginx: `/api/telegram/attachments`) |
-| **Header** | `X-API-Key: <TELEGRAM_API_KEY>` (wajib, dibandingkan *timing-safe*; slot `TELEGRAM_API_KEY_PREVIOUS` ikut diterima selama masa rotasi), `Content-Type: multipart/form-data`, opsional `Idempotency-Key: <telegram message_id>` (maks 64 karakter) |
+| **Header** | `X-API-Key` atau `X-Telegram-Api-Key: <TELEGRAM_API_KEY>` (wajib, dibandingkan *timing-safe*; slot `TELEGRAM_API_KEY_PREVIOUS` ikut diterima selama masa rotasi), `Content-Type: multipart/form-data`, opsional `Idempotency-Key: <telegram message_id>` (maks 64 karakter) |
 | **Body (Form-Data)** | `file` (Binary: foto maks 5 MB, video maks `TELEGRAM_MAX_VIDEO_MB`, default 20 MB), `ticket_id` (wajib), `telegram_user_id` **atau** `telegram_username` (wajib minimal satu), `chat_id` (opsional — diteruskan ke event balik-status) |
 | **Autentikasi** | API key (`X-API-Key`) — **bukan JWT**. Otorisasi orang dilakukan BE dua lapis: identitas harus terdaftar di whitelist `telegram_users` **dan** tertaut ke akun platform yang lolos aturan relasi tiket (`assertCanUpload`): admin, pelapor aftersales, atau leader/anggota tim tiket |
 

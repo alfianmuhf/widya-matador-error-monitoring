@@ -166,8 +166,8 @@ export default function TicketDetailDrawer({ ticket, onClose }) {
       };
     }
 
-    // 3. STATUS SOLVED (atau closed): Cek apakah penanganan terakhir oleh Tim RnD
-    if (rawStatus === "solved" || rawStatus === "closed") {
+    // 3. STATUS SOLVED: Cek apakah penanganan terakhir oleh Tim RnD
+    if (rawStatus === "solved") {
       const historyList = ticket?.history || [];
       const solvedHistory =
         historyList.find((h) => String(h.rawStatus || h.status).toLowerCase() === "solved") ||
@@ -260,15 +260,15 @@ export default function TicketDetailDrawer({ ticket, onClose }) {
 
   const assignedMembers = ticket.assignees || ticket.assignedMembers || [];
 
-  // Status Badge Helper dengan palet warna soft & elegan
+  // Status Badge Helper dengan palet warna soft & elegan (Open = Biru, Escalated = Kuning, Solved = Hijau)
   const getStatusBadge = (st) => {
     const s = (st || "").toLowerCase();
     if (s === "open") {
       return {
-        bg: "#fef2f2",
-        border: "#fecaca",
-        color: "#b91c1c",
-        dot: "#b91c1c",
+        bg: "#eff6ff",
+        border: "#bfdbfe",
+        color: "#1d4ed8",
+        dot: "#3b82f6",
         label: "Open",
       };
     }
@@ -291,24 +291,24 @@ export default function TicketDetailDrawer({ ticket, onClose }) {
       };
     }
     return {
-      bg: "#f8fafc",
-      border: "#e2e8f0",
-      color: "#64748b",
-      dot: "#94a3b8",
-      label: s ? s.charAt(0).toUpperCase() + s.slice(1) : "Closed",
+      bg: "#eff6ff",
+      border: "#bfdbfe",
+      color: "#1d4ed8",
+      dot: "#3b82f6",
+      label: "Open",
     };
   };
 
-  // Severity Badge Helper dengan warna soft & elegan
+  // Severity Badge Helper (Rendah = Hijau, Sedang = Orange, Tinggi = Merah)
   const getSeverityBadge = (sev) => {
     const s = (sev || "").toLowerCase();
     if (s === "tinggi") {
       return { bg: "#fef2f2", border: "#fecaca", color: "#b91c1c", dot: "#b91c1c", label: "Tinggi" };
     }
     if (s === "sedang") {
-      return { bg: "#fefce8", border: "#fef08a", color: "#a16207", dot: "#ca8a04", label: "Sedang" };
+      return { bg: "#fff7ed", border: "#fed7aa", color: "#c2410c", dot: "#ea580c", label: "Sedang" };
     }
-    return { bg: "#eff6ff", border: "#bfdbfe", color: "#1d4ed8", dot: "#3b82f6", label: "Rendah" };
+    return { bg: "#f0fdf4", border: "#bbf7d0", color: "#15803d", dot: "#22c55e", label: "Rendah" };
   };
 
   const statusBadge = getStatusBadge(ticket.rawStatus || ticket.status);

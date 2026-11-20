@@ -17,7 +17,7 @@ export default function TicketTable({
 }) {
   const [sortAsc, setSortAsc] = useState(false);
 
-  // Status Badge Component (Soft Elegance dengan kontras yang pas)
+  // Status Badge Component (Soft Elegance: Open = Biru, Escalated = Kuning, Solved = Hijau)
   const renderStatusBadge = (status) => {
     const s = String(status || "open").toLowerCase();
     switch (s) {
@@ -30,9 +30,9 @@ export default function TicketTable({
               gap: "5px",
               padding: "3px 10px",
               borderRadius: "9999px",
-              backgroundColor: "#fef2f2",
-              border: "1px solid #fecaca",
-              color: "#b91c1c",
+              backgroundColor: "#eff6ff",
+              border: "1px solid #bfdbfe",
+              color: "#1d4ed8",
               fontSize: "12px",
               fontWeight: 600,
             }}
@@ -68,6 +68,7 @@ export default function TicketTable({
           </span>
         );
       case "solved":
+      default:
         return (
           <span
             style={{
@@ -89,50 +90,27 @@ export default function TicketTable({
             solved
           </span>
         );
-      case "closed":
-      default:
-        return (
-          <span
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "5px",
-              padding: "3px 10px",
-              borderRadius: "9999px",
-              backgroundColor: "#f8fafc",
-              border: "1px solid #e2e8f0",
-              color: "#64748b",
-              fontSize: "12px",
-              fontWeight: 600,
-            }}
-          >
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-              <circle cx="12" cy="12" r="10" fill="currentColor" />
-            </svg>
-            closed
-          </span>
-        );
     }
   };
 
-  // Severity Indicator Component (Soft Badge dengan kontras yang pas)
+  // Severity Indicator Component (Soft Badge: Rendah = Hijau, Sedang = Orange, Tinggi = Merah)
   const renderSeverity = (severity) => {
     const s = String(severity || "rendah").toLowerCase();
     let config = {
       label: "rendah",
-      bg: "#eff6ff",
-      border: "#bfdbfe",
-      color: "#1d4ed8",
-      dot: "#3b82f6",
+      bg: "#f0fdf4",
+      border: "#bbf7d0",
+      color: "#15803d",
+      dot: "#22c55e",
     };
 
     if (s === "sedang") {
       config = {
         label: "sedang",
-        bg: "#fefce8",
-        border: "#fef08a",
-        color: "#a16207",
-        dot: "#ca8a04",
+        bg: "#fff7ed",
+        border: "#fed7aa",
+        color: "#c2410c",
+        dot: "#ea580c",
       };
     } else if (s === "tinggi") {
       config = {
@@ -304,7 +282,7 @@ export default function TicketTable({
       );
     }
 
-    // 3. STATUS SOLVED (dan closed): Cek penanggung jawab terakhir siapa
+    // 3. STATUS SOLVED: Cek penanggung jawab terakhir siapa
     const historyList = t.history || [];
     const solvedHistory =
       historyList.find((h) => String(h.rawStatus || h.status).toLowerCase() === "solved") ||

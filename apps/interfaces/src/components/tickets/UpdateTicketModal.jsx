@@ -48,7 +48,7 @@ export default function UpdateTicketModal({ isOpen, onClose, ticket, onSuccess }
       value: "open",
       label: "Open (Penanganan Aftersales)",
       desc: "Perbarui catatan tindakan atau kondisi di lapangan",
-      color: "#2563eb",
+      color: "#1d4ed8",
       bg: "#eff6ff",
       border: "#bfdbfe",
     });
@@ -56,9 +56,9 @@ export default function UpdateTicketModal({ isOpen, onClose, ticket, onSuccess }
       value: "escalated",
       label: "Eskalasi ke RnD",
       desc: "Alihkan penanganan ke tim RnD untuk investigasi bug/sistem",
-      color: "#d97706",
-      bg: "#fffbeb",
-      border: "#fde68a",
+      color: "#a16207",
+      bg: "#fefce8",
+      border: "#fef08a",
     });
     statusOptions.push({
       value: "solved",
@@ -73,9 +73,9 @@ export default function UpdateTicketModal({ isOpen, onClose, ticket, onSuccess }
       value: "escalated",
       label: "Tetap Escalated (Progress RnD)",
       desc: "Perbarui progres investigasi, debugging, atau modul patch RnD",
-      color: "#d97706",
-      bg: "#fffbeb",
-      border: "#fde68a",
+      color: "#a16207",
+      bg: "#fefce8",
+      border: "#fef08a",
     });
     statusOptions.push({
       value: "solved",
@@ -91,7 +91,7 @@ export default function UpdateTicketModal({ isOpen, onClose, ticket, onSuccess }
       value: "open",
       label: "Open",
       desc: "Buka kembali tiket",
-      color: "#2563eb",
+      color: "#1d4ed8",
       bg: "#eff6ff",
       border: "#bfdbfe",
     });
@@ -99,9 +99,9 @@ export default function UpdateTicketModal({ isOpen, onClose, ticket, onSuccess }
       value: "escalated",
       label: "Escalated",
       desc: "Alihkan ke tim RnD",
-      color: "#d97706",
-      bg: "#fffbeb",
-      border: "#fde68a",
+      color: "#a16207",
+      bg: "#fefce8",
+      border: "#fef08a",
     });
     statusOptions.push({
       value: "solved",
@@ -359,8 +359,8 @@ export default function UpdateTicketModal({ isOpen, onClose, ticket, onSuccess }
             </label>
             <div style={{ display: "flex", gap: "10px" }}>
               {[
-                { val: "rendah", label: "Rendah", color: "#1d4ed8", bg: "#eff6ff", border: "#bfdbfe" },
-                { val: "sedang", label: "Sedang", color: "#a16207", bg: "#fefce8", border: "#fef08a" },
+                { val: "rendah", label: "Rendah", color: "#15803d", bg: "#f0fdf4", border: "#bbf7d0" },
+                { val: "sedang", label: "Sedang", color: "#c2410c", bg: "#fff7ed", border: "#fed7aa" },
                 { val: "tinggi", label: "Tinggi", color: "#b91c1c", bg: "#fef2f2", border: "#fecaca" },
               ].map((s) => {
                 const isSelected = severity === s.val;

@@ -151,7 +151,7 @@ services:
     mem_limit: 512m
     command: >
       postgres
-      -c max_connections=10
+      -c max_connections=100
       -c shared_buffers=128MB
       -c effective_cache_size=512MB
       -c work_mem=4MB

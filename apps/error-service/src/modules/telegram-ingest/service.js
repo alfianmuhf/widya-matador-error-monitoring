@@ -4,7 +4,7 @@ import { uploadAttachment, formatAttachment } from "../attachment/attachment.ser
 import { parseIngestBody, parseIdempotencyKey } from "./schema.js";
 
 const ATTACHMENT_INCLUDE = {
-  uploaded_by_user: { select: { id: true, name: true, username: true, email: true } },
+  uploaded_by_user: { select: { id: true, name: true, username: true } },
   uploaded_by_telegram: { select: { id: true, username: true, full_name: true } },
 };
 
@@ -14,10 +14,18 @@ const ATTACHMENT_INCLUDE = {
  * milik attachment.service (relasi tiket tidak dilonggarkan).
  */
 const resolveActor = async ({ telegramUserId, telegramUsername }) => {
+  const cleanUsername = telegramUsername ? String(telegramUsername).replace(/^@/, "").trim() : undefined;
+
+  const conditions = [];
+  if (telegramUserId) conditions.push({ telegram_id: String(telegramUserId) });
+  if (cleanUsername) conditions.push({ username: cleanUsername });
+
+  if (conditions.length === 0) {
+    throw createError(400, "telegram_user_id atau telegram_username wajib diisi");
+  }
+
   const whitelisted = await prisma.telegram_users.findFirst({
-    where: telegramUserId
-      ? { OR: [{ telegram_id: telegramUserId }, { username: telegramUsername }] }
-      : { username: telegramUsername },
+    where: conditions.length > 1 ? { OR: conditions } : conditions[0],
   });
 
   if (!whitelisted) {
@@ -30,7 +38,7 @@ const resolveActor = async ({ telegramUserId, telegramUsername }) => {
 
   const platformUser = await prisma.users.findFirst({
     where: { telegram_user_id: whitelisted.id },
-    select: { id: true, name: true, username: true, email: true, role: true, telegram_user_id: true },
+    select: { id: true, name: true, username: true, role: true, telegram_user_id: true },
   });
 
   if (!platformUser) {

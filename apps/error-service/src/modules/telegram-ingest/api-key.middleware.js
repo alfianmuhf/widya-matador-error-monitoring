@@ -14,7 +14,7 @@ export const requireApiKey = (req, res, next) => {
     return next(createError(503, "Endpoint ingest Telegram belum dikonfigurasi"));
   }
 
-  const provided = req.get("X-API-Key") || "";
+  const provided = req.get("X-API-Key") || req.get("X-Telegram-Api-Key") || "";
   const digest = sha256(provided);
 
   const matchesActive = timingSafeEqual(digest, sha256(active));

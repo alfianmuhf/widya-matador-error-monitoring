@@ -235,7 +235,13 @@ export const claimTicket = async (ticketId, actor, data = {}) => {
     data: {
       ticketId,
       escalatedBy: actorName,
-      team: { id: targetTeam.id, name: targetTeam.name, leader: leaderName },
+      team: {
+        id: targetTeam.id,
+        name: targetTeam.name,
+        leader: leaderName,
+        groupTeleId: targetTeam.group_tele_id || null,
+        group_tele_id: targetTeam.group_tele_id || null,
+      },
       group,
     },
   });
@@ -361,7 +367,13 @@ export const addTeamToTicket = async (ticketId, data, actor) => {
     data: {
       ticketId,
       addedBy: actorName,
-      team: { id: team.id, name: team.name, leader: team.leader?.name },
+      team: {
+        id: team.id,
+        name: team.name,
+        leader: team.leader?.name,
+        groupTeleId: team.group_tele_id || null,
+        group_tele_id: team.group_tele_id || null,
+      },
     },
   });
 
@@ -574,7 +586,13 @@ export const handoverTicketTeam = async (ticketId, data, actor) => {
     data: {
       ticketId,
       oldTeam: oldTeamName,
-      newTeam: { id: targetTeam.id, name: targetTeam.name, leader: targetTeam.leader?.name },
+      newTeam: {
+        id: targetTeam.id,
+        name: targetTeam.name,
+        leader: targetTeam.leader?.name,
+        groupTeleId: targetTeam.group_tele_id || null,
+        group_tele_id: targetTeam.group_tele_id || null,
+      },
       changedBy: actorName,
       changeType: "handover",
     },

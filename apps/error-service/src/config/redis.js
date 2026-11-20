@@ -58,9 +58,9 @@ export async function getCache(key) {
 }
 
 /**
- * Set cache with TTL in seconds (default: 60s)
+ * Set cache with TTL in seconds (default: env.REDIS_CACHE_TTL_SECONDS)
  */
-export async function setCache(key, data, ttlSeconds = 60) {
+export async function setCache(key, data, ttlSeconds = env.REDIS_CACHE_TTL_SECONDS) {
   if (!redisClient || !isRedisAvailable) return false;
   try {
     const serialized = JSON.stringify(data);

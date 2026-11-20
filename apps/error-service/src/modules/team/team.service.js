@@ -13,6 +13,8 @@ export const formatTeam = (team) => {
     name: team.name,
     isActive: team.is_active,
     leaderUserId: team.leader_user_id,
+    groupTeleId: team.group_tele_id || null,
+    group_tele_id: team.group_tele_id || null,
     leader: team.leader
       ? {
           id: team.leader.id,
@@ -145,12 +147,15 @@ export const createTeam = async (data, actor) => {
     );
   }
 
+  const groupTeleId = data.groupTeleId !== undefined ? data.groupTeleId : (data.group_tele_id || null);
+
   // Create team and automatically add leader as first member
   const newTeam = await prisma.$transaction(async (tx) => {
     const team = await tx.teams.create({
       data: {
         name: data.name,
         leader_user_id: data.leaderUserId,
+        group_tele_id: groupTeleId,
         is_active: data.isActive !== undefined ? data.isActive : true,
       },
     });
@@ -209,6 +214,8 @@ export const updateTeam = async (id, data, actor) => {
   if (data.name !== undefined) updateData.name = data.name;
   if (data.isActive !== undefined) updateData.is_active = data.isActive;
   if (data.leaderUserId !== undefined) updateData.leader_user_id = data.leaderUserId;
+  if (data.groupTeleId !== undefined) updateData.group_tele_id = data.groupTeleId;
+  else if (data.group_tele_id !== undefined) updateData.group_tele_id = data.group_tele_id;
 
   let newLeaderUser = null;
   if (data.leaderUserId && data.leaderUserId !== team.leader_user_id) {

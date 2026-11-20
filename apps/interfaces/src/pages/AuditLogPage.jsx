@@ -8,8 +8,10 @@ export default function AuditLogPage() {
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [currentPage, setCurrentPage] = useState(1);
-  const [meta, setMeta] = useState({ total: 0, page: 1, limit: 15, totalPages: 1 });
+  const [currentCursor, setCurrentCursor] = useState(null);
+  const [cursorHistory, setCursorHistory] = useState([]);
+  const [nextCursor, setNextCursor] = useState(null);
+  const [hasNextPage, setHasNextPage] = useState(false);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [newlyAddedIds, setNewlyAddedIds] = useState(new Set());
 
@@ -23,24 +25,27 @@ export default function AuditLogPage() {
     return () => clearTimeout(timer);
   }, [search]);
 
-  // Reset page to 1 when search query changes
+  // Reset cursor & history when search query changes
   const isFirstSearchRun = useRef(true);
   useEffect(() => {
     if (isFirstSearchRun.current) {
       isFirstSearchRun.current = false;
       return;
     }
-    setCurrentPage(1);
+    setCurrentCursor(null);
+    setCursorHistory([]);
     setNewlyAddedIds(new Set());
   }, [debouncedSearch]);
 
-  // Fetch audit logs with true server-side pagination
+  // Fetch audit logs with true cursor-based pagination
   const fetchAuditLogs = useCallback(async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams();
-      params.append("page", String(currentPage));
       params.append("limit", String(itemsPerPage));
+      if (currentCursor) {
+        params.append("cursor", currentCursor);
+      }
       if (debouncedSearch.trim()) {
         params.append("search", debouncedSearch.trim());
       }
@@ -52,21 +57,16 @@ export default function AuditLogPage() {
           : res.data.data?.logs || [];
 
         setLogs(dataLogs);
-        const newMeta = res.data.meta ||
-          res.data.data?.meta || {
-            total: dataLogs.length,
-            page: currentPage,
-            limit: itemsPerPage,
-            totalPages: Math.ceil(dataLogs.length / itemsPerPage) || 1,
-          };
-        setMeta(newMeta);
+        const metaRes = res.data.meta || res.data.data?.meta || {};
+        setHasNextPage(Boolean(metaRes.hasNextPage));
+        setNextCursor(metaRes.nextCursor || null);
       }
     } catch (e) {
       console.error("Gagal mengambil data audit log:", e);
     } finally {
       setLoading(false);
     }
-  }, [currentPage, debouncedSearch, itemsPerPage]);
+  }, [currentCursor, debouncedSearch, itemsPerPage]);
 
   useEffect(() => {
     if (!accessToken) return;
@@ -84,7 +84,8 @@ export default function AuditLogPage() {
       try {
         const newLog = JSON.parse(ev.data);
         if (newLog?.id) {
-          if (currentPage === 1 && !debouncedSearch.trim()) {
+          // Hanya tambahkan secara real-time jika berada di halaman paling awal (tanpa cursor aktif)
+          if (!currentCursor && cursorHistory.length === 0 && !debouncedSearch.trim()) {
             setNewlyAddedIds((prev) => new Set([...prev, newLog.id]));
             setLogs((prev) => [newLog, ...prev.filter((l) => l.id !== newLog.id)].slice(0, itemsPerPage));
             setTimeout(() => {
@@ -95,14 +96,6 @@ export default function AuditLogPage() {
               });
             }, 3000);
           }
-          setMeta((p) => {
-            const nextTotal = (p.total || 0) + 1;
-            return {
-              ...p,
-              total: nextTotal,
-              totalPages: Math.ceil(nextTotal / itemsPerPage) || 1,
-            };
-          });
         }
       } catch (err) {
         console.error("Gagal memproses SSE audit log:", err);
@@ -116,7 +109,24 @@ export default function AuditLogPage() {
     return () => {
       es.close();
     };
-  }, [accessToken, currentPage, debouncedSearch, itemsPerPage]);
+  }, [accessToken, currentCursor, cursorHistory.length, debouncedSearch, itemsPerPage]);
+
+  const handlePrevPage = () => {
+    if (cursorHistory.length === 0 || loading) return;
+    const prevCursor = cursorHistory[cursorHistory.length - 1];
+    setCursorHistory((prev) => prev.slice(0, -1));
+    setCurrentCursor(prevCursor);
+    setNewlyAddedIds(new Set());
+  };
+
+  const handleNextPage = () => {
+    if (!hasNextPage || !nextCursor || loading) return;
+    setCursorHistory((prev) => [...prev, currentCursor]);
+    setCurrentCursor(nextCursor);
+    setNewlyAddedIds(new Set());
+  };
+
+  const currentPageNumber = cursorHistory.length + 1;
 
   const handleSearchChange = (e) => {
     setSearch(e.target.value);
@@ -181,7 +191,7 @@ export default function AuditLogPage() {
               Audit Log
             </h2>
             <span style={{ fontSize: "12px", color: "#64748b" }}>
-              ({logs.length} dari {meta.total || logs.length} ditampilkan)
+              ({logs.length} log ditampilkan)
             </span>
           </div>
 
@@ -437,7 +447,7 @@ export default function AuditLogPage() {
           </table>
         </div>
 
-        {/* Footer with True Server-Side Pagination */}
+        {/* Footer with Cursor-Based Pagination */}
         <div
           style={{
             padding: "16px 24px",
@@ -453,30 +463,19 @@ export default function AuditLogPage() {
           }}
         >
           <div>
-            Menampilkan{" "}
-            <strong style={{ color: "#0f172a" }}>
-              {meta.total === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1}
-            </strong>{" "}
-            -{" "}
-            <strong style={{ color: "#0f172a" }}>
-              {Math.min(meta.total || 0, currentPage * itemsPerPage)}
-            </strong>{" "}
-            dari <strong style={{ color: "#0f172a" }}>{meta.total || 0}</strong> rekaman audit log
+            Menampilkan <strong style={{ color: "#0f172a" }}>{logs.length}</strong> rekaman audit log pada halaman ini
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
             <span style={{ fontSize: "13px", color: "#64748b" }}>
-              Halaman {currentPage} dari {meta.totalPages || 1}
+              Halaman {currentPageNumber}
             </span>
 
             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
               <button
                 type="button"
-                disabled={currentPage <= 1 || loading}
-                onClick={() => {
-                  setCurrentPage((p) => Math.max(1, p - 1));
-                  setNewlyAddedIds(new Set());
-                }}
+                disabled={cursorHistory.length === 0 || loading}
+                onClick={handlePrevPage}
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
@@ -484,11 +483,11 @@ export default function AuditLogPage() {
                   padding: "6px 14px",
                   borderRadius: "8px",
                   border: "1px solid #cbd5e1",
-                  backgroundColor: currentPage <= 1 || loading ? "#f8fafc" : "#ffffff",
-                  color: currentPage <= 1 || loading ? "#94a3b8" : "#334155",
+                  backgroundColor: cursorHistory.length === 0 || loading ? "#f8fafc" : "#ffffff",
+                  color: cursorHistory.length === 0 || loading ? "#94a3b8" : "#334155",
                   fontSize: "13px",
                   fontWeight: 500,
-                  cursor: currentPage <= 1 || loading ? "not-allowed" : "pointer",
+                  cursor: cursorHistory.length === 0 || loading ? "not-allowed" : "pointer",
                   transition: "background-color 0.15s ease",
                 }}
               >
@@ -500,11 +499,8 @@ export default function AuditLogPage() {
 
               <button
                 type="button"
-                disabled={currentPage >= (meta.totalPages || 1) || loading}
-                onClick={() => {
-                  setCurrentPage((p) => Math.min(meta.totalPages || 1, p + 1));
-                  setNewlyAddedIds(new Set());
-                }}
+                disabled={!hasNextPage || !nextCursor || loading}
+                onClick={handleNextPage}
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
@@ -512,11 +508,11 @@ export default function AuditLogPage() {
                   padding: "6px 14px",
                   borderRadius: "8px",
                   border: "1px solid #cbd5e1",
-                  backgroundColor: currentPage >= (meta.totalPages || 1) || loading ? "#f8fafc" : "#ffffff",
-                  color: currentPage >= (meta.totalPages || 1) || loading ? "#94a3b8" : "#334155",
+                  backgroundColor: !hasNextPage || !nextCursor || loading ? "#f8fafc" : "#ffffff",
+                  color: !hasNextPage || !nextCursor || loading ? "#94a3b8" : "#334155",
                   fontSize: "13px",
                   fontWeight: 500,
-                  cursor: currentPage >= (meta.totalPages || 1) || loading ? "not-allowed" : "pointer",
+                  cursor: !hasNextPage || !nextCursor || loading ? "not-allowed" : "pointer",
                   transition: "background-color 0.15s ease",
                 }}
               >

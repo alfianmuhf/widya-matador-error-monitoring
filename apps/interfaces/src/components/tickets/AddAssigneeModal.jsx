@@ -218,7 +218,7 @@ export default function AddAssigneeModal({ isOpen, onClose, ticket, onSuccess })
       });
 
       const updated = res.data?.data?.ticket || res.data?.data;
-      const msg = res.data?.message || `Tanggung jawab utama berhasil dialihkan ke tim '${promoteTeamTarget.name}'!`;
+      const msg = res.data?.message || `Tanggung jawab utama berhasil di-handover ke tim '${promoteTeamTarget.name}'!`;
       setSuccessMessage(msg);
       setPromoteTeamTarget(null);
       setPromoteNotes("");
@@ -230,8 +230,8 @@ export default function AddAssigneeModal({ isOpen, onClose, ticket, onSuccess })
         onSuccess(updated);
       }
     } catch (err) {
-      console.error("Gagal mengalihkan tanggung jawab:", err);
-      const msg = err.response?.data?.message || "Gagal mengalihkan tanggung jawab tiket.";
+      console.error("Gagal melakukan handover tanggung jawab:", err);
+      const msg = err.response?.data?.message || "Gagal melakukan handover tanggung jawab tiket.";
       setErrorMessage(msg);
     } finally {
       setSubmitting(false);
@@ -381,9 +381,6 @@ export default function AddAssigneeModal({ isOpen, onClose, ticket, onSuccess })
                 {ticket.id}
               </span>
             </div>
-            <p style={{ fontSize: "12.5px", color: "#64748b", marginTop: "3px" }}>
-              Kelola kolaborasi tim lintas divisi atau alihkan tanggung jawab utama penanganan tiket.
-            </p>
           </div>
 
           <button
@@ -433,7 +430,7 @@ export default function AddAssigneeModal({ isOpen, onClose, ticket, onSuccess })
           <div style={{ textAlign: "right" }}>
             <span style={{ fontSize: "11px", color: "#64748b" }}>Leader Penanggung Jawab:</span>
             <div style={{ fontSize: "13px", fontWeight: 700, color: "#0e8587", display: "flex", alignItems: "center", gap: "4px" }}>
-              ⭐ {currentTeam?.leader?.name || "Belum ada Leader"}
+              {currentTeam?.leader?.name || "Belum ada Leader"}
             </div>
           </div>
         </div>
@@ -498,7 +495,7 @@ export default function AddAssigneeModal({ isOpen, onClose, ticket, onSuccess })
               cursor: "pointer",
             }}
           >
-            Alih Tanggung Jawab Langsung
+            Handover
           </button>
         </div>
 
@@ -536,7 +533,7 @@ export default function AddAssigneeModal({ isOpen, onClose, ticket, onSuccess })
                     </div>
                     <p style={{ fontSize: "12px", color: "#64748b", margin: "4px 0 0", lineHeight: 1.5 }}>
                       Tiket ini saat ini hanya ditangani oleh tim utama (<strong>{currentTeam?.name || "RnD"}</strong>).<br />
-                      Gunakan form di bawah untuk mengajak tim RnD lain berkolaborasi atau sebelum mengalihkan tanggung jawab tiket.
+                      Gunakan form di bawah untuk mengajak tim RnD lain berkolaborasi atau sebelum melakukan handover tanggung jawab tiket.
                     </p>
                   </div>
                 ) : (
@@ -594,7 +591,7 @@ export default function AddAssigneeModal({ isOpen, onClose, ticket, onSuccess })
                               }}
                               title="Jadikan tim ini sebagai Tim Utama penanggung jawab tiket"
                             >
-                              ⭐ Jadikan Tim Utama
+                              Jadikan Tim Utama
                             </button>
 
                             {/* Keluarkan Tim Kolaborasi */}
@@ -669,9 +666,6 @@ export default function AddAssigneeModal({ isOpen, onClose, ticket, onSuccess })
                       + Tambah Tim
                     </button>
                   </div>
-                  <div style={{ fontSize: "11.5px", color: "#64748b", marginTop: "6px" }}>
-                    Hanya menampilkan tim RnD yang belum pernah masuk ke tiket ini. Tim yang ditambahkan dapat dialihkan menjadi Tim Utama kapan saja.
-                  </div>
                 </form>
               ) : (
                 <div style={{ padding: "10px 14px", borderRadius: "8px", backgroundColor: "#f8fafc", border: "1px solid #e2e8f0", fontSize: "12px", color: "#64748b" }}>
@@ -723,12 +717,12 @@ export default function AddAssigneeModal({ isOpen, onClose, ticket, onSuccess })
                       lineHeight: 1.5,
                     }}
                   >
-                    <strong>Mekanisme Serah Terima Langsung:</strong> Menyerahkan kepemilikan tiket sepenuhnya ke tim RnD baru. Tim baru akan langsung menjadi <strong>Tim Utama (Leader Penanggung Jawab)</strong>, dan tim Anda saat ini (<strong>{currentTeam?.name}</strong>) akan <strong>langsung dilepas / dihapus</strong> dari tiket ini.
+                    <strong>Mekanisme Handover:</strong> Menyerahkan kepemilikan tiket sepenuhnya ke tim RnD baru. Tim baru akan langsung menjadi <strong>Tim Utama (Leader Penanggung Jawab)</strong>, dan tim Anda saat ini (<strong>{currentTeam?.name}</strong>) akan <strong>langsung dilepas / dihapus</strong> dari tiket ini.
                   </div>
 
                   <div>
                     <label style={{ display: "block", fontSize: "13px", fontWeight: 700, color: "#334155", marginBottom: "6px" }}>
-                      Pilih Tim Divisi RnD Penerima Tanggung Jawab <span style={{ color: "#dc2626" }}>*</span>
+                      Pilih Tim Divisi RnD Penerima Handover <span style={{ color: "#dc2626" }}>*</span>
                     </label>
 
                     <select
@@ -759,11 +753,11 @@ export default function AddAssigneeModal({ isOpen, onClose, ticket, onSuccess })
 
                   <div>
                     <label style={{ display: "block", fontSize: "13px", fontWeight: 700, color: "#334155", marginBottom: "6px" }}>
-                      Catatan / Alasan Serah Terima Langsung
+                      Catatan / Alasan Handover
                     </label>
                     <textarea
                       rows={3}
-                      placeholder="Contoh: Tiket dialihkan sepenuhnya ke tim Hardware karena kendala murni pada modul sensor fisik..."
+                      placeholder="Contoh: Tiket di-handover sepenuhnya ke tim Hardware karena kendala murni pada modul sensor fisik..."
                       value={directHandoverNotes}
                       onChange={(e) => setDirectHandoverNotes(e.target.value)}
                       disabled={submitting}
@@ -799,7 +793,7 @@ export default function AddAssigneeModal({ isOpen, onClose, ticket, onSuccess })
                         boxShadow: "0 2px 4px rgba(234, 88, 12, 0.2)",
                       }}
                     >
-                      {submitting ? "Memproses..." : "Alihkan & Lepas Tiket"}
+                      {submitting ? "Memproses..." : "Handover & Lepas Tiket"}
                     </button>
                   </div>
                 </form>
@@ -875,14 +869,18 @@ export default function AddAssigneeModal({ isOpen, onClose, ticket, onSuccess })
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  fontSize: "18px",
                 }}
               >
-                ⭐
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M17 1l4 4-4 4" />
+                  <path d="M3 11V9a4 4 0 0 1 4-4h14" />
+                  <path d="M7 23l-4-4 4-4" />
+                  <path d="M21 13v2a4 4 0 0 1-4 4H3" />
+                </svg>
               </div>
               <div>
                 <h3 style={{ fontSize: "15px", fontWeight: 750, color: "#0f172a", margin: 0 }}>
-                  Alihkan Tanggung Jawab Utama
+                  Handover Tanggung Jawab Utama
                 </h3>
                 <p style={{ fontSize: "12px", color: "#64748b", margin: 0 }}>
                   Jadikan tim kolaborator sebagai penanggung jawab utama tiket
@@ -899,11 +897,11 @@ export default function AddAssigneeModal({ isOpen, onClose, ticket, onSuccess })
 
             <div style={{ marginBottom: "16px" }}>
               <label style={{ display: "block", fontSize: "12.5px", fontWeight: 700, color: "#334155", marginBottom: "6px" }}>
-                Catatan Pengalihan (Opsional)
+                Catatan Handover (Opsional)
               </label>
               <textarea
                 rows={2}
-                placeholder="Contoh: Tanggung jawab utama dialihkan karena komponen software telah terselesaikan..."
+                placeholder="Contoh: Tanggung jawab utama di-handover karena komponen software telah terselesaikan..."
                 value={promoteNotes}
                 onChange={(e) => setPromoteNotes(e.target.value)}
                 disabled={submitting}
@@ -952,7 +950,7 @@ export default function AddAssigneeModal({ isOpen, onClose, ticket, onSuccess })
                   cursor: submitting ? "not-allowed" : "pointer",
                 }}
               >
-                {submitting ? "Memproses..." : "Ya, Alihkan Tanggung Jawab"}
+                {submitting ? "Memproses..." : "Ya, Handover Tanggung Jawab"}
               </button>
             </div>
           </div>
@@ -1004,10 +1002,10 @@ export default function AddAssigneeModal({ isOpen, onClose, ticket, onSuccess })
               </div>
               <div>
                 <h3 style={{ fontSize: "15px", fontWeight: 750, color: "#0f172a", margin: 0 }}>
-                  Konfirmasi Alih Tanggung Jawab Langsung
+                  Konfirmasi Handover
                 </h3>
                 <p style={{ fontSize: "12px", color: "#64748b", margin: 0 }}>
-                  Serah terima langsung dan pelepasan tim pengalih
+                  Handover dan pelepasan tim saat ini
                 </p>
               </div>
             </div>
@@ -1050,7 +1048,7 @@ export default function AddAssigneeModal({ isOpen, onClose, ticket, onSuccess })
                   cursor: submitting ? "not-allowed" : "pointer",
                 }}
               >
-                {submitting ? "Memproses..." : "Ya, Serahkan & Lepas Tiket"}
+                {submitting ? "Memproses..." : "Ya, Handover & Lepas Tiket"}
               </button>
             </div>
           </div>

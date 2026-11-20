@@ -63,7 +63,7 @@ Layanan backend dibangun dengan Node.js dan Express untuk menangani pencatatan e
 | **[rate-limit-redis](https://github.com/express-rate-limit/rate-limit-redis)** | `^6.0.2` | Store adapter rate limit berbasis Redis untuk pembagian kuota terdistribusi dengan failover memori lokal. |
 | **[bullmq](https://bullmq.io/)** | `^6.5.3` | Antrean background worker berbasis Redis untuk transcoding video secara asinkron. |
 | **[fluent-ffmpeg](https://github.com/fluent-ffmpeg/node-fluent-ffmpeg)** | `^2.1.3` | Abstraksi FFmpeg & FFprobe untuk kompresi dan standardisasi resolusi video tiket. |
-| **[ioredis](https://ioredis.readthedocs.io/)** | `^6.0.0` | Klien Redis berfitur lengkap untuk caching dashboard, BullMQ, dan rate limiting store. |
+| **[ioredis](https://ioredis.readthedocs.io/)** | `^6.0.0` | Klien Redis berfitur lengkap untuk caching dashboard (TTL terkonfigurasi via `REDIS_CACHE_TTL_SECONDS`), BullMQ, dan rate limiting store. |
 | **[@aws-sdk/client-s3](https://aws.amazon.com/sdk-for-javascript/)** | `^3.1155.0` | SDK S3 resmi untuk integrasi penyimpanan berkas lampiran ke RustFS S3 storage. |
 | **[sharp](https://sharp.pixelplumbing.com/)** | `^0.35.5` | Pengolah dan pengompres gambar performa tinggi untuk thumbnail dan rotasi EXIF. |
 | **[pino-pretty](https://github.com/pinojs/pino-pretty)** *(Dev)* | `^13.1.3` | Formatter log dengan pewarnaan terminal untuk kenyamanan debugging masa pengembangan. |
@@ -93,6 +93,10 @@ Layanan backend dibangun dengan Node.js dan Express untuk menangani pencatatan e
 
 3. **Manajemen Tiket After-Sales (`/daftar-tiket` & `/manajemen-tiket`)**:
    - **Pencarian & Penyaringan Lengkap**: Pencarian teks bebas, pagination, serta filter waktu dan dropdown yang terpisah rapi. Filter `assignee` mendukung pencarian nama PIC Aftersales, nama Tim RnD, nama Leader tim, maupun anggota tim.
+   - **Handover Tanggung Jawab & Kolaborasi Tim**:
+     - *Handover Aftersales*: Pengalihan penanggung jawab Aftersales secara resmi saat tiket berstatus `Open`.
+     - *Handover RnD*: Pengalihan tanggung jawab Tim RnD Utama (*primary team*) atau promosi tim kolaborator ke tim penanggung jawab utama saat tiket berstatus `Escalated`.
+     - *Kolaborasi Multi-Divisi*: Menambah atau menghapus tim kolaborator lintas divisi pada tiket.
    - **Aturan Representasi Kolom PIC / Tim**:
      - *Status Open*: Menampilkan nama Penanggung Jawab Aftersales.
      - *Status Escalated*: Menampilkan **nama Tim RnD saja** yang menangani tiket.
@@ -116,7 +120,7 @@ Layanan backend dibangun dengan Node.js dan Express untuk menangani pencatatan e
 
 7. **Audit Log & Kepatuhan Keamanan (`/audit-logs`)**:
    - Pencatatan seluruh jejak aktivitas pengguna (login, logout, mutasi tiket, perubahan master data) dengan metadata IP address, user agent, dan timestamp.
-   - Paginasi *server-side* murni (15 entri per halaman) yang terintegrasi langsung dengan Server-Sent Events (SSE) `/audit-logs/stream` untuk penambahan log baru secara *real-time* tanpa membuat blank screen.
+   - Paginasi *cursor-based* berkinerja tinggi (15 entri per halaman, bebas dari masalah *data drift* saat penambahan log baru) yang terintegrasi langsung dengan Server-Sent Events (SSE) `/audit-logs/stream` untuk penambahan log baru secara *real-time*.
 
 8. **Notifikasi Telegram via n8n**:
    - Undangan user (`user.invited`), klaim tiket grup (`ticket.claimed`), dan penambahan anggota tim (`ticket.member_added`) dikirim ke workflow n8n yang terintegrasi dengan Bot API Telegram. Undangan dikirim sebagai DM ke username yang ditentukan.

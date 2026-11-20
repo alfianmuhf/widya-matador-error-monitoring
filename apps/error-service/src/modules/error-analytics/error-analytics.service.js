@@ -275,8 +275,8 @@ export async function getErrorAnalyticsData(query = {}) {
     },
   };
 
-  // Cache in Redis for 60 seconds
-  await setCache(cacheKey, result, 60);
+  // Cache in Redis using configurable TTL from env (default 60s)
+  await setCache(cacheKey, result);
 
   return result;
 }

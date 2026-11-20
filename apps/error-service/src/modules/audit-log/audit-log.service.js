@@ -247,13 +247,21 @@ export const recordLog = async ({
   }
 };
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /**
- * Get paginated list of audit logs with filtering and standardized display format
+ * Get paginated list of audit logs with filtering and standardized display format (Cursor-based)
  */
 export const getAuditLogs = async (query = {}) => {
-  const page = Math.max(1, parseInt(query.page, 10) || 1);
-  const limit = Math.max(1, Math.min(100, parseInt(query.limit, 10) || 20));
-  const skip = (page - 1) * limit;
+  const limit = Math.max(1, Math.min(100, parseInt(query.limit, 10) || 15));
+  const cursorParam = query.cursor ? String(query.cursor).trim() : null;
+
+  if (cursorParam && !UUID_REGEX.test(cursorParam)) {
+    throw createError(400, "Format cursor tidak valid. Cursor harus berupa UUID.");
+  }
+
+  const cursor = cursorParam;
+  const isCursorMode = Boolean(cursor) || !query.page || query.page === "1" || parseInt(query.page, 10) === 1;
 
   const where = {};
 
@@ -286,18 +294,43 @@ export const getAuditLogs = async (query = {}) => {
     ];
   }
 
-  const [logs, total] = await Promise.all([
-    auditLogRepo.findMany({ skip, take: limit, where }),
-    auditLogRepo.count(where),
-  ]);
+  // Fetch limit + 1 records to determine if there is a next page and its cursor
+  const fetchTake = limit + 1;
+  let rawLogs = [];
+
+  if (isCursorMode) {
+    rawLogs = await auditLogRepo.findMany({
+      cursor,
+      skip: cursor ? 1 : 0,
+      take: fetchTake,
+      where,
+      orderBy: [{ created_at: "desc" }, { id: "desc" }],
+    });
+  } else {
+    // Backward-compatibility fallback for legacy page query
+    const page = Math.max(1, parseInt(query.page, 10) || 1);
+    const skip = (page - 1) * limit;
+    rawLogs = await auditLogRepo.findMany({
+      skip,
+      take: fetchTake,
+      where,
+      orderBy: [{ created_at: "desc" }, { id: "desc" }],
+    });
+  }
+
+  const hasNextPage = rawLogs.length > limit;
+  const logs = hasNextPage ? rawLogs.slice(0, limit) : rawLogs;
+  const nextCursor = hasNextPage && logs.length > 0 ? logs[logs.length - 1].id : null;
 
   return {
     logs: logs.map(formatAuditLog),
     meta: {
-      total,
-      page,
       limit,
-      totalPages: Math.ceil(total / limit) || 1,
+      nextCursor,
+      hasNextPage,
+      cursor: cursor || null,
+      total: logs.length,
+      page: isCursorMode ? undefined : Math.max(1, parseInt(query.page, 10) || 1),
     },
   };
 };

@@ -166,8 +166,8 @@ export default function TicketDetailDrawer({ ticket, onClose }) {
       };
     }
 
-    // 3. STATUS SOLVED (atau closed): Cek apakah penanganan terakhir oleh Tim RnD
-    if (rawStatus === "solved" || rawStatus === "closed") {
+    // 3. STATUS SOLVED: Cek apakah penanganan terakhir oleh Tim RnD
+    if (rawStatus === "solved") {
       const historyList = ticket?.history || [];
       const solvedHistory =
         historyList.find((h) => String(h.rawStatus || h.status).toLowerCase() === "solved") ||
@@ -260,7 +260,7 @@ export default function TicketDetailDrawer({ ticket, onClose }) {
 
   const assignedMembers = ticket.assignees || ticket.assignedMembers || [];
 
-  // Status Badge Helper dengan palet warna bersih & elegan
+  // Status Badge Helper dengan palet warna soft & elegan (Open = Biru, Escalated = Kuning, Solved = Hijau)
   const getStatusBadge = (st) => {
     const s = (st || "").toLowerCase();
     if (s === "open") {
@@ -272,12 +272,12 @@ export default function TicketDetailDrawer({ ticket, onClose }) {
         label: "Open",
       };
     }
-    if (s === "escalated") {
+    if (s === "escalated" || s === "monitor") {
       return {
-        bg: "#fffbeb",
-        border: "#fde68a",
-        color: "#b45309",
-        dot: "#f59e0b",
+        bg: "#fef9c3",
+        border: "#facc15",
+        color: "#854d0e",
+        dot: "#eab308",
         label: "Escalated",
       };
     }
@@ -285,30 +285,30 @@ export default function TicketDetailDrawer({ ticket, onClose }) {
       return {
         bg: "#f0fdf4",
         border: "#bbf7d0",
-        color: "#15803d",
+        color: "#16a34a",
         dot: "#22c55e",
         label: "Solved",
       };
     }
     return {
-      bg: "#f8fafc",
-      border: "#cbd5e1",
-      color: "#475569",
-      dot: "#94a3b8",
-      label: s || "Open",
+      bg: "#eff6ff",
+      border: "#bfdbfe",
+      color: "#1d4ed8",
+      dot: "#3b82f6",
+      label: "Open",
     };
   };
 
-  // Severity Badge Helper dengan warna elegan
+  // Severity Badge Helper (Rendah = Biru, Sedang = Escalated/Kuning-Orange, Tinggi = Merah)
   const getSeverityBadge = (sev) => {
     const s = (sev || "").toLowerCase();
     if (s === "tinggi") {
-      return { bg: "#fef2f2", border: "#fecaca", color: "#dc2626", label: "Tinggi" };
+      return { bg: "#fef2f2", border: "#fca5a5", color: "#b91c1c", dot: "#dc2626", label: "Tinggi" };
     }
     if (s === "sedang") {
-      return { bg: "#fffbeb", border: "#fde68a", color: "#b45309", label: "Sedang" };
+      return { bg: "#fef9c3", border: "#facc15", color: "#854d0e", dot: "#eab308", label: "Sedang" };
     }
-    return { bg: "#f0fdfa", border: "#ccfbf1", color: "#0f766e", label: "Rendah" };
+    return { bg: "#eff6ff", border: "#bfdbfe", color: "#1d4ed8", dot: "#3b82f6", label: "Rendah" };
   };
 
   const statusBadge = getStatusBadge(ticket.rawStatus || ticket.status);
@@ -434,7 +434,7 @@ export default function TicketDetailDrawer({ ticket, onClose }) {
                   backgroundColor: statusBadge.bg,
                   color: statusBadge.color,
                   fontSize: "12px",
-                  fontWeight: 700,
+                  fontWeight: 650,
                 }}
               >
                 <span
@@ -453,7 +453,7 @@ export default function TicketDetailDrawer({ ticket, onClose }) {
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
-                  gap: "5px",
+                  gap: "6px",
                   padding: "3px 10px",
                   borderRadius: "9999px",
                   border: `1px solid ${severityBadge.border}`,
@@ -463,7 +463,15 @@ export default function TicketDetailDrawer({ ticket, onClose }) {
                   fontWeight: 650,
                 }}
               >
-                <span style={{ fontSize: "11px", opacity: 0.8 }}>Severity:</span>
+                <span
+                  style={{
+                    width: "6px",
+                    height: "6px",
+                    borderRadius: "50%",
+                    backgroundColor: severityBadge.dot,
+                  }}
+                />
+                <span style={{ fontSize: "11px", opacity: 0.85 }}>Severity:</span>
                 {severityBadge.label}
               </span>
 

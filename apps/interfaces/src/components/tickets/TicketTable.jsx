@@ -93,24 +93,24 @@ export default function TicketTable({
     }
   };
 
-  // Severity Indicator Component (Soft Badge: Rendah = Hijau, Sedang = Orange, Tinggi = Merah)
+  // Severity Indicator Component (Soft Badge: Rendah = Biru, Sedang = Escalated/Kuning-Orange, Tinggi = Merah)
   const renderSeverity = (severity) => {
     const s = String(severity || "rendah").toLowerCase();
     let config = {
       label: "rendah",
-      bg: "#f0fdf4",
-      border: "#bbf7d0",
-      color: "#15803d",
-      dot: "#22c55e",
+      bg: "#eff6ff",
+      border: "#bfdbfe",
+      color: "#1d4ed8",
+      dot: "#3b82f6",
     };
 
     if (s === "sedang") {
       config = {
         label: "sedang",
-        bg: "#fff7ed",
-        border: "#fed7aa",
-        color: "#c2410c",
-        dot: "#ea580c",
+        bg: "#fefce8",
+        border: "#fef08a",
+        color: "#a16207",
+        dot: "#ca8a04",
       };
     } else if (s === "tinggi") {
       config = {

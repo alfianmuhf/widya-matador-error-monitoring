@@ -299,16 +299,16 @@ export default function TicketDetailDrawer({ ticket, onClose }) {
     };
   };
 
-  // Severity Badge Helper (Rendah = Hijau, Sedang = Orange, Tinggi = Merah)
+  // Severity Badge Helper (Rendah = Biru, Sedang = Escalated/Kuning-Orange, Tinggi = Merah)
   const getSeverityBadge = (sev) => {
     const s = (sev || "").toLowerCase();
     if (s === "tinggi") {
       return { bg: "#fef2f2", border: "#fecaca", color: "#b91c1c", dot: "#b91c1c", label: "Tinggi" };
     }
     if (s === "sedang") {
-      return { bg: "#fff7ed", border: "#fed7aa", color: "#c2410c", dot: "#ea580c", label: "Sedang" };
+      return { bg: "#fefce8", border: "#fef08a", color: "#a16207", dot: "#ca8a04", label: "Sedang" };
     }
-    return { bg: "#f0fdf4", border: "#bbf7d0", color: "#15803d", dot: "#22c55e", label: "Rendah" };
+    return { bg: "#eff6ff", border: "#bfdbfe", color: "#1d4ed8", dot: "#3b82f6", label: "Rendah" };
   };
 
   const statusBadge = getStatusBadge(ticket.rawStatus || ticket.status);

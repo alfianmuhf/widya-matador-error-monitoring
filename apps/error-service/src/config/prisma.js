@@ -6,9 +6,9 @@ const prismaClientSingleton = () => {
   const connectionString = env.DIRECT_URL || env.DATABASE_URL;
   const adapter = new PrismaPg({
     connectionString,
-    max: 20,
+    max: 50,
     idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 5000,
+    connectionTimeoutMillis: 10000,
   });
 
   return new PrismaClient({
@@ -21,8 +21,6 @@ const globalForPrisma = globalThis;
 
 export const prisma = globalForPrisma.prisma ?? prismaClientSingleton();
 
-if (env.NODE_ENV !== "production") {
-  globalForPrisma.prisma = prisma;
-}
+globalForPrisma.prisma = prisma;
 
 export default prisma;

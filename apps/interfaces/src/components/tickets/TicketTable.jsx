@@ -53,9 +53,9 @@ export default function TicketTable({
               gap: "5px",
               padding: "3px 10px",
               borderRadius: "9999px",
-              backgroundColor: "#fefce8",
-              border: "1px solid #fef08a",
-              color: "#a16207",
+              backgroundColor: "#fef9c3",
+              border: "1px solid #facc15",
+              color: "#854d0e",
               fontSize: "12px",
               fontWeight: 600,
             }}
@@ -107,18 +107,18 @@ export default function TicketTable({
     if (s === "sedang") {
       config = {
         label: "sedang",
-        bg: "#fefce8",
-        border: "#fef08a",
-        color: "#a16207",
-        dot: "#ca8a04",
+        bg: "#fef9c3",
+        border: "#facc15",
+        color: "#854d0e",
+        dot: "#eab308",
       };
     } else if (s === "tinggi") {
       config = {
         label: "tinggi",
         bg: "#fef2f2",
-        border: "#fecaca",
+        border: "#fca5a5",
         color: "#b91c1c",
-        dot: "#b91c1c",
+        dot: "#dc2626",
       };
     }
 

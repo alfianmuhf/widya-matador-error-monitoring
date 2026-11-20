@@ -335,8 +335,8 @@ export default function CreateTicketModal({ isOpen, onClose, onSuccess }) {
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "10px" }}>
               {[
                 { val: "rendah", label: "Rendah", color: "#1d4ed8", bg: "#eff6ff", border: "#bfdbfe" },
-                { val: "sedang", label: "Sedang", color: "#a16207", bg: "#fefce8", border: "#fef08a" },
-                { val: "tinggi", label: "Tinggi", color: "#b91c1c", bg: "#fef2f2", border: "#fecaca" },
+                { val: "sedang", label: "Sedang", color: "#854d0e", bg: "#fef9c3", border: "#facc15" },
+                { val: "tinggi", label: "Tinggi", color: "#b91c1c", bg: "#fef2f2", border: "#fca5a5" },
               ].map((s) => {
                 const isSelected = severity === s.val;
                 return (

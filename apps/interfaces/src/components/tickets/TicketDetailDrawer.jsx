@@ -274,10 +274,10 @@ export default function TicketDetailDrawer({ ticket, onClose }) {
     }
     if (s === "escalated" || s === "monitor") {
       return {
-        bg: "#fefce8",
-        border: "#fef08a",
-        color: "#a16207",
-        dot: "#ca8a04",
+        bg: "#fef9c3",
+        border: "#facc15",
+        color: "#854d0e",
+        dot: "#eab308",
         label: "Escalated",
       };
     }
@@ -303,10 +303,10 @@ export default function TicketDetailDrawer({ ticket, onClose }) {
   const getSeverityBadge = (sev) => {
     const s = (sev || "").toLowerCase();
     if (s === "tinggi") {
-      return { bg: "#fef2f2", border: "#fecaca", color: "#b91c1c", dot: "#b91c1c", label: "Tinggi" };
+      return { bg: "#fef2f2", border: "#fca5a5", color: "#b91c1c", dot: "#dc2626", label: "Tinggi" };
     }
     if (s === "sedang") {
-      return { bg: "#fefce8", border: "#fef08a", color: "#a16207", dot: "#ca8a04", label: "Sedang" };
+      return { bg: "#fef9c3", border: "#facc15", color: "#854d0e", dot: "#eab308", label: "Sedang" };
     }
     return { bg: "#eff6ff", border: "#bfdbfe", color: "#1d4ed8", dot: "#3b82f6", label: "Rendah" };
   };

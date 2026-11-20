@@ -56,9 +56,9 @@ export default function UpdateTicketModal({ isOpen, onClose, ticket, onSuccess }
       value: "escalated",
       label: "Eskalasi ke RnD",
       desc: "Alihkan penanganan ke tim RnD untuk investigasi bug/sistem",
-      color: "#a16207",
-      bg: "#fefce8",
-      border: "#fef08a",
+      color: "#854d0e",
+      bg: "#fef9c3",
+      border: "#facc15",
     });
     statusOptions.push({
       value: "solved",
@@ -73,9 +73,9 @@ export default function UpdateTicketModal({ isOpen, onClose, ticket, onSuccess }
       value: "escalated",
       label: "Tetap Escalated (Progress RnD)",
       desc: "Perbarui progres investigasi, debugging, atau modul patch RnD",
-      color: "#a16207",
-      bg: "#fefce8",
-      border: "#fef08a",
+      color: "#854d0e",
+      bg: "#fef9c3",
+      border: "#facc15",
     });
     statusOptions.push({
       value: "solved",
@@ -99,9 +99,9 @@ export default function UpdateTicketModal({ isOpen, onClose, ticket, onSuccess }
       value: "escalated",
       label: "Escalated",
       desc: "Alihkan ke tim RnD",
-      color: "#a16207",
-      bg: "#fefce8",
-      border: "#fef08a",
+      color: "#854d0e",
+      bg: "#fef9c3",
+      border: "#facc15",
     });
     statusOptions.push({
       value: "solved",
@@ -360,8 +360,8 @@ export default function UpdateTicketModal({ isOpen, onClose, ticket, onSuccess }
             <div style={{ display: "flex", gap: "10px" }}>
               {[
                 { val: "rendah", label: "Rendah", color: "#1d4ed8", bg: "#eff6ff", border: "#bfdbfe" },
-                { val: "sedang", label: "Sedang", color: "#a16207", bg: "#fefce8", border: "#fef08a" },
-                { val: "tinggi", label: "Tinggi", color: "#b91c1c", bg: "#fef2f2", border: "#fecaca" },
+                { val: "sedang", label: "Sedang", color: "#854d0e", bg: "#fef9c3", border: "#facc15" },
+                { val: "tinggi", label: "Tinggi", color: "#b91c1c", bg: "#fef2f2", border: "#fca5a5" },
               ].map((s) => {
                 const isSelected = severity === s.val;
                 return (

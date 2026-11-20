@@ -14,10 +14,18 @@ const ATTACHMENT_INCLUDE = {
  * milik attachment.service (relasi tiket tidak dilonggarkan).
  */
 const resolveActor = async ({ telegramUserId, telegramUsername }) => {
+  const cleanUsername = telegramUsername ? String(telegramUsername).replace(/^@/, "").trim() : undefined;
+
+  const conditions = [];
+  if (telegramUserId) conditions.push({ telegram_id: String(telegramUserId) });
+  if (cleanUsername) conditions.push({ username: cleanUsername });
+
+  if (conditions.length === 0) {
+    throw createError(400, "telegram_user_id atau telegram_username wajib diisi");
+  }
+
   const whitelisted = await prisma.telegram_users.findFirst({
-    where: telegramUserId
-      ? { OR: [{ telegram_id: telegramUserId }, { username: telegramUsername }] }
-      : { username: telegramUsername },
+    where: conditions.length > 1 ? { OR: conditions } : conditions[0],
   });
 
   if (!whitelisted) {

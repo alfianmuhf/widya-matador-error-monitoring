@@ -21,6 +21,7 @@ const envSchema = z.object({
   REDIS_HOST: z.string().default("localhost"),
   REDIS_PORT: z.coerce.number().default(6379),
   REDIS_PASSWORD: z.string().optional(),
+  REDIS_CACHE_TTL_SECONDS: z.coerce.number().int().min(1).default(60),
   VIDEO_CRF: z.coerce.number().min(0).max(51).default(28),
   VIDEO_MAX_RESOLUTION: z.string().default("1080p"),
   VIDEO_MAX_SIZE_MB: z.coerce.number().int().min(1).max(500).default(350),

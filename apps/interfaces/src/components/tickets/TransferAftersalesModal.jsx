@@ -72,8 +72,8 @@ export default function TransferAftersalesModal({ isOpen, onClose, ticket, onSuc
       }
       onClose();
     } catch (err) {
-      console.error("Gagal mengalihkan penanggung jawab aftersales:", err);
-      const msg = err.response?.data?.message || "Gagal mengalihkan penanggung jawab Aftersales.";
+      console.error("Gagal melakukan handover penanggung jawab aftersales:", err);
+      const msg = err.response?.data?.message || "Gagal melakukan handover penanggung jawab Aftersales.";
       setErrorMessage(msg);
     } finally {
       setSubmitting(false);
@@ -140,7 +140,7 @@ export default function TransferAftersalesModal({ isOpen, onClose, ticket, onSuc
             </div>
             <div>
               <h3 style={{ margin: 0, fontSize: "16.5px", fontWeight: 750, color: "#1e3a8a" }}>
-                Alih Tanggung Jawab Aftersales
+                Handover Tanggung Jawab Aftersales
               </h3>
               <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "3px" }}>
                 <span style={{ fontSize: "12px", fontFamily: "monospace", fontWeight: 700, color: "#2563eb" }}>
@@ -234,7 +234,7 @@ export default function TransferAftersalesModal({ isOpen, onClose, ticket, onSuc
           {/* SELECT TARGET AFTERSALES */}
           <div>
             <label style={{ display: "block", fontSize: "13px", fontWeight: 700, color: "#334155", marginBottom: "6px" }}>
-              Pilih Petugas Aftersales Pengganti
+              Pilih Petugas Aftersales Penerima Handover
             </label>
             <select
               value={selectedUserId}
@@ -263,9 +263,6 @@ export default function TransferAftersalesModal({ isOpen, onClose, ticket, onSuc
                 );
               })}
             </select>
-            <span style={{ fontSize: "11.5px", color: "#64748b", marginTop: "4px", display: "block" }}>
-              Hanya petugas yang dialihkan yang dapat melakukan update pada tiket selama berstatus Open.
-            </span>
           </div>
 
           {/* ACTIONS */}
@@ -305,7 +302,7 @@ export default function TransferAftersalesModal({ isOpen, onClose, ticket, onSuc
                 boxShadow: "0 2px 4px rgba(37, 99, 235, 0.25)",
               }}
             >
-              {submitting ? "Mengalihkan..." : "Alihkan Tanggung Jawab"}
+              {submitting ? "Memproses..." : "Handover Tanggung Jawab"}
             </button>
           </div>
         </form>

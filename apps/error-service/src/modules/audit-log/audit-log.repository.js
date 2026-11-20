@@ -30,11 +30,17 @@ export const create = async (data) => {
 };
 
 /**
- * Get paginated list of audit logs
+ * Get paginated list of audit logs (supports both cursor and offset pagination)
  */
-export const findMany = async ({ skip = 0, take = 20, where = {}, orderBy = { created_at: "desc" } }) => {
+export const findMany = async ({
+  cursor = null,
+  skip = 0,
+  take = 20,
+  where = {},
+  orderBy = [{ created_at: "desc" }, { id: "desc" }],
+}) => {
   return prisma.audit_logs.findMany({
-    skip,
+    ...(cursor ? { cursor: { id: cursor }, skip: skip || 1 } : (skip ? { skip } : {})),
     take,
     where,
     orderBy,

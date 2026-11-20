@@ -260,40 +260,6 @@ export const countOpenTickets = async () => {
 };
 
 /**
- * Find ticket IDs matching current history status or severity
- */
-export const findTicketIdsByCurrentHistory = async ({ status, severity }) => {
-  if (status && severity) {
-    const rows = await prisma.$queryRaw`
-      SELECT t.id FROM tickets t
-      JOIN ticket_history th ON th.ticket_id = t.id AND th.version = t.current_version
-      WHERE th.status = ${status}::ticket_status AND th.severity = ${severity}::severity
-    `;
-    return rows.map((r) => r.id);
-  }
-
-  if (status) {
-    const rows = await prisma.$queryRaw`
-      SELECT t.id FROM tickets t
-      JOIN ticket_history th ON th.ticket_id = t.id AND th.version = t.current_version
-      WHERE th.status = ${status}::ticket_status
-    `;
-    return rows.map((r) => r.id);
-  }
-
-  if (severity) {
-    const rows = await prisma.$queryRaw`
-      SELECT t.id FROM tickets t
-      JOIN ticket_history th ON th.ticket_id = t.id AND th.version = t.current_version
-      WHERE th.severity = ${severity}::severity
-    `;
-    return rows.map((r) => r.id);
-  }
-
-  return null;
-};
-
-/**
  * Find paginated ticket IDs and total count when filtering by status/severity,
  * preventing Prisma parameter limit overflow when tens of thousands of tickets match.
  */
@@ -405,21 +371,38 @@ export const findFilteredTicketIdsAndCount = async ({
   const sortCol = allowedSortCols[sortBy] || Prisma.sql`t.open_at`;
   const sortDir = sortOrder.toLowerCase() === "asc" ? Prisma.sql`ASC` : Prisma.sql`DESC`;
 
+  // Dynamic JOIN: hanya join tabel yang benar-benar dibutuhkan oleh filter query
+  const needHistory = Boolean(status || severity || search);
+  const needFailureCode = Boolean(componentId || component || search);
+  const needAsset = Boolean(unitCode || clientId || client || locationId || location || search);
+
+  const joinHistory = needHistory
+    ? Prisma.sql`JOIN ticket_history th ON th.ticket_id = t.id AND th.version = t.current_version`
+    : Prisma.empty;
+
+  const joinFailureCode = needFailureCode
+    ? Prisma.sql`JOIN failure_codes fc ON fc.id = t.failure_code_id`
+    : Prisma.empty;
+
+  const joinAsset = needAsset
+    ? Prisma.sql`JOIN assets a ON a.id = t.asset_id`
+    : Prisma.empty;
+
   const [countRows, idRows] = await Promise.all([
     prisma.$queryRaw(Prisma.sql`
-      SELECT COUNT(DISTINCT t.id)::int as total
+      SELECT COUNT(*)::int as total
       FROM tickets t
-      JOIN ticket_history th ON th.ticket_id = t.id AND th.version = t.current_version
-      JOIN failure_codes fc ON fc.id = t.failure_code_id
-      JOIN assets a ON a.id = t.asset_id
+      ${joinHistory}
+      ${joinFailureCode}
+      ${joinAsset}
       WHERE ${whereClause}
     `),
     prisma.$queryRaw(Prisma.sql`
       SELECT t.id
       FROM tickets t
-      JOIN ticket_history th ON th.ticket_id = t.id AND th.version = t.current_version
-      JOIN failure_codes fc ON fc.id = t.failure_code_id
-      JOIN assets a ON a.id = t.asset_id
+      ${joinHistory}
+      ${joinFailureCode}
+      ${joinAsset}
       WHERE ${whereClause}
       ORDER BY ${sortCol} ${sortDir}
       ${(take !== undefined && take !== null) ? Prisma.sql`LIMIT ${take} OFFSET ${skip || 0}` : ((skip !== undefined && skip !== null) ? Prisma.sql`OFFSET ${skip}` : Prisma.sql``)}

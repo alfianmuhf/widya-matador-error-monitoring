@@ -184,7 +184,7 @@ export default function ManajemenTiket() {
   };
 
   const handleTransferAftersalesSuccess = (updated) => {
-    showToast(`Penanggung jawab Aftersales tiket ${updated.id} berhasil dialihkan!`);
+    showToast(`Handover penanggung jawab Aftersales tiket ${updated.id} berhasil!`);
     fetchManagedTickets();
   };
 
@@ -444,9 +444,9 @@ export default function ManajemenTiket() {
                                     color: "#1d4ed8",
                                     cursor: "pointer",
                                   }}
-                                  title="Alihkan penanggung jawab Aftersales tiket ini"
+                                  title="Handover penanggung jawab Aftersales tiket ini"
                                 >
-                                  Alihkan PJ
+                                  Handover
                                 </button>
                               )}
 

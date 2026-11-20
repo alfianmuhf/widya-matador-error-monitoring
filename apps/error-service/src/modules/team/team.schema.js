@@ -9,6 +9,8 @@ export const createTeamSchema = z.object({
     .max(100, "Nama tim maksimal 100 karakter")
     .trim(),
   leaderUserId: UUID_SCHEMA,
+  groupTeleId: z.string().max(50, "ID grup Telegram maksimal 50 karakter").optional().nullable(),
+  group_tele_id: z.string().max(50, "ID grup Telegram maksimal 50 karakter").optional().nullable(),
   isActive: z.boolean().optional().default(true),
 });
 
@@ -20,6 +22,8 @@ export const updateTeamSchema = z.object({
     .trim()
     .optional(),
   leaderUserId: UUID_SCHEMA.optional(),
+  groupTeleId: z.string().max(50, "ID grup Telegram maksimal 50 karakter").optional().nullable(),
+  group_tele_id: z.string().max(50, "ID grup Telegram maksimal 50 karakter").optional().nullable(),
   isActive: z.boolean().optional(),
 });
 

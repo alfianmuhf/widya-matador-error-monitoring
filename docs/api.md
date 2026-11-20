@@ -1428,13 +1428,14 @@ Mengambil informasi detail satu tim RnD beserta susunan Leader dan seluruh anggo
 | **Autentikasi** | `Authorization: Bearer <access_token>` |
 | **Role Izin** | **`admin`** |
 
-Membuat tim RnD baru. Pengguna yang dipilih sebagai `leaderUserId` secara otomatis didaftarkan sebagai anggota pertama di `team_members`.
+Membuat tim RnD baru. Pengguna yang dipilih sebagai `leaderUserId` secara otomatis didaftarkan sebagai anggota pertama di `team_members`. Opsional menyertakan `groupTeleId` untuk integrasi ID chat grup Telegram tim.
 
 ##### Request Body
 ```json
 {
   "name": "RnD - Hardware",
   "leaderUserId": "916e5839-f26c-41b6-bd7c-98c7736030a7",
+  "groupTeleId": "-1001987654321",
   "isActive": true
 }
 ```
@@ -1449,7 +1450,8 @@ Membuat tim RnD baru. Pengguna yang dipilih sebagai `leaderUserId` secara otomat
     "id": "f8a02c54-4412-4f32-8499-123456789abc",
     "name": "RnD - Hardware",
     "isActive": true,
-    "leaderUserId": "916e5839-f26c-41b6-bd7c-98c7736030a7"
+    "leaderUserId": "916e5839-f26c-41b6-bd7c-98c7736030a7",
+    "groupTeleId": "-1001987654321"
   }
 }
 ```
@@ -1466,13 +1468,14 @@ Membuat tim RnD baru. Pengguna yang dipilih sebagai `leaderUserId` secara otomat
 | **Autentikasi** | `Authorization: Bearer <access_token>` |
 | **Role Izin** | **`admin`** (Wewenang struktural divisi oleh Admin) |
 
-Memperbarui nama tim, status keaktifan, atau mengganti Leader tim oleh Admin. Catatan: Pengalihan kepemimpinan merupakan wewenang struktural divisi oleh Admin (fitur pengalihan oleh leader tim telah ditiadakan). Jika leader diganti, leader baru otomatis ditambahkan ke `team_members` jika belum terdaftar.
+Memperbarui nama tim, ID grup Telegram (`groupTeleId`), status keaktifan, atau mengganti Leader tim oleh Admin. Catatan: Pengalihan kepemimpinan merupakan wewenang struktural divisi oleh Admin (fitur pengalihan oleh leader tim telah ditiadakan). Jika leader diganti, leader baru otomatis ditambahkan ke `team_members` jika belum terdaftar.
 
 ##### Request Body
 ```json
 {
   "name": "RnD - Embedded & Hardware",
   "leaderUserId": "916e5839-f26c-41b6-bd7c-98c7736030a7",
+  "groupTeleId": "-1001987654321",
   "isActive": true
 }
 ```
@@ -3053,11 +3056,15 @@ Mencatat seluruh rekam jejak aktivitas penting pengguna dan sistem secara otomat
 
 | Method | Endpoint | Deskripsi | Query Params |
 |:---|:---|:---|:---|
-| `GET` | `/audit-logs` | Daftar log audit terpaginasi (server-side pagination, default 15 items) | `?page=1&limit=15&search=&action=&entityType=&startDate=&endDate=` |
+| `GET` | `/audit-logs` | Daftar log audit terpaginasi (*cursor-based pagination*, default 15 items) | `?cursor=<uuid>&limit=15&search=&action=&entityType=&delete_type=` |
 | `GET` | `/audit-logs/:id` | Detail satu entri catatan audit log | ID UUID |
 | `GET` | `/audit-logs/stream` | Real-time SSE streaming aktivitas audit | `?token=<access_token>` atau Bearer header |
 
 * **Role Izin**: Semua Role (`admin`, `coordinator`, `viewer`).
+* **Mekanisme Paginasi Cursor**:
+  - Request pertama (Halaman 1): kirim tanpa parameter `cursor` (`GET /audit-logs?limit=15`).
+  - Halaman berikutnya: gunakan nilai `nextCursor` yang dikembalikan pada `meta.nextCursor` sebagai parameter query (`GET /audit-logs?cursor=<nextCursor>&limit=15`).
+  - Mendukung filter pencarian teks (`search`), tipe entitas (`entityType`), dan tipe aksi (`action`).
 
 #### Contoh Respons: `200 OK` (`GET /audit-logs`)
 ```json
@@ -3067,26 +3074,20 @@ Mencatat seluruh rekam jejak aktivitas penting pengguna dan sistem secara otomat
   "data": [
     {
       "id": "e84f09d2-995c-4217-a065-27a1197e411b",
-      "actor": "admin@erad.id",
-      "actorUserId": "3c847b2b-4277-4c4c-81ba-4b2e88a3e7ef",
-      "action": "update",
-      "entityType": "TicketAftersalesLead",
-      "entityId": "ERR-20261009-0001",
-      "details": {
-        "identifier": "ERR-20261009-0001",
-        "changeSummary": "Penanggung jawab Aftersales dialihkan ke 'Budi Aftersales Baru'",
-        "ticketId": "ERR-20261009-0001",
-        "oldAftersalesUserId": "981ba263-8103-4c76-a7ed-f241297e8b27",
-        "newAftersalesUserId": "550e8400-e29b-41d4-a716-446655440001"
-      },
+      "waktu": "2026-10-13 17:15",
+      "pelaku": "admin@erad.id",
+      "objek": "ticket:ERR-20261009-0001",
+      "aksi": "update",
+      "detailPerubahan": "Penanggung jawab Aftersales dialihkan ke 'Budi Aftersales Baru'",
       "createdAt": "2026-10-13T10:15:00.000Z"
     }
   ],
   "meta": {
-    "total": 142,
-    "page": 1,
     "limit": 15,
-    "totalPages": 10
+    "nextCursor": "e84f09d2-995c-4217-a065-27a1197e411b",
+    "hasNextPage": true,
+    "cursor": null,
+    "total": 15
   }
 }
 ```
@@ -3107,6 +3108,7 @@ Menyediakan metrik agregasi untuk visualisasi statistik kartu dan grafik pada Da
 | **Query Params** | `?timeRange=30d` (pilihan: `30d`, `90d`, `6m`, `all`), `status=`, `componentId=`, `clientId=`, `locationId=` |
 | **Autentikasi** | `Authorization: Bearer <access_token>` |
 | **Role Izin** | **Semua Role** (`admin`, `coordinator`, `viewer`) |
+| **Caching (Redis)** | Hasil kalkulasi disimpan di Redis Cache dengan TTL mutlak terkonfigurasi (`REDIS_CACHE_TTL_SECONDS`, default: 60 detik) dan otomatis di-invalidasi seketika saat terjadi mutasi tiket via SSE event. |
 
 * **Metrik Utama Dashboard (`/summary`)**:
   * **Total Tiket**: Jumlah tiket pada rentang periode yang dipilih (`open_at`).

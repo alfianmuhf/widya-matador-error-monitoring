@@ -51,15 +51,18 @@ export const getManagedTicketsKPI = async ({ userId, division, role }) => {
   if (div === "software" || div === "rnd") {
     const rows = await prisma.$queryRaw(Prisma.sql`
       SELECT 
-        COUNT(DISTINCT t.id)::int as total,
-        COUNT(DISTINCT CASE WHEN th_current.severity = 'tinggi' THEN t.id END)::int as high_severity_count
+        COUNT(*)::int as total,
+        COUNT(CASE WHEN th_current.severity = 'tinggi' THEN 1 END)::int as high_severity_count
       FROM tickets t
       JOIN ticket_history th_current ON th_current.ticket_id = t.id AND th_current.version = t.current_version
-      JOIN ticket_teams tt ON tt.ticket_id = t.id
-      JOIN teams team ON team.id = tt.team_id
-      LEFT JOIN team_members tm ON tm.team_id = tt.team_id AND tm.user_id = ${userId}::uuid
       WHERE th_current.status = 'escalated'::ticket_status
-        AND (team.leader_user_id = ${userId}::uuid OR tm.user_id = ${userId}::uuid)
+        AND EXISTS (
+          SELECT 1 FROM ticket_teams tt
+          JOIN teams team ON team.id = tt.team_id
+          LEFT JOIN team_members tm ON tm.team_id = tt.team_id AND tm.user_id = ${userId}::uuid
+          WHERE tt.ticket_id = t.id
+            AND (team.leader_user_id = ${userId}::uuid OR tm.user_id = ${userId}::uuid)
+        )
     `);
     return {
       total: Number(rows[0]?.total || 0),
@@ -94,7 +97,13 @@ export const findManagedTicketIdsAndCount = async ({
     conditions.push(Prisma.sql`t.aftersales_user_id = ${userId}::uuid`);
   } else if (div === "software" || div === "rnd") {
     conditions.push(Prisma.sql`th_current.status = 'escalated'::ticket_status`);
-    conditions.push(Prisma.sql`(team.leader_user_id = ${userId}::uuid OR tm.user_id = ${userId}::uuid)`);
+    conditions.push(Prisma.sql`EXISTS (
+      SELECT 1 FROM ticket_teams tt
+      JOIN teams team ON team.id = tt.team_id
+      LEFT JOIN team_members tm ON tm.team_id = tt.team_id AND tm.user_id = ${userId}::uuid
+      WHERE tt.ticket_id = t.id
+        AND (team.leader_user_id = ${userId}::uuid OR tm.user_id = ${userId}::uuid)
+    )`);
   } else {
     return { ids: [], total: 0 };
   }
@@ -115,15 +124,6 @@ export const findManagedTicketIdsAndCount = async ({
 
   const whereClause = Prisma.join(conditions, " AND ");
 
-  const joinAssignees =
-    div === "software" || div === "rnd"
-      ? Prisma.sql`
-          JOIN ticket_teams tt ON tt.ticket_id = t.id
-          JOIN teams team ON team.id = tt.team_id
-          LEFT JOIN team_members tm ON tm.team_id = tt.team_id AND tm.user_id = ${userId}::uuid
-        `
-      : Prisma.empty;
-
   const joinExtras = search
     ? Prisma.sql`
         JOIN failure_codes fc ON fc.id = t.failure_code_id
@@ -133,18 +133,16 @@ export const findManagedTicketIdsAndCount = async ({
 
   const [countRows, idRows] = await Promise.all([
     prisma.$queryRaw(Prisma.sql`
-      SELECT COUNT(DISTINCT t.id)::int as total
+      SELECT COUNT(*)::int as total
       FROM tickets t
       JOIN ticket_history th_current ON th_current.ticket_id = t.id AND th_current.version = t.current_version
-      ${joinAssignees}
       ${joinExtras}
       WHERE ${whereClause}
     `),
     prisma.$queryRaw(Prisma.sql`
-      SELECT DISTINCT t.id, t.open_at
+      SELECT t.id, t.open_at
       FROM tickets t
       JOIN ticket_history th_current ON th_current.ticket_id = t.id AND th_current.version = t.current_version
-      ${joinAssignees}
       ${joinExtras}
       WHERE ${whereClause}
       ORDER BY t.open_at DESC
